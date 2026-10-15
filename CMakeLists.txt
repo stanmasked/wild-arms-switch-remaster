@@ -225,3 +225,8 @@ set_tests_properties(wa_original_gp0_global_writes_a3 PROPERTIES WORKING_DIRECTO
 add_test(NAME wa_original_gp0_stack_handoff
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_stack_handoff.py)
 set_tests_properties(wa_original_gp0_stack_handoff PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Original polygon stack helper GTE MVMVA output to a1[0..8].
+add_test(NAME wa_original_gp0_helper_mvmva
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_helper_mvmva.py)
+set_tests_properties(wa_original_gp0_helper_mvmva PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
