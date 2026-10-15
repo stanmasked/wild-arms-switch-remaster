@@ -5,7 +5,7 @@
 
 namespace wa::gte {
 // Approximate RTPS-like composition for host testing.
-// The projection receives clamped IR3 as depth.
+// Depth uses the pre-IR3 transform value to preserve 32768..65535 depth.
 // NOT a bit-accurate PlayStation GTE: no MAC overflow, flags or reciprocal.
 struct RtpsReferenceResult {
     Transformed transformed{};
@@ -18,7 +18,7 @@ constexpr RtpsReferenceResult rtps_reference(const Transform& transform, Vector3
     result.transformed = rotate_translate(transform, vertex, false);
     result.projected = project_reference(result.transformed.ir[0],
                                          result.transformed.ir[1],
-                                         result.transformed.ir[2], projection);
+                                         result.transformed.pre_ir[2], projection);
     // Wild Arms helper uses SRA V0,V0,2 after reading GTE SZ3.
     result.returned_sz3_shift2 = static_cast<std::int32_t>(result.projected.sz >> 2);
     return result;
