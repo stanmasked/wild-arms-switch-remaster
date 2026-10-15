@@ -17,7 +17,8 @@ constexpr DepthCueStage depth_cue_stage(std::uint32_t quotient_q16,
     if (raw > std::numeric_limits<std::int32_t>::max()) out.flags |= 1u << 16;
     if (raw < std::numeric_limits<std::int32_t>::min()) out.flags |= 1u << 15;
     out.mac0 = wrap_i32(raw);
-    const auto shifted = floor_shift12(out.mac0);
+    // IR0 saturation consumes the full intermediate, not wrapped MAC0.
+    const auto shifted = floor_shift12(raw);
     if (shifted < 0 || shifted > 4096) out.flags |= 1u << 12;
     out.ir0 = static_cast<std::uint16_t>(shifted < 0 ? 0 : shifted > 4096 ? 4096 : shifted);
     // FLAG[31] does not include bits 16,15 or 12 by themselves.
