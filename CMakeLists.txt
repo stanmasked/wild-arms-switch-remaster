@@ -32,3 +32,8 @@ add_test(NAME wa_gte_rtps_reference_tests COMMAND wa_gte_rtps_reference_tests)
 add_executable(wa_gte_unr_division_tests tests/test_gte_unr_division.cpp)
 target_include_directories(wa_gte_unr_division_tests PRIVATE include)
 add_test(NAME wa_gte_unr_division_tests COMMAND wa_gte_unr_division_tests)
+
+# Compare hardware-inspired UNR divide with the earlier host projection model.
+add_executable(wa_gte_projection_unr_tests tests/test_gte_projection_unr.cpp)
+target_include_directories(wa_gte_projection_unr_tests PRIVATE include)
+add_test(NAME wa_gte_projection_unr_tests COMMAND wa_gte_projection_unr_tests)
