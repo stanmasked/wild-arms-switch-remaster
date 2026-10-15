@@ -33,12 +33,18 @@ def transfer(word, pc, state, lookups):
     elif op in (8,9,10,11,12,13,14):
         out, val = rt, set(regs[rs])
     elif op == 0:
-        if fn in (0,2,3):
+        if fn in (24,25) and rd == 0 and ((word>>6)&31) == 0:
+            product_sources = set(regs[rs]) | set(regs[rt])
+            regs[32] = set(product_sources)  # HI
+            regs[33] = set(product_sources)  # LO
+        elif fn in (17,19) and rt == 0 and rd == 0 and ((word>>6)&31) == 0:
+            regs[32 if fn == 17 else 33] = set(regs[rs])
+        elif fn in (0,2,3):
             out, val = rd, set(regs[rt])
         elif fn in (4,6,7,32,33,34,35,36,37,38,39,42,43):
             out, val = rd, set(regs[rs]) | set(regs[rt])
-        elif fn in (16,18):
-            out = rd # HI/LO provenance not carried in this limited pass
+        elif fn in (16,18) and rs == 0 and rt == 0 and ((word>>6)&31) == 0:
+            out, val = rd, set(regs[32 if fn == 16 else 33])
         elif fn == 9:
             out = rd # JALR link value
     elif op == 3:
@@ -59,7 +65,7 @@ def analyze(image, base, start=BUILDER, end=RETURN, lookups=TABLE_LOAD_PCS):
         a, b = int(edge['from'],16), int(edge['to'],16)
         edges.setdefault(a,set()).add(b)
         incoming.setdefault(b,set()).add(a)
-    zero = tuple(frozenset() for _ in range(32))
+    zero = tuple(frozenset() for _ in range(34))
     states = {start:zero}
     queue = deque([start])
     visits = 0
@@ -89,7 +95,7 @@ def analyze(image, base, start=BUILDER, end=RETURN, lookups=TABLE_LOAD_PCS):
             'reachable_instructions':len(states),
             'unresolved_transfers':cfg['unresolved'],
             'full_control_flow_proven':False,
-            'hi_lo_tracking':False,'assets_emitted':False}
+            'hi_lo_tracking':True,'assets_emitted':False}
 
 
 def main():
