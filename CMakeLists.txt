@@ -265,3 +265,8 @@ set_tests_properties(wa_original_gp0_matrix_provenance PROPERTIES WORKING_DIRECT
 add_test(NAME wa_original_gp0_matrix_cfg
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_cfg.py)
 set_tests_properties(wa_original_gp0_matrix_cfg PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Fixed-point may-source join analysis over supported MIPS CFG edges.
+add_test(NAME wa_original_gp0_matrix_cfg_join
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_cfg_join.py)
+set_tests_properties(wa_original_gp0_matrix_cfg_join PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
