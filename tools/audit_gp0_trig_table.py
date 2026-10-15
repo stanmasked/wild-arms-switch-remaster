@@ -60,12 +60,28 @@ def analyze(image, base, table=TABLE, entries=ENTRIES, pcs=TABLE_LOAD_PCS):
         angle = 2*math.pi*i/entries
         maxerr = max(maxerr, abs(s-round(4096*math.sin(angle))),
                      abs(c-round(4096*math.cos(angle))))
+    # Aggregate, non-extracting diagnostics for the fixed-point table.
+    # Quarter-turn identities reveal independent quantization or asymmetry.
+    quarter_error = max(
+        max(abs(values[(i+q) % entries][0] - values[i][1]),
+            abs(values[(i+q) % entries][1] + values[i][0]))
+        for i in range(entries)
+    )
+    half_error = max(
+        max(abs(values[(i+2*q) % entries][0] + values[i][0]),
+            abs(values[(i+2*q) % entries][1] + values[i][1]))
+        for i in range(entries)
+    )
+    norm_error = max(abs(s*s + c*c - 4096*4096) for s,c in values)
     verified_pcs = [f'0x{pc:08X}' for pc in pcs if indexed_lookup(image,base,pc,table)]
     return {'table_in_image': True, 'table_address':f'0x{table:08X}',
             'entries':entries, 'byte_length':entries*4,
             'layout':'signed int16 sine low; signed int16 cosine high',
             'cardinal_points_match':cardinal == expected,
             'max_abs_error_against_rounded_trig':maxerr,
+            'max_quarter_turn_identity_error':quarter_error,
+            'max_half_turn_identity_error':half_error,
+            'max_squared_q12_unit_circle_error':norm_error,
             'lookup_instructions_checked':len(pcs),
             'complete_lookup_chain_count':len(verified_pcs),
             'verified_lookup_pcs':verified_pcs,
