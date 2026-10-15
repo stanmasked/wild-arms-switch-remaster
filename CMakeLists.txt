@@ -115,3 +115,8 @@ set_tests_properties(wa_gte_fuzz_rtps_import_contract PROPERTIES WORKING_DIRECTO
 add_test(NAME wa_gte_fuzz_strict_contract
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gte_fuzz_strict_contract.py)
 set_tests_properties(wa_gte_fuzz_strict_contract PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Verify psx-spx packed matrix, vertex and output register mapping in gte-fuzz logs.
+add_test(NAME wa_gte_fuzz_register_mapping
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gte_fuzz_register_mapping.py)
+set_tests_properties(wa_gte_fuzz_register_mapping PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
