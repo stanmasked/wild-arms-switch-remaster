@@ -82,3 +82,8 @@ add_test(NAME wa_gte_rtps_depth_stage_tests COMMAND wa_gte_rtps_depth_stage_test
 add_executable(wa_gte_rtps_mac44_depth_reference_tests tests/test_gte_rtps_mac44_depth_reference.cpp)
 target_include_directories(wa_gte_rtps_mac44_depth_reference_tests PRIVATE include)
 add_test(NAME wa_gte_rtps_mac44_depth_reference_tests COMMAND wa_gte_rtps_mac44_depth_reference_tests)
+
+# Standalone RTPS depth cue (MAC0/DQA/DQB -> IR0), partial FLAG.
+add_executable(wa_gte_depth_cue_stage_tests tests/test_gte_depth_cue_stage.cpp)
+target_include_directories(wa_gte_depth_cue_stage_tests PRIVATE include)
+add_test(NAME wa_gte_depth_cue_stage_tests COMMAND wa_gte_depth_cue_stage_tests)
