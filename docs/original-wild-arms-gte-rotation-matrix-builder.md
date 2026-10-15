@@ -16,7 +16,7 @@ The constructor function `0x800B7118 … 0x800B739C` contains **10 `SH` writes t
 
 The offset **+16** is written by two separate instruction sites (`0x800B7214` and `0x800B7254`). The complete set of unique destinations is `0,2,4,6,8,10,12,14,16`. Branches may select different writes; the bounded linear static scan does not prove both occur in any one execution.
 
-The function also loads a pointer from global **`0x800CBE44`** at six instruction sites: `0x800B7140`, `0x800B7168`, `0x800B71A4`, `0x800B71CC`, `0x800B7230`, `0x800B7264`. These reads participate in calculations of the matrix coefficients. Their runtime target, values and precise mathematical table contents are **not verified**; do not label the data sine/cosine without further evidence.
+**Correction based on subsequent local EXE verification:** `0x800CBE44` is the base address of a directly indexed, 4096-entry packed sine/cosine table inside the executable's load image; it is **not a global pointer slot**. The six indexed `LW` instructions are `0x800B7140`, `0x800B7168`, `0x800B71A4`, `0x800B71CC`, `0x800B7230`, and `0x800B7264`. Each reads a table word at `0x800CBE44 + 4 * angle_index`. The table contains signed 16-bit sine and cosine samples at approximately Q12 scale. Exact branch-dependent coefficient selection and the original table-generation algorithm remain unproven. See `docs/original-wild-arms-gte-trig-table.md`.
 
 This establishes a reproducible high-level chain:
 
@@ -41,7 +41,7 @@ cmake --build build -j4
 ctest --test-dir build --output-on-failure
 ```
 
-The original EXE audit reported `builder_called=true`, `a1_is_stack_plus_16=true`, `complete_matrix_slots=true`, six global-pointer loads and `runtime_coefficients_recovered=false`. Twelve unit tests cover SH decoding, unique and duplicate slots, correct stack pointer and JAL, signed LUI/LW address formation, false-positive rejections and invalid ranges.
+The original EXE audit reported `builder_called=true`, `a1_is_stack_plus_16=true`, `complete_matrix_slots=true`, six indexed table loads and `runtime_coefficients_recovered=false`. Twelve unit tests cover SH decoding, unique and duplicate slots, correct stack pointer and JAL, signed LUI/LW address formation, false-positive rejections and invalid ranges.
 
 The full local host CMake/C++20 build passed **48/48 CTest suites**. This is static reverse engineering and host test verification; it is not a native playable Switch port or hardware-accurate GTE certification.
 
