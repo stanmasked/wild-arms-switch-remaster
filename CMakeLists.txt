@@ -8,3 +8,8 @@ enable_testing()
 add_executable(wa_core_tests tests/test_core.cpp)
 target_link_libraries(wa_core_tests PRIVATE wa_core)
 add_test(NAME wa_core_tests COMMAND wa_core_tests)
+
+# Host-verified groundwork for an eventual native PS1 GTE RTPS implementation.
+add_executable(wa_gte_math_tests tests/test_gte_math.cpp)
+target_include_directories(wa_gte_math_tests PRIVATE include)
+add_test(NAME wa_gte_math_tests COMMAND wa_gte_math_tests)
