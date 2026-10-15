@@ -110,3 +110,8 @@ set_tests_properties(wa_gte_external_log_inspector PROPERTIES WORKING_DIRECTORY 
 add_test(NAME wa_gte_fuzz_rtps_import_contract
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_import_gte_fuzz_rtps.py)
 set_tests_properties(wa_gte_fuzz_rtps_import_contract PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Detect malformed and interleaved ps1-tests GTE fuzz register blocks.
+add_test(NAME wa_gte_fuzz_strict_contract
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gte_fuzz_strict_contract.py)
+set_tests_properties(wa_gte_fuzz_strict_contract PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
