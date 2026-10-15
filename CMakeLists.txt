@@ -125,3 +125,8 @@ set_tests_properties(wa_gte_fuzz_register_mapping PROPERTIES WORKING_DIRECTORY $
 add_test(NAME wa_gte_runner_input_contract
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/check_gte_runner_input.py
                  $<TARGET_FILE:wa_gte_reference_runner>)
+
+# Differential screen/IR0 overflow behavior from independent emulator semantics.
+add_executable(wa_gte_mac0_wide_intermediate_tests tests/test_gte_mac0_wide_intermediate.cpp)
+target_include_directories(wa_gte_mac0_wide_intermediate_tests PRIVATE include)
+add_test(NAME wa_gte_mac0_wide_intermediate_tests COMMAND wa_gte_mac0_wide_intermediate_tests)
