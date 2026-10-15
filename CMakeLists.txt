@@ -18,3 +18,8 @@ add_test(NAME wa_gte_math_tests COMMAND wa_gte_math_tests)
 add_executable(wa_gte_transform_tests tests/test_gte_transform.cpp)
 target_include_directories(wa_gte_transform_tests PRIVATE include)
 add_test(NAME wa_gte_transform_tests COMMAND wa_gte_transform_tests)
+
+# Host-only integer projection reference (not hardware-accurate GTE).
+add_executable(wa_gte_projection_tests tests/test_gte_projection.cpp)
+target_include_directories(wa_gte_projection_tests PRIVATE include)
+add_test(NAME wa_gte_projection_tests COMMAND wa_gte_projection_tests)
