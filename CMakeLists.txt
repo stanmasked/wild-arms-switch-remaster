@@ -47,3 +47,8 @@ add_test(NAME wa_gte_rtps_unr_reference_tests COMMAND wa_gte_rtps_unr_reference_
 add_executable(wa_gte_screen_stage_tests tests/test_gte_screen_stage.cpp)
 target_include_directories(wa_gte_screen_stage_tests PRIVATE include)
 add_test(NAME wa_gte_screen_stage_tests COMMAND wa_gte_screen_stage_tests)
+
+# Composite UNR RTPS with fractional screen-offset stage.
+add_executable(wa_gte_rtps_screen_reference_tests tests/test_gte_rtps_screen_reference.cpp)
+target_include_directories(wa_gte_rtps_screen_reference_tests PRIVATE include)
+add_test(NAME wa_gte_rtps_screen_reference_tests COMMAND wa_gte_rtps_screen_reference_tests)
