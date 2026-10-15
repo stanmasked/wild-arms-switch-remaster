@@ -145,3 +145,8 @@ add_test(NAME wa_gte_rtpt_reference_tests COMMAND wa_gte_rtpt_reference_tests)
 add_executable(wa_gte_nclip_reference_tests tests/test_gte_nclip_reference.cpp)
 target_include_directories(wa_gte_nclip_reference_tests PRIVATE include)
 add_test(NAME wa_gte_nclip_reference_tests COMMAND wa_gte_nclip_reference_tests)
+
+# Conservative face classification with explicitly configured winding convention.
+add_executable(wa_gte_triangle_classification_tests tests/test_gte_triangle_classification.cpp)
+target_include_directories(wa_gte_triangle_classification_tests PRIVATE include)
+add_test(NAME wa_gte_triangle_classification_tests COMMAND wa_gte_triangle_classification_tests)
