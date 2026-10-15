@@ -62,3 +62,8 @@ add_test(NAME wa_gte_mac_stage_tests COMMAND wa_gte_mac_stage_tests)
 add_executable(wa_gte_rtps_mac_reference_tests tests/test_gte_rtps_mac_reference.cpp)
 target_include_directories(wa_gte_rtps_mac_reference_tests PRIVATE include)
 add_test(NAME wa_gte_rtps_mac_reference_tests COMMAND wa_gte_rtps_mac_reference_tests)
+
+# Per-step signed 44-bit accumulator model and overflow regression tests.
+add_executable(wa_gte_mac44_accumulate_tests tests/test_gte_mac44_accumulate.cpp)
+target_include_directories(wa_gte_mac44_accumulate_tests PRIVATE include)
+add_test(NAME wa_gte_mac44_accumulate_tests COMMAND wa_gte_mac44_accumulate_tests)
