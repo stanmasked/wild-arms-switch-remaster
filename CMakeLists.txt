@@ -195,3 +195,8 @@ set_tests_properties(wa_original_gp0_packet_stride PROPERTIES WORKING_DIRECTORY 
 add_test(NAME wa_original_gp0_callers
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_callers.py)
 set_tests_properties(wa_original_gp0_callers PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Original Wild Arms structure +16 pointer arithmetic (static MIPS pattern contract).
+add_test(NAME wa_original_gp0_packet_field16
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_packet_field16.py)
+set_tests_properties(wa_original_gp0_packet_field16 PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
