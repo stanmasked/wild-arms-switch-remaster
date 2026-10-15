@@ -17,6 +17,8 @@ except ImportError:
 
 
 def classify(word):
+    if word == 0:  # architectural NOP, not a meaningful SLL
+        return None
     op = word >> 26
     rs, rt, rd, sa, fn = ((word >> 21) & 31, (word >> 16) & 31,
                          (word >> 11) & 31, (word >> 6) & 31, word & 63)
