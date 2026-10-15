@@ -100,3 +100,8 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_test(NAME wa_gte_external_fixture_contract
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_external_gte_fixture.py)
 set_tests_properties(wa_gte_external_fixture_contract PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Guard against mislabeling ps1-tests summary logs as GTE reference vectors.
+add_test(NAME wa_gte_external_log_inspector
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_gte_log_inspector.py)
+set_tests_properties(wa_gte_external_log_inspector PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
