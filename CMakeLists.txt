@@ -260,3 +260,8 @@ set_tests_properties(wa_original_gp0_matrix_arithmetic PROPERTIES WORKING_DIRECT
 add_test(NAME wa_original_gp0_matrix_provenance
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_provenance.py)
 set_tests_properties(wa_original_gp0_matrix_provenance PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Conservative direct MIPS branch edges and delay-slot CFG contracts.
+add_test(NAME wa_original_gp0_matrix_cfg
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_cfg.py)
+set_tests_properties(wa_original_gp0_matrix_cfg PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
