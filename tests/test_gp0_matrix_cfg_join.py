@@ -32,6 +32,31 @@ class CFGJoinTests(unittest.TestCase):
         result=check([lw(8),(31<<21)|8,0,sh(8,0)],(0,))
         self.assertEqual(result['candidate_stores'],[])
         self.assertTrue(result['unresolved_transfers'])
+    def test_mult_mflo_provenance(self):
+        mult=(8<<21)|(9<<16)|24
+        mflo=(10<<11)|18
+        result=check([lw(8),mult,mflo,sh(10,0)],(0,))
+        self.assertEqual(result['candidate_stores'][0]['candidate_lookup_sources'],
+                         [f'0x{START:08X}'])
+        self.assertTrue(result['hi_lo_tracking'])
+    def test_mult_mfhi_provenance(self):
+        multu=(8<<21)|(9<<16)|25
+        mfhi=(10<<11)|16
+        result=check([lw(8),multu,mfhi,sh(10,2)],(0,))
+        self.assertEqual(result['candidate_stores'][0]['candidate_lookup_sources'],
+                         [f'0x{START:08X}'])
+    def test_new_product_overwrites_old_lo(self):
+        mult1=(8<<21)|(9<<16)|24
+        mult2=(10<<21)|(11<<16)|24
+        mflo=(12<<11)|18
+        result=check([lw(8),mult1,mult2,mflo,sh(12,0)],(0,))
+        self.assertEqual(result['candidate_stores'][0]['candidate_lookup_sources'],[])
+    def test_mtlo_source_to_mflo(self):
+        mtlo=(8<<21)|19
+        mflo=(10<<11)|18
+        result=check([lw(8),mtlo,mflo,sh(10,0)],(0,))
+        self.assertEqual(result['candidate_stores'][0]['candidate_lookup_sources'],
+                         [f'0x{START:08X}'])
     def test_invalid_range(self):
         self.assertFalse(analyze(b'',BASE,START,START)['valid_range'])
 
