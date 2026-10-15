@@ -92,3 +92,11 @@ add_test(NAME wa_gte_depth_cue_stage_tests COMMAND wa_gte_depth_cue_stage_tests)
 add_executable(wa_gte_rtps_ir0_reference_tests tests/test_gte_rtps_ir0_reference.cpp)
 target_include_directories(wa_gte_rtps_ir0_reference_tests PRIVATE include)
 add_test(NAME wa_gte_rtps_ir0_reference_tests COMMAND wa_gte_rtps_ir0_reference_tests)
+
+# External PS1 GTE snapshot comparison: no hardware fixture bundled.
+add_executable(wa_gte_reference_runner tests/gte_reference_runner.cpp)
+target_include_directories(wa_gte_reference_runner PRIVATE include)
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_test(NAME wa_gte_external_fixture_contract
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_external_gte_fixture.py)
+set_tests_properties(wa_gte_external_fixture_contract PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
