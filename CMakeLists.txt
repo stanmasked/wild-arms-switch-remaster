@@ -170,3 +170,8 @@ set_tests_properties(wa_original_nclip_ot_packets PROPERTIES WORKING_DIRECTORY $
 add_test(NAME wa_original_gp0_triangle_layouts
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_triangle_layouts.py)
 set_tests_properties(wa_original_gp0_triangle_layouts PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Static GP0 first-command-word and opcode-byte preservation analysis.
+add_test(NAME wa_original_gp0_opcode_provenance
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_opcode_provenance.py)
+set_tests_properties(wa_original_gp0_opcode_provenance PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
