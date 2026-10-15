@@ -40,6 +40,23 @@ class TrigTableTests(unittest.TestCase):
         self.assertEqual(r['max_abs_error_against_rounded_trig'],0)
         self.assertEqual(r['complete_lookup_chain_count'],1)
         self.assertFalse(r['values_emitted'])
+    def test_quarter_and_half_turn_symmetry(self):
+        result = analyze(fixture(),BASE,TABLE,16,(PC,))
+        self.assertEqual(result['max_quarter_turn_identity_error'],0)
+        self.assertEqual(result['max_half_turn_identity_error'],0)
+        self.assertLess(result['max_squared_q12_unit_circle_error'],4096)
+
+    def test_asymmetric_noncardinal_entry_is_detected(self):
+        data = fixture()
+        # Change just one off-axis sample while leaving cardinal points intact.
+        offset = TABLE-BASE + 4
+        value = struct.unpack_from('<h',data,offset)[0]
+        struct.pack_into('<h',data,offset,value+10)
+        result = analyze(data,BASE,TABLE,16,(PC,))
+        self.assertTrue(result['cardinal_points_match'])
+        self.assertGreater(result['max_quarter_turn_identity_error'],0)
+        self.assertGreater(result['max_half_turn_identity_error'],0)
+
     def test_corrupted_cardinal_point(self):
         b=fixture();struct.pack_into('<h',b,TABLE-BASE,100)
         self.assertFalse(analyze(b,BASE,TABLE,16,(PC,))['cardinal_points_match'])
