@@ -160,3 +160,8 @@ set_tests_properties(wa_original_nclip_winding_audit PROPERTIES WORKING_DIRECTOR
 add_test(NAME wa_original_nclip_polygon_writes
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_nclip_polygon_writes.py)
 set_tests_properties(wa_original_nclip_polygon_writes PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Static opcode contract for original Wild Arms GPU OT packet linkage.
+add_test(NAME wa_original_nclip_ot_packets
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_nclip_ot_packets.py)
+set_tests_properties(wa_original_nclip_ot_packets PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
