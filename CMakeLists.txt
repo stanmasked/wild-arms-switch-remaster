@@ -255,3 +255,8 @@ set_tests_properties(wa_original_gp0_trig_table PROPERTIES WORKING_DIRECTORY ${C
 add_test(NAME wa_original_gp0_matrix_arithmetic
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_arithmetic.py)
 set_tests_properties(wa_original_gp0_matrix_arithmetic PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Conservative intra-block lookup-to-matrix provenance, synthetic opcode fixtures.
+add_test(NAME wa_original_gp0_matrix_provenance
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_provenance.py)
+set_tests_properties(wa_original_gp0_matrix_provenance PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
