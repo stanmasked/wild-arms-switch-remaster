@@ -120,3 +120,8 @@ set_tests_properties(wa_gte_fuzz_strict_contract PROPERTIES WORKING_DIRECTORY ${
 add_test(NAME wa_gte_fuzz_register_mapping
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gte_fuzz_register_mapping.py)
 set_tests_properties(wa_gte_fuzz_register_mapping PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Verify C++ reference runner rejects malformed or out-of-range register inputs.
+add_test(NAME wa_gte_runner_input_contract
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/check_gte_runner_input.py
+                 $<TARGET_FILE:wa_gte_reference_runner>)
