@@ -190,3 +190,8 @@ set_tests_properties(wa_original_gp0_texture_fields PROPERTIES WORKING_DIRECTORY
 add_test(NAME wa_original_gp0_packet_stride
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_packet_stride.py)
 set_tests_properties(wa_original_gp0_packet_stride PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Static direct JAL packet-renderer call sites and a0 source provenance.
+add_test(NAME wa_original_gp0_callers
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_callers.py)
+set_tests_properties(wa_original_gp0_callers PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
