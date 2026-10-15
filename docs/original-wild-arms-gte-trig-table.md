@@ -29,7 +29,26 @@ ctest --test-dir build --output-on-failure
 
 The **private original executable was examined locally only**. The new tool reports aggregate comparisons and instruction addresses; it neither prints nor commits the original 16 KiB table. Tests use their own independently generated, tiny synthetic lookup fixture, not original game assets.
 
-Ten new regression tests pass; the complete locally compiled project passed **49/49 CTest suites**. Original table reconstruction at runtime, exact rounding, hardware-exact GTE simulation, Nintendo Switch native rendering, and playable game status are not implied by this result.
+The original ten regression tests cover the initial audit; two additional synthetic diagnostic tests were added in stage 160. The new total has not yet been verified against the complete CI suite. Previously, the complete locally compiled project passed **49/49 CTest suites**. Original table reconstruction at runtime, exact rounding, hardware-exact GTE simulation, Nintendo Switch native rendering, and playable game status are not implied by this result.
+
+## Additional aggregate symmetry diagnostics (stage 160)
+
+The auditor also reports three non-extracting error metrics, all calculated
+over the complete table. For each index `i`, with `q = entries/4`:
+
+- `max_quarter_turn_identity_error`: maximum difference between
+  `sin(i+q)` and `cos(i)`, or `cos(i+q)` and `-sin(i)`.
+- `max_half_turn_identity_error`: maximum difference between
+  `sin(i+2q)` and `-sin(i)`, or `cos(i+2q)` and `-cos(i)`.
+- `max_squared_q12_unit_circle_error`: maximum absolute value of
+  `sin(i)^2 + cos(i)^2 - 4096^2`, in squared Q12 sample units.
+
+These aggregates can help distinguish rotational symmetry, quantization,
+and table-generation behavior without distributing any original sample.
+Two synthetic fixture tests exercise the metrics, including an off-axis
+single-sample perturbation whose cardinal samples remain valid. No
+bit-exact rounding rule can be inferred from aggregate errors alone.
+Run the audit on the user-owned EXE locally to obtain measured values.
 
 ## Next investigation
 
