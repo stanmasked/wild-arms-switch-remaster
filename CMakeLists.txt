@@ -130,3 +130,8 @@ add_test(NAME wa_gte_runner_input_contract
 add_executable(wa_gte_mac0_wide_intermediate_tests tests/test_gte_mac0_wide_intermediate.cpp)
 target_include_directories(wa_gte_mac0_wide_intermediate_tests PRIVATE include)
 add_test(NAME wa_gte_mac0_wide_intermediate_tests COMMAND wa_gte_mac0_wide_intermediate_tests)
+
+# Preserve RTPS SXY0..2 and SZ0..3 FIFO state between vertices.
+add_executable(wa_gte_rtps_fifo_tests tests/test_gte_rtps_fifo.cpp)
+target_include_directories(wa_gte_rtps_fifo_tests PRIVATE include)
+add_test(NAME wa_gte_rtps_fifo_tests COMMAND wa_gte_rtps_fifo_tests)
