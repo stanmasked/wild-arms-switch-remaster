@@ -210,3 +210,8 @@ set_tests_properties(wa_original_gp0_cursor_lifecycle PROPERTIES WORKING_DIRECTO
 add_test(NAME wa_original_gp0_structure_callers
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_structure_callers.py)
 set_tests_properties(wa_original_gp0_structure_callers PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Recover original Wild Arms polygon structure r20/r22 root pointer origins.
+add_test(NAME wa_original_gp0_root_registers
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_root_registers.py)
+set_tests_properties(wa_original_gp0_root_registers PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
