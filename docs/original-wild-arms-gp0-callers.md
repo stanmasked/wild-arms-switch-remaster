@@ -34,7 +34,7 @@ ctest --test-dir build --output-on-failure
 
 Offline original-EXE output: 6 packet paths, 5 with direct JAL caller candidates, all 5 with nearest `LW a0,+16(base)` evidence.
 
-Eight additional synthetic Python tests in `tests/test_gp0_callers.py` validate JAL address construction, high-address region handling, signed LW offsets, ignoring writes to non-a0 registers, explicit ADDU sources, repeated callers, nearest textual a0 definitions, and empty-image behavior.
+Nine additional synthetic Python tests in `tests/test_gp0_callers.py` validate JAL address construction, high-address region handling, signed LW offsets, negative ADDIU immediates, ignoring writes to non-a0 registers, explicit ADDU sources, repeated callers, nearest textual a0 definitions, and empty-image behavior.
 
 **A fresh local CMake/C++20 build passed 38/38 CTest suites** including `wa_original_gp0_callers`. No GitHub Actions result or Nintendo Switch executable is implied.
 
