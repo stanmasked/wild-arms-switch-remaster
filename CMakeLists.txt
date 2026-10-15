@@ -72,3 +72,8 @@ add_test(NAME wa_gte_mac44_accumulate_tests COMMAND wa_gte_mac44_accumulate_test
 add_executable(wa_gte_rtps_mac44_reference_tests tests/test_gte_rtps_mac44_reference.cpp)
 target_include_directories(wa_gte_rtps_mac44_reference_tests PRIVATE include)
 add_test(NAME wa_gte_rtps_mac44_reference_tests COMMAND wa_gte_rtps_mac44_reference_tests)
+
+# Isolated RTPS IR3 saturation flag versus SZ3 depth rules (sf/lm).
+add_executable(wa_gte_rtps_depth_stage_tests tests/test_gte_rtps_depth_stage.cpp)
+target_include_directories(wa_gte_rtps_depth_stage_tests PRIVATE include)
+add_test(NAME wa_gte_rtps_depth_stage_tests COMMAND wa_gte_rtps_depth_stage_tests)
