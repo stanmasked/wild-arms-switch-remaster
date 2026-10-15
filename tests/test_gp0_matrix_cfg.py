@@ -1,0 +1,38 @@
+import struct
+import unittest
+from tools.audit_gp0_matrix_cfg import analyze, direct_successors
+
+BASE = 0x80010000
+START = BASE + 0x20
+
+def check(words):
+    data = bytes(0x20) + struct.pack('<%dI' % len(words), *words)
+    return analyze(data, BASE, START, START + 4*(len(words)-1))
+
+class CFGTests(unittest.TestCase):
+    def test_beq_forward(self):
+        kind, targets, delayed = direct_successors(4<<26 | 2, START)
+        self.assertEqual((kind, targets, delayed), ('conditional', (START+12, START+8), True))
+    def test_negative_branch(self):
+        self.assertEqual(direct_successors(5<<26 | 0xffff, START)[1][0], START)
+    def test_jump_target(self):
+        address = START + 16
+        self.assertEqual(direct_successors(2<<26 | (address>>2 & 0x3ffffff), START)[1], (address,))
+    def test_delay_edges(self):
+        report = check([4<<26 | 1, 0, 0, 0])
+        self.assertTrue(any(e['kind']=='delay_slot' for e in report['edges']))
+        self.assertTrue(any(e['kind']=='conditional' for e in report['edges']))
+    def test_external_call_unresolved(self):
+        report = check([3<<26, 0, 0])
+        self.assertTrue(any(x['reason']=='call_requires_semantics' for x in report['unresolved']))
+    def test_indirect_jump_unresolved(self):
+        report = check([(31<<21)|8, 0, 0])
+        self.assertTrue(any(x['reason']=='indirect_requires_semantics' for x in report['unresolved']))
+    def test_branch_likely_unresolved(self):
+        report = check([20<<26, 0, 0])
+        self.assertTrue(any(x['reason']=='branch_likely_requires_semantics' for x in report['unresolved']))
+    def test_out_of_range(self):
+        self.assertFalse(analyze(b'', BASE, START, START)['valid_range'])
+
+if __name__ == '__main__':
+    unittest.main()
