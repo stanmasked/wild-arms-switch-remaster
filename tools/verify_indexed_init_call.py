@@ -27,15 +27,15 @@ def verify_words(words):
         raise ValueError("stride instruction signature mismatch")
     if (words[8], words[9]) != GLOBAL_OPS:
         raise ValueError("global pointer signature mismatch")
-    if words[15] != 0x26040004:
+    if words[16] != 0x26040004:
         raise ValueError("expected addiu a0,s0,4")
-    if words[16] != 0xA2020000 or words[18] != 0xA2060001:
+    if words[17] != 0xA2020000 or words[19] != 0xA2060001:
         raise ValueError("record header stores differ")
-    if words[17] != (0x0c000000 | ((CALLEE >> 2) & 0x03ffffff)):
+    if words[18] != (0x0c000000 | ((CALLEE >> 2) & 0x03ffffff)):
         raise ValueError("initializer JAL signature differs")
-    # JAL delay slot at index 18 saves input byte a2 into record byte 1.
-    expected_stores = {26: 0xA6020052, 27: 0xA6120002,
-                       28: 0xA6030050, 39: 0xAE030054}
+    # JAL delay slot at index 19 saves input byte a2 into record byte 1.
+    expected_stores = {25: 0xA6020052, 26: 0xA6120002,
+                       27: 0xA6030050, 39: 0xAE030054}
     for index, expected in expected_stores.items():
         if words[index] != expected:
             raise ValueError(f"record field store differs at index {index}")
