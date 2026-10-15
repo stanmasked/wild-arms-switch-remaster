@@ -215,3 +215,8 @@ set_tests_properties(wa_original_gp0_structure_callers PROPERTIES WORKING_DIRECT
 add_test(NAME wa_original_gp0_root_registers
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_root_registers.py)
 set_tests_properties(wa_original_gp0_root_registers PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Original polygon root globals and JAL delay-slot a3 stack argument audit.
+add_test(NAME wa_original_gp0_global_writes_a3
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_global_writes_a3.py)
+set_tests_properties(wa_original_gp0_global_writes_a3 PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
