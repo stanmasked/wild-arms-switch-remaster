@@ -180,3 +180,8 @@ set_tests_properties(wa_original_gp0_opcode_provenance PROPERTIES WORKING_DIRECT
 add_test(NAME wa_original_gp0_color_fifo
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_color_fifo.py)
 set_tests_properties(wa_original_gp0_color_fifo PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Detect direct stores into FT3/GT3 UV/CLUT/TPAGE words in original NCLIP paths.
+add_test(NAME wa_original_gp0_texture_fields
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_texture_fields.py)
+set_tests_properties(wa_original_gp0_texture_fields PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
