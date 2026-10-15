@@ -21,6 +21,10 @@ class GP0CallerAudit(unittest.TestCase):
                          {'kind':'LW','base_register':17,'offset':16})
         self.assertEqual(a0_definition(lw_a0(16,-4))['offset'],-4)
 
+    def test_negative_addiu_immediate(self):
+        word=(9<<26)|(4<<21)|(4<<16)|0xfffc
+        self.assertEqual(a0_definition(word)['immediate'],-4)
+
     def test_non_a0_write_ignored(self):
         self.assertIsNone(a0_definition((35<<26)|(17<<21)|(5<<16)|16))
 
