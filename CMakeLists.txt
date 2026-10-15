@@ -240,3 +240,8 @@ set_tests_properties(wa_original_gp0_mvmva_control PROPERTIES WORKING_DIRECTORY 
 add_test(NAME wa_original_gp0_rotation_matrix_load
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_rotation_matrix_load.py)
 set_tests_properties(wa_original_gp0_rotation_matrix_load PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Original rotation matrix constructor writes nine signed halfword slots.
+add_test(NAME wa_original_gp0_rotation_matrix_builder
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_rotation_matrix_builder.py)
+set_tests_properties(wa_original_gp0_rotation_matrix_builder PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
