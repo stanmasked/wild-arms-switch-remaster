@@ -23,3 +23,7 @@ add_test(NAME wa_gte_transform_tests COMMAND wa_gte_transform_tests)
 add_executable(wa_gte_projection_tests tests/test_gte_projection.cpp)
 target_include_directories(wa_gte_projection_tests PRIVATE include)
 add_test(NAME wa_gte_projection_tests COMMAND wa_gte_projection_tests)
+
+add_executable(wa_gte_rtps_reference_tests tests/test_gte_rtps_reference.cpp)
+target_include_directories(wa_gte_rtps_reference_tests PRIVATE include)
+add_test(NAME wa_gte_rtps_reference_tests COMMAND wa_gte_rtps_reference_tests)
