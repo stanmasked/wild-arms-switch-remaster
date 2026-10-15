@@ -42,3 +42,8 @@ add_test(NAME wa_gte_projection_unr_tests COMMAND wa_gte_projection_unr_tests)
 add_executable(wa_gte_rtps_unr_reference_tests tests/test_gte_rtps_unr_reference.cpp)
 target_include_directories(wa_gte_rtps_unr_reference_tests PRIVATE include)
 add_test(NAME wa_gte_rtps_unr_reference_tests COMMAND wa_gte_rtps_unr_reference_tests)
+
+# Fixed-point GTE OFX/OFY screen stage and MAC0 diagnostic flags.
+add_executable(wa_gte_screen_stage_tests tests/test_gte_screen_stage.cpp)
+target_include_directories(wa_gte_screen_stage_tests PRIVATE include)
+add_test(NAME wa_gte_screen_stage_tests COMMAND wa_gte_screen_stage_tests)
