@@ -150,3 +150,8 @@ add_test(NAME wa_gte_nclip_reference_tests COMMAND wa_gte_nclip_reference_tests)
 add_executable(wa_gte_triangle_classification_tests tests/test_gte_triangle_classification.cpp)
 target_include_directories(wa_gte_triangle_classification_tests PRIVATE include)
 add_test(NAME wa_gte_triangle_classification_tests COMMAND wa_gte_triangle_classification_tests)
+
+# Reverse-engineered PS-X EXE polygon winding: synthetic opcode tests only.
+add_test(NAME wa_original_nclip_winding_audit
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_original_nclip_winding.py)
+set_tests_properties(wa_original_nclip_winding_audit PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
