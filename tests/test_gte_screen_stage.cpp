@@ -16,5 +16,5 @@ static_assert((clipping.flag & ((1u<<31)|(1u<<17)|(1u<<14)|(1u<<13))) ==
              ((1u<<31)|(1u<<17)|(1u<<14)|(1u<<13)));
 constexpr auto overflow=screen_stage_unr(32767,0,2147483647,0,{0x10000,false});
 static_assert((overflow.flag & (1u<<16)) != 0);
-static_assert((overflow.flag & (1u<<31)) == 0); // MAC0 overflow alone is not summary.
+static_assert((overflow.flag & ((1u<<31)|(1u<<14))) == ((1u<<31)|(1u<<14))); // Full-width screen limiter clips.
 int main(){assert(normal.sxy==pack_sxy(370,215));}
