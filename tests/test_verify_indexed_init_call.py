@@ -6,9 +6,9 @@ def fixture():
     w[3:7] = STRIDE_OPS[:4]
     w[10] = STRIDE_OPS[4]
     w[8], w[9] = GLOBAL_OPS
-    w[15:19] = [0x26040004, 0xA2020000, 0x0C01B39C, 0xA2060001]
-    for i,v in {26:0xA6020052,27:0xA6120002,
-                28:0xA6030050,39:0xAE030054}.items():
+    w[16:20] = [0x26040004, 0xA2020000, 0x0C01B39C, 0xA2060001]
+    for i,v in {25:0xA6020052,26:0xA6120002,
+                27:0xA6030050,39:0xAE030054}.items():
         w[i]=v
     return w
 
@@ -21,9 +21,9 @@ class InitCallerTests(unittest.TestCase):
     def test_argument_offset(self):
         self.assertEqual(verify_words(fixture())["initializer_argument_offset"],4)
     def test_jal_delay_slot(self):
-        self.assertEqual(fixture()[18],0xA2060001)
+        self.assertEqual(fixture()[19],0xA2060001)
     def test_reject_other_callee(self):
-        w=fixture();w[17]=0x0C000000
+        w=fixture();w[18]=0x0C000000
         with self.assertRaises(ValueError):verify_words(w)
     def test_reject_wrong_stride(self):
         w=fixture();w[6]=0
