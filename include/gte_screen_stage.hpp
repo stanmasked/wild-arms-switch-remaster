@@ -32,7 +32,9 @@ constexpr ScreenStageResult screen_stage_unr(std::int16_t ir1, std::int16_t ir2,
         const std::int64_t raw = std::int64_t(of) + std::int64_t(ir) * quotient;
         if (raw > std::numeric_limits<std::int32_t>::max()) flags |= 1u << 16;
         if (raw < std::numeric_limits<std::int32_t>::min()) flags |= 1u << 15;
-        const auto pixel = floor_shift16(wrap_i32(raw));
+        // The screen limiter sees the full MAC0 intermediate; only the
+        // architectural MAC0 register is truncated to 32 bits.
+        const auto pixel = floor_shift16(raw);
         const auto limited = x ? clamp_sx(pixel) : clamp_sy(pixel);
         if (pixel != limited) flags |= 1u << (x ? 14 : 13);
         return limited;
