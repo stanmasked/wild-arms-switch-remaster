@@ -40,3 +40,23 @@ indirect-transfer boundaries and invalid images.
 
 The follow-on task is an edge-sensitive CFG representation that separates
 delay-slot contexts, along with HI/LO propagation and branch predicates.
+
+## Stage 165: HI/LO source propagation
+
+The CFG-join transfer state now includes two additional symbolic registers,
+HI (index 32) and LO (index 33). Valid R-type `MULT`/`MULTU` replace
+both with the union of operand source labels; `MFHI`/`MFLO` copy
+the corresponding source to the destination GPR; `MTHI`/`MTLO`
+explicitly overwrite the corresponding source. The worklist merges these
+source sets alongside the 32 general registers.
+
+Four further synthetic tests check signed and unsigned multiplication,
+overwriting an earlier product, and explicit MTLO-to-MFLO propagation.
+
+**Caution:** source labels are not 64-bit arithmetic values. This stage does
+not establish multiplication overflow, signedness of the coefficient formula,
+MIPS pipeline timing or actual branch predicates. The CFG remains context-
+insensitive regarding delay slots, calls and unresolved branch types. The
+output remains a *may-source* diagnostic, not a bit-exact matrix reconstruction.
+The private original EXE is not included, and complete CI execution has
+not been confirmed.
