@@ -185,3 +185,8 @@ set_tests_properties(wa_original_gp0_color_fifo PROPERTIES WORKING_DIRECTORY ${C
 add_test(NAME wa_original_gp0_texture_fields
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_texture_fields.py)
 set_tests_properties(wa_original_gp0_texture_fields PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Static packet pointer alias and fixed stride analysis for original Wild Arms.
+add_test(NAME wa_original_gp0_packet_stride
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_packet_stride.py)
+set_tests_properties(wa_original_gp0_packet_stride PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
