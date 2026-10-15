@@ -13,6 +13,7 @@ struct Transform {
 };
 struct Transformed {
     std::array<std::int32_t, 3> ir;
+    std::array<std::int64_t, 3> pre_ir;
     std::array<bool, 3> clamped;
 };
 constexpr Transformed rotate_translate(const Transform& transform, Vector3 v,
@@ -24,6 +25,7 @@ constexpr Transformed rotate_translate(const Transform& transform, Vector3 v,
         for (std::size_t column = 0; column < 3; ++column)
             accumulator += std::int64_t(transform.rotation[row][column]) * values[column];
         const std::int64_t shifted = floor_shift12(accumulator);
+        out.pre_ir[row] = shifted;
         out.ir[row] = limit_mode ? clamp_ir_unsigned(shifted) : clamp_ir_signed(shifted);
         out.clamped[row] = shifted != out.ir[row];
     }
