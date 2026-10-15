@@ -175,3 +175,8 @@ set_tests_properties(wa_original_gp0_triangle_layouts PROPERTIES WORKING_DIRECTO
 add_test(NAME wa_original_gp0_opcode_provenance
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_opcode_provenance.py)
 set_tests_properties(wa_original_gp0_opcode_provenance PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Independently audit RGB FIFO color stores in original polygon command packets.
+add_test(NAME wa_original_gp0_color_fifo
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_color_fifo.py)
+set_tests_properties(wa_original_gp0_color_fifo PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
