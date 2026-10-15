@@ -155,3 +155,8 @@ add_test(NAME wa_gte_triangle_classification_tests COMMAND wa_gte_triangle_class
 add_test(NAME wa_original_nclip_winding_audit
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_original_nclip_winding.py)
 set_tests_properties(wa_original_nclip_winding_audit PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Static, game-asset-free tests for SWC2 polygon-coordinate writes after NCLIP.
+add_test(NAME wa_original_nclip_polygon_writes
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_nclip_polygon_writes.py)
+set_tests_properties(wa_original_nclip_polygon_writes PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
