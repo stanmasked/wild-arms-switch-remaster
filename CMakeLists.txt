@@ -220,3 +220,8 @@ set_tests_properties(wa_original_gp0_root_registers PROPERTIES WORKING_DIRECTORY
 add_test(NAME wa_original_gp0_global_writes_a3
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_global_writes_a3.py)
 set_tests_properties(wa_original_gp0_global_writes_a3 PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Original polygon setup/renderer stack object handoff through a2 and a3.
+add_test(NAME wa_original_gp0_stack_handoff
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_stack_handoff.py)
+set_tests_properties(wa_original_gp0_stack_handoff PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
