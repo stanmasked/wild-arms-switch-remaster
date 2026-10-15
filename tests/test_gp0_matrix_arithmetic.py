@@ -21,6 +21,8 @@ class ArithmeticDecodeTests(unittest.TestCase):
         self.assertEqual(classify(r(0, 9, 10, 12, 3)), ('SRA', (10, 9, 12)))
     def test_variable_arithmetic_shift(self):
         self.assertEqual(classify(r(7, 9, 10, 0, 7)), ('SRAV', (10, 9, 7)))
+    def test_nop_is_not_counted_as_shift(self):
+        self.assertIsNone(classify(0))
     def test_reject_invalid_mult_encoding(self):
         self.assertIsNone(classify(r(8, 9, 4, 0, 24)))
     def test_reject_nonzero_shift_source(self):
