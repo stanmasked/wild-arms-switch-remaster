@@ -205,3 +205,8 @@ set_tests_properties(wa_original_gp0_packet_field16 PROPERTIES WORKING_DIRECTORY
 add_test(NAME wa_original_gp0_cursor_lifecycle
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_cursor_lifecycle.py)
 set_tests_properties(wa_original_gp0_cursor_lifecycle PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Trace direct JAL entry and a0 argument sources for polygon cursor setup.
+add_test(NAME wa_original_gp0_structure_callers
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_structure_callers.py)
+set_tests_properties(wa_original_gp0_structure_callers PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
