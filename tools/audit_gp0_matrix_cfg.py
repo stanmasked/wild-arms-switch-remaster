@@ -45,10 +45,12 @@ def analyze(image, base, start=BUILDER, end=RETURN):
              for pc in range(start, end+4, 4)}
     edges = []
     unresolved = []
+    delay_slots = {pc+4 for pc, word in words.items()
+                   if direct_successors(word, pc)[2] and pc+4 <= end}
     for pc, word in words.items():
         kind, targets, delayed = direct_successors(word, pc)
         if kind == 'linear':
-            if pc + 4 <= end:
+            if pc not in delay_slots and pc + 4 <= end:
                 edges.append({'from': f'0x{pc:08X}', 'to': f'0x{pc+4:08X}', 'kind': kind})
             continue
         slot = pc + 4
