@@ -13,3 +13,8 @@ add_test(NAME wa_core_tests COMMAND wa_core_tests)
 add_executable(wa_gte_math_tests tests/test_gte_math.cpp)
 target_include_directories(wa_gte_math_tests PRIVATE include)
 add_test(NAME wa_gte_math_tests COMMAND wa_gte_math_tests)
+
+# Host reference tests for fixed-point rotate/translate (not full GTE RTPS).
+add_executable(wa_gte_transform_tests tests/test_gte_transform.cpp)
+target_include_directories(wa_gte_transform_tests PRIVATE include)
+add_test(NAME wa_gte_transform_tests COMMAND wa_gte_transform_tests)
