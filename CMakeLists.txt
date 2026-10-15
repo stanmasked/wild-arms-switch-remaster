@@ -245,3 +245,8 @@ set_tests_properties(wa_original_gp0_rotation_matrix_load PROPERTIES WORKING_DIR
 add_test(NAME wa_original_gp0_rotation_matrix_builder
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_rotation_matrix_builder.py)
 set_tests_properties(wa_original_gp0_rotation_matrix_builder PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Verify original packed fixed-point trigonometric table and six indexed reads.
+add_test(NAME wa_original_gp0_trig_table
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_trig_table.py)
+set_tests_properties(wa_original_gp0_trig_table PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
