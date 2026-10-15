@@ -18,10 +18,10 @@ def check(words,loads=()):
 
 class CFGJoinTests(unittest.TestCase):
     def test_branch_merges_two_lookup_sources(self):
-        # Branch from 0 to 4 or 2; both paths reach the store at 6.
-        result=check([beq(3),0,lw(8),j(START+24),lw(8),0,sh(8,0)],(2,4))
+        # Branch goes to 5 or falls through to 2; both reach store at 7.
+        result=check([beq(4),0,lw(8),j(START+28),0,lw(8),0,sh(8,0)],(2,5))
         self.assertEqual(result['candidate_stores'][0]['candidate_lookup_sources'],
-                         [f'0x{START+8:08X}',f'0x{START+16:08X}'])
+                         [f'0x{START+8:08X}',f'0x{START+20:08X}'])
     def test_overwrite_kills_previous_source(self):
         result=check([lw(8),addiu(8),sh(8,0)],(0,))
         self.assertEqual(result['candidate_stores'][0]['candidate_lookup_sources'],[])
