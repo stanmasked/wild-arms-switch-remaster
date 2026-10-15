@@ -105,3 +105,8 @@ set_tests_properties(wa_gte_external_fixture_contract PROPERTIES WORKING_DIRECTO
 add_test(NAME wa_gte_external_log_inspector
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_gte_log_inspector.py)
 set_tests_properties(wa_gte_external_log_inspector PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Strict 64-register ps1-tests gte-fuzz capture importer contract.
+add_test(NAME wa_gte_fuzz_rtps_import_contract
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_import_gte_fuzz_rtps.py)
+set_tests_properties(wa_gte_fuzz_rtps_import_contract PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
