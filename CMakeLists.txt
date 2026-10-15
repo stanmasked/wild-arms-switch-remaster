@@ -37,3 +37,8 @@ add_test(NAME wa_gte_unr_division_tests COMMAND wa_gte_unr_division_tests)
 add_executable(wa_gte_projection_unr_tests tests/test_gte_projection_unr.cpp)
 target_include_directories(wa_gte_projection_unr_tests PRIVATE include)
 add_test(NAME wa_gte_projection_unr_tests COMMAND wa_gte_projection_unr_tests)
+
+# Composite host RTPS using UNR perspective; not full PlayStation GTE.
+add_executable(wa_gte_rtps_unr_reference_tests tests/test_gte_rtps_unr_reference.cpp)
+target_include_directories(wa_gte_rtps_unr_reference_tests PRIVATE include)
+add_test(NAME wa_gte_rtps_unr_reference_tests COMMAND wa_gte_rtps_unr_reference_tests)
