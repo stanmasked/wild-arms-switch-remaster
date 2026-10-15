@@ -230,3 +230,8 @@ set_tests_properties(wa_original_gp0_stack_handoff PROPERTIES WORKING_DIRECTORY 
 add_test(NAME wa_original_gp0_helper_mvmva
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_helper_mvmva.py)
 set_tests_properties(wa_original_gp0_helper_mvmva PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Decode original GTE MVMVA control bits and verify the original opcode word.
+add_test(NAME wa_original_gp0_mvmva_control
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_mvmva_control.py)
+set_tests_properties(wa_original_gp0_mvmva_control PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
