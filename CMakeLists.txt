@@ -165,3 +165,8 @@ set_tests_properties(wa_original_nclip_polygon_writes PROPERTIES WORKING_DIRECTO
 add_test(NAME wa_original_nclip_ot_packets
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_nclip_ot_packets.py)
 set_tests_properties(wa_original_nclip_ot_packets PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Match PS1 GP0 triangle layout candidates against original packet SXY offsets.
+add_test(NAME wa_original_gp0_triangle_layouts
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_triangle_layouts.py)
+set_tests_properties(wa_original_gp0_triangle_layouts PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
