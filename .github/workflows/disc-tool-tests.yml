@@ -1,0 +1,11 @@
+name: Disc analysis unit tests
+on:
+  push:
+  pull_request:
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run synthetic overlay tests (no game image required)
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
