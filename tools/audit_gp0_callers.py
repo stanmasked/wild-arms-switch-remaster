@@ -30,7 +30,7 @@ def a0_definition(word):
     if rt == 4 and op in (8, 9, 12, 13, 15):
         return {'kind': {8:'ADDI',9:'ADDIU',12:'ANDI',13:'ORI',15:'LUI'}[op],
                 'base_register': rs,
-                'immediate': imm if op not in (12,13,15) and imm >= 32768 else imm}
+                'immediate': (imm-65536 if imm >= 32768 else imm) if op in (8,9) else imm}
     if op == 0 and ((word >> 11) & 31) == 4 and (word & 63) in (0x21,0x23):
         return {'kind':'ADDU' if (word & 63)==0x21 else 'SUBU',
                 'source_registers':[rs,rt]}
