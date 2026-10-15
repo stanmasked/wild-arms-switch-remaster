@@ -57,3 +57,8 @@ add_test(NAME wa_gte_rtps_screen_reference_tests COMMAND wa_gte_rtps_screen_refe
 add_executable(wa_gte_mac_stage_tests tests/test_gte_mac_stage.cpp)
 target_include_directories(wa_gte_mac_stage_tests PRIVATE include)
 add_test(NAME wa_gte_mac_stage_tests COMMAND wa_gte_mac_stage_tests)
+
+# Experimental MAC/IR/FLAG RTPS composite (not hardware bit-exact).
+add_executable(wa_gte_rtps_mac_reference_tests tests/test_gte_rtps_mac_reference.cpp)
+target_include_directories(wa_gte_rtps_mac_reference_tests PRIVATE include)
+add_test(NAME wa_gte_rtps_mac_reference_tests COMMAND wa_gte_rtps_mac_reference_tests)
