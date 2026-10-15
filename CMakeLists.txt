@@ -250,3 +250,8 @@ set_tests_properties(wa_original_gp0_rotation_matrix_builder PROPERTIES WORKING_
 add_test(NAME wa_original_gp0_trig_table
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_trig_table.py)
 set_tests_properties(wa_original_gp0_trig_table PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Decode multiply, HI/LO and signed shifts in the original matrix constructor.
+add_test(NAME wa_original_gp0_matrix_arithmetic
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_arithmetic.py)
+set_tests_properties(wa_original_gp0_matrix_arithmetic PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
