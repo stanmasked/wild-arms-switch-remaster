@@ -65,6 +65,8 @@ def parse_capture(text, source):
             index = int(index)
             if index >= 64:
                 raise ValueError(f'line {lineno}: register index >= 64')
+            if direction == '>' and cmd is not None:
+                raise ValueError(f'line {lineno}: input register after command')
             target = before if direction == '>' else after
             if index in target:
                 raise ValueError(f'line {lineno}: duplicate register {direction}{index}')
@@ -83,11 +85,17 @@ def parse_capture(text, source):
         if match:
             if cmd is not None or after or len(before) != 64:
                 raise ValueError(f'line {lineno}: command without 64 input registers')
-            opcode,label,sf,lm,*_ = match.groups()
+            opcode,label,sf,lm,tx,vx,mx = match.groups()
+            if any(int(selector) > 3 for selector in (tx,vx,mx)):
+                raise ValueError(f'line {lineno}: invalid command vector selection')
+            if (int(opcode,16) == 1) != (label == 'RTPS'):
+                raise ValueError(f'line {lineno}: inconsistent RTPS opcode/name')
             cmd = int(opcode,16),label,int(sf),int(lm)
             continue
         if line.startswith(('> r[','< r[','GTE 0x')):
             raise ValueError(f'line {lineno}: malformed register or opcode')
+        if line and (before or after or cmd is not None):
+            raise ValueError(f'line {lineno}: unexpected text inside register block')
     if cmd is not None or before or after:
         raise ValueError('truncated final register block')
     if not vectors:
