@@ -135,3 +135,8 @@ add_test(NAME wa_gte_mac0_wide_intermediate_tests COMMAND wa_gte_mac0_wide_inter
 add_executable(wa_gte_rtps_fifo_tests tests/test_gte_rtps_fifo.cpp)
 target_include_directories(wa_gte_rtps_fifo_tests PRIVATE include)
 add_test(NAME wa_gte_rtps_fifo_tests COMMAND wa_gte_rtps_fifo_tests)
+
+# Triple RTPT reference reusing stateful single-vertex RTPS.
+add_executable(wa_gte_rtpt_reference_tests tests/test_gte_rtpt_reference.cpp)
+target_include_directories(wa_gte_rtpt_reference_tests PRIVATE include)
+add_test(NAME wa_gte_rtpt_reference_tests COMMAND wa_gte_rtpt_reference_tests)
