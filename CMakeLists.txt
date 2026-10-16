@@ -345,3 +345,13 @@ set_tests_properties(wa_mips_caller_sources PROPERTIES WORKING_DIRECTORY ${CMAKE
 add_test(NAME wa_mips_caller_cfg_sources
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_caller_cfg_sources.py)
 set_tests_properties(wa_mips_caller_cfg_sources PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Match bounded synthetic MIPS replay traces to conservative caller CFG paths.
+add_test(NAME wa_mips_cfg_probe_path
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_cfg_probe_path.py)
+set_tests_properties(wa_mips_cfg_probe_path PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Integrated JAL/caller CFG probing, including full-window replay safety.
+add_test(NAME wa_gp0_cfg_runtime_correlation
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_cfg_runtime_correlation.py)
+set_tests_properties(wa_gp0_cfg_runtime_correlation PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
