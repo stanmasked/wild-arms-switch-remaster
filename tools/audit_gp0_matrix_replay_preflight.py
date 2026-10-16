@@ -30,6 +30,7 @@ try:
     from .mips_matrix_operation_schedule import summarize as summarize_operation_schedule
     from .mips_builder_opcode_evidence import inspect as inspect_builder_opcode_evidence
     from .mips_builder_execution_evidence import summarize as summarize_builder_execution
+    from .mips_builder_integrity_gate import evaluate as evaluate_builder_integrity
 except ImportError:
     from audit_original_nclip_winding import parse_exe
     from audit_gp0_rotation_matrix_builder import BUILDER, RETURN, CALL, jal_target
@@ -47,6 +48,7 @@ except ImportError:
     from mips_matrix_operation_schedule import summarize as summarize_operation_schedule
     from mips_builder_opcode_evidence import inspect as inspect_builder_opcode_evidence
     from mips_builder_execution_evidence import summarize as summarize_builder_execution
+    from mips_builder_integrity_gate import evaluate as evaluate_builder_integrity
 
 
 def instruction_family(word):
@@ -241,6 +243,10 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
     matrix_value_lineage = summarize_matrix_lineage(
         image, base, trace, matrix_address, table_address=table,
         table_entries=ENTRIES)
+    builder_execution = summarize_builder_execution(
+        image, base, start, end, trace, matrix_address,
+        operation_schedule=operation_schedule, value_lineage=matrix_value_lineage,
+        table_address=table, table_entries=ENTRIES)
     result['exploratory_trace'] = {
         'initial_registers_are_synthetic': True,
         'read_before_first_write_gprs': list(read_before_write(image, base, visited)),
@@ -250,6 +256,8 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
         'frame_layout': 'a1_sp_plus_16' if frame_layout else 'separate_matrix',
         'replay_origin': 'caller_before_jal' if caller_replay else 'builder_entry',
         'caller_jal_executed': bool(caller_replay and call in visited),
+        'caller_transfer_completed': bool(caller_replay and
+            (call, 'jal', start) in transfers),
         'builder_entry_reached': start in visited or (
             caller_replay and call in visited and trace['pc'] == start),
         'returned_to_caller': bool(returned),
@@ -271,10 +279,7 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
             table_address=table, table_entries=ENTRIES),
         'matrix_value_lineage': matrix_value_lineage,
         'matrix_operation_schedule': operation_schedule,
-        'builder_execution_evidence': summarize_builder_execution(
-            image, base, start, end, trace, matrix_address,
-            operation_schedule=operation_schedule, value_lineage=matrix_value_lineage,
-            table_address=table, table_entries=ENTRIES),
+        'builder_execution_evidence': builder_execution,
         'distinct_executed_pcs': len(set(trace['visited_pcs'])),
         'matrix_slot_store_count': sum(addr in matrix_addresses
                                        for addr in trace['store_addresses']),
@@ -282,6 +287,14 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
         'all_matrix_slots_written': matrix_addresses.issubset(
             trace['store_addresses']),
     }
+    result['exploratory_trace']['builder_integrity'] = evaluate_builder_integrity(
+        static=result['builder_opcode_evidence'],
+        caller_linkage=result['caller_linkage'],
+        execution=result['exploratory_trace'],
+        builder_execution=builder_execution,
+        operation_schedule=operation_schedule,
+        value_lineage=matrix_value_lineage,
+        trig_address_provenance=result['exploratory_trace']['trig_address_provenance'])
     if input_sensitivity:
         # Allocate fresh writable scratch memory for EVERY variation.
         # The resulting private coefficient values never leave this scope.
