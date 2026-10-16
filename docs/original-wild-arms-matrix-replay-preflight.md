@@ -160,3 +160,47 @@ These tests are synthetic and cannot establish original Wild Arms
 numerical outputs. Original executable bytes, guest register values,
 table samples and matrix coefficients remain excluded from reports.
 No full checkout CI success or real-device execution is claimed.
+
+## Stage 196 — completed control transfers and strict return proof
+
+Prior inference based on the last two visited instruction addresses
+could misidentify a return. A `JR $ra` instruction at the expected
+builder return site is **not** a completed return if its delay-slot
+instruction fails. An earlier return can also reach the caller without
+ever executing that expected final return site.
+
+The bounded interpreter now records internal
+`control_transfers = ((branch_pc, kind, resolved_target), ...)` only
+when a transfer has truly completed. In particular, a normal branch,
+`JAL`, `J`, `JR`, or `JALR` contributes a completed transfer **after
+its delay slot finishes successfully**. Non-taken branch-likely
+instructions with annulled slots record the immediately resolved
+transfer. A failed delay slot does not add a completed transfer.
+These addresses remain internal to the emulator and are **not**
+included in the public preflight JSON.
+
+`returned_to_caller` now demands that the actual `JAL` at the
+verified caller site resolves into the builder AND the expected builder
+return instruction completes a `JR $ra` transfer to the caller
+continuation. The separate `return_instruction_executed` status also
+requires that expected `JR $ra` transfer to complete, not merely be
+encountered. An early unrelated `JR` does not satisfy the criterion.
+
+The decoder additionally rejects malformed `BLEZ/BGTZ` variants
+whose reserved `rt` field is not zero, and the preflight's static
+instruction-family checker agrees.
+
+Six new regression tests cover successful transfer recording,
+a failed delay-slot transfer, malformed BLEZ encoding, a JR with a
+failing delay slot, an earlier non-final JR and reserved-field
+classification. In the locally reconstructed source tree, the
+existing 46 tests plus these six passed: **52/52**, as did Python
+`compileall`. Full original-game execution, real-device comparison,
+and successful GitHub Actions CI are still not verified.
+
+Run on a checkout:
+
+```sh
+python3 -m unittest discover -s tests -p test_mips_control_flow.py -v
+python3 -m unittest discover -s tests -p test_gp0_matrix_replay_preflight.py -v
+```
