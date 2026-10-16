@@ -36,6 +36,9 @@ on:
       - 'tests/test_mips_input_sensitivity.py'
       - 'tools/mips_entry_dependencies.py'
       - 'tests/test_mips_entry_dependencies.py'
+      - 'tools/mips_matrix_operation_schedule.py'
+      - 'tests/test_mips_matrix_operation_schedule.py'
+      - 'tests/test_gp0_matrix_operation_schedule.py'
       - 'tools/mips_q12_arithmetic_reference.py'
       - 'tools/mips_q12_differential.py'
       - 'tools/audit_mips_q12_differential.py'
@@ -82,6 +85,8 @@ jobs:
           python -m unittest discover -s tests -p 'test_mips_trig_index_provenance.py' -v
           python -m unittest discover -s tests -p 'test_mips_matrix_value_lineage.py' -v
           python -m unittest discover -s tests -p 'test_mips_q12_arithmetic_reference.py' -v
+          python -m unittest discover -s tests -p 'test_mips_matrix_operation_schedule.py' -v
+          python -m unittest discover -s tests -p 'test_gp0_matrix_operation_schedule.py' -v
           python -m unittest discover -s tests -p 'test_mips_q12_differential.py' -v
           python -m unittest discover -s tests -p 'test_audit_mips_q12_differential.py' -v
           python -m tools.audit_mips_q12_differential --cases 256 --seed 206
