@@ -25,6 +25,29 @@ class TrigMemoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):table_memory(0x100001,synthetic_cardinal_table())
     def test_signed_decoding(self):
         self.assertEqual(decode_entry(0xf0001000),(4096,-4096))
+    def test_extract_negative_sine_from_packed_word(self):
+        base=0x100000
+        mem=table_memory(base,synthetic_cardinal_table())
+        registers=[0]*32
+        registers[8]=entry_address(base,3072)
+        # First isolate the low 16 bits with SLL, then sign extend with SRA.
+        program=[i(35,8,10,0),0,r(0,rt=10,rd=11,sa=16),
+                 r(3,rt=11,rd=12,sa=16)]
+        result=execute(program,mem,registers)
+        self.assertTrue(result['completed'])
+        self.assertEqual(result['gpr'][12],0xfffff000)
+
+    def test_extract_negative_cosine_from_packed_word(self):
+        base=0x100000
+        mem=table_memory(base,synthetic_cardinal_table())
+        registers=[0]*32
+        registers[8]=entry_address(base,2048)
+        # SRA of the upper 16 bits sign extends packed cosine.
+        program=[i(35,8,10,0),0,r(3,rt=10,rd=12,sa=16)]
+        result=execute(program,mem,registers)
+        self.assertTrue(result['completed'])
+        self.assertEqual(result['gpr'][12],0xfffff000)
+
     def test_lw_mult_shift_chain(self):
         base=0x100000
         mem=table_memory(base,synthetic_cardinal_table())
