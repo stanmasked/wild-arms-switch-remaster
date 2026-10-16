@@ -51,6 +51,8 @@ def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
                           'candidate_hi_mismatch_indices': []}
                          for i in range(matrix_slots)],
         'mismatch_index_lists_truncated': False,
+        'mismatch_dependent_address_observed': False,
+        'mismatch_dependent_control_observed': False,
         'synthetic_dynamic_dependency_only': True,
         'proven_numeric_causation': False,
         'original_gameplay_equivalence_proven': False,
@@ -82,6 +84,8 @@ def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
     load_cursor = 0
     store_cursor = 0
     budget_exceeded = False
+    mismatch_dependent_address = False
+    mismatch_dependent_control = False
 
     def union(*origins):
         nonlocal budget_exceeded
@@ -109,6 +113,12 @@ def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
         dest = None
         next_pending = None
         value = empty
+        # A mismatched arithmetic result can change *where* memory is read or
+        # written, even if it never reaches the value being stored. Following
+        # observed addresses alone would then understate possible effects.
+        if op in LOADS or op in STORES:
+            if regs[rs] & bad_tokens:
+                mismatch_dependent_address = True
         if op in LOADS:
             if load_cursor >= len(trace['load_accesses']):
                 raise ValueError('missing executed load')
@@ -139,8 +149,11 @@ def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
                     slots[index] = stored if op == 41 and addr == start else None
         elif op == 0:
             if word == 0 or fn == 8:
-                pass
+                if fn == 8 and regs[rs] & bad_tokens:  # JR target
+                    mismatch_dependent_control = True
             elif fn == 9:          # JALR writes PC-derived link, not arithmetic
+                if regs[rs] & bad_tokens:
+                    mismatch_dependent_control = True
                 dest = rd
             elif fn in (24, 25):
                 sources = union(regs[rs], regs[rt])
@@ -171,7 +184,16 @@ def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
         elif op == 3:  # JAL writes a link PC, not data
             dest = 31
         elif op in (1, 2, 4, 5, 6, 7, 20, 21, 22, 23):
-            pass
+            # Direct J/JAL targets are constant. Conditional control tests
+            # their current operands *before* delayed loads retire.
+            if op in (1, 6, 7, 22, 23):
+                control_deps = regs[rs]
+            elif op in (4, 5, 20, 21):
+                control_deps = union(regs[rs], regs[rt])
+            else:
+                control_deps = empty
+            if control_deps & bad_tokens:
+                mismatch_dependent_control = True
         else:
             raise ValueError('unsupported executed opcode in dependency replay')
         # Same one-instruction pending load retirement as the concrete runner.
@@ -187,6 +209,14 @@ def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
         raise ValueError('unconsumed guest replay events')
     if budget_exceeded:
         output['reason_code'] = 'dependency_budget_exceeded'
+        return output
+    if mismatch_dependent_address or mismatch_dependent_control:
+        # An observed execution path is insufficient to rule out stores made
+        # through another pointer or another branch path on real hardware.
+        # Withhold *all* per-slot candidates, including orphan conclusions.
+        output['reason_code'] = 'mismatch_dependent_execution_path'
+        output['mismatch_dependent_address_observed'] = mismatch_dependent_address
+        output['mismatch_dependent_control_observed'] = mismatch_dependent_control
         return output
 
     affected = set()
