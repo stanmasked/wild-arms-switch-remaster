@@ -45,6 +45,8 @@ def main(argv=None):
     parser.add_argument('--max-steps', type=int, default=4096)
     parser.add_argument('--synthetic', action='store_true',
                         help='mark capture as synthetic rather than unverified external PS1')
+    parser.add_argument('--require-jr-return', action='store_true',
+                        help='require completed JR $ra and delay slot at expected stop PC')
     parser.add_argument('--compare', action='store_true',
                         help='also run the stage-211 numerical comparison privately')
     args = parser.parse_args(argv)
@@ -58,7 +60,8 @@ def main(argv=None):
             ram_base=args.ram_base,
             matrix_address=args.matrix_address,
             source='synthetic' if args.synthetic else 'external_ps1_capture_claim',
-            max_steps=args.max_steps)
+            max_steps=args.max_steps,
+            require_completed_jr_ra=args.require_jr_return)
         result = summarize_capture(fixture)
         # The only printed comparison details are safe counts/slot indices.
         if args.compare:
