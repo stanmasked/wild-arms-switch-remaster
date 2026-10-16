@@ -66,3 +66,61 @@ investigation paths**, not diagnosed causes. Once workflow steps appear,
 inspect the first failing step and its log, repair a reproducible code
 regression if found, and keep PR #1 draft until all required suites pass.
 Never merge while the cause or test result is still unknown.
+
+
+## Stage 227 — corroborated failure boundary and Actions annotations
+
+GitHub's run history contains **both** executions with a provisioned runner
+and zero-step failures. This rules out treating every red check as the
+same type of problem. Selected independently fetched REST examples
+(UTC, 2026-10-16):
+
+| Run ID | Created (UTC) | Observed runner/steps |
+|---|---|---|
+| `38863373868` | 06:49 | named GitHub-hosted runner, 7 steps, success |
+| `38865926450` | 07:14 | named runners, 8–9 steps, failures |
+| `38941028160` | 17:36 | named runner, 8 steps, failure |
+| `38942396412` | 17:47 | named runner, 7 steps, failure |
+| `38943926131` | 17:59 | empty runner, zero steps, failure |
+| `38945078291` | 18:08 | empty runner, zero steps, failure |
+| `38977680585` | 22:45 | both jobs empty runner/steps, failure |
+
+The available samples locate a **transition interval** between 17:47
+and 17:59 UTC, not necessarily the precise first affected job. Some
+earlier red jobs actually ran code and must be investigated separately
+using their own job logs when accessible. Jobs with `steps: []`
+provide **no evidence that Python or C++ tests ran**.
+
+The commit check-run REST metadata for PR #1 also shows
+`output.annotations_count: 2` for affected failed checks, even when
+`output.summary` and `output.text` are empty. The connected API does
+not expose annotation contents; do **not** invent an error message.
+Open the actual failed check in GitHub's web interface and read those
+annotations. In particular, look for GitHub's explicit Actions budget,
+spending/payment, account verification, disabled runner or policy errors.
+These are hypotheses, not an established diagnosis.
+
+Official troubleshooting reference:
+https://docs.github.com/en/actions/how-tos/troubleshoot-workflows
+
+Since this is a private repository with GitHub-hosted runners, check the
+**repository owner's** Settings → Billing and licensing / Billing and
+plans → Actions usage, spending limits, budgets, outstanding payments,
+and verification prompts, plus repository Settings → Actions → General.
+The wording of menus may vary. Raising a budget or adding a payment
+method is a financial decision and must **not** be automated without
+the owner's choice.
+
+If run annotations reveal an account-wide runner provisioning/billing
+block, resolve it on GitHub rather than weakening test assertions,
+changing code semantics or switching off CI. If the billing/permissions
+screen is healthy yet the issue persists, pass the affected run/job IDs
+to GitHub Support. Re-run a small affected workflow **once** only after
+addressing a suspected cause; repeated identical failures do not prove
+code regressions.
+
+Verification gate: PR #1 stays draft and unmerged. Its newly written
+stage 225 lineage tests and the full host suite remain **not verified**
+by GitHub Actions while there are no executed steps. The nine local
+stage 226 bootstrap-classifier tests independently pass under Python
+3.13, but they are only tests of that diagnostic tool.
