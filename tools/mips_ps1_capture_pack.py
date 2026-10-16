@@ -9,6 +9,7 @@ import struct
 
 from .audit_original_nclip_winding import parse_exe
 from .mips_ps1_matrix_reference import SCHEMA, _decode_reference, _u32
+from .mips_final_cpu_state import decode_expected
 
 RAM_LIMIT = 4 * 1024 * 1024
 REGISTERS_SCHEMA = 'wild-arms-ps1-debugger-registers-v1'
@@ -21,8 +22,16 @@ def _parse_register_snapshot(raw, *, require_gpr):
     if pc & 3:
         raise ValueError('unaligned debugger stop PC')
     if not require_gpr:
-        # Do not infer the after-PC from the old RA register or a guess.
-        return {'pc': pc}
+        # Missing optional post-state is allowed unless strict comparison is
+        # explicitly requested; never infer final GPRs from the initial ones.
+        has_any_final = any(key in raw for key in
+            ('gpr','hi','lo','pending_load','in_branch_delay_slot'))
+        if not has_any_final:
+            return {'pc': pc, 'final_cpu': None}
+        final = decode_expected({key: raw[key] for key in
+           ('gpr','hi','lo','pending_load','in_branch_delay_slot') if key in raw})
+        return {'pc': pc, 'final_cpu': {key: raw[key] for key in
+            ('gpr','hi','lo','pending_load','in_branch_delay_slot')}}
     gprs = raw.get('gpr')
     if not isinstance(gprs, list) or len(gprs) != 32:
         raise ValueError('pre-call snapshot requires all 32 GPR values')
@@ -42,7 +51,7 @@ def _parse_register_snapshot(raw, *, require_gpr):
 def pack(exe_blob, before_registers, after_registers, before_ram, after_ram,
          *, ram_base=0x80000000, matrix_address=None,
          source='external_ps1_capture_claim', max_steps=4096,
-         require_completed_jr_ra=False):
+         require_completed_jr_ra=False, require_final_cpu_state=False):
     """Return a stage-211 reference fixture, never log or print it.
 
     `before_ram` is the guest's memory AT the before_registers PC (before
@@ -75,6 +84,10 @@ def pack(exe_blob, before_registers, after_registers, before_ram, after_ram,
         raise ValueError('all matrix halfwords must fit the RAM capture')
     if source not in ('synthetic', 'external_ps1_capture_claim'):
         raise ValueError('unrecognized provenance claim')
+    if type(require_final_cpu_state) is not bool:
+        raise ValueError('invalid strict final CPU requirement')
+    if require_final_cpu_state and after['final_cpu'] is None:
+        raise ValueError('complete debugger after-registers state required')
     if type(require_completed_jr_ra) is not bool:
         raise ValueError('invalid strict return boundary request')
     if type(max_steps) is not int or not 1 <= max_steps <= 100000:
@@ -96,9 +109,12 @@ def pack(exe_blob, before_registers, after_registers, before_ram, after_ram,
         'in_branch_delay_slot': before['in_branch_delay_slot'],
         'max_steps': max_steps,
         'require_completed_jr_ra': require_completed_jr_ra,
+        'require_final_cpu_state': require_final_cpu_state,
         'memory_segments': [{'address': base, 'data_hex': before_ram.hex()}],
         'expected_matrix_s16': expected,
     }
+    if after['final_cpu'] is not None:
+        fixture['expected_final_cpu_state'] = after['final_cpu']
     # Reuse stage-211 validation before ever persisting a private artifact.
     _decode_reference(fixture, sha)
     return fixture
