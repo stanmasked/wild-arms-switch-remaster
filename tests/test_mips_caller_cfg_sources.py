@@ -42,6 +42,20 @@ class CFGCallerSourcesTests(unittest.TestCase):
         self.assertEqual(result['paths_to_call'],1)
         self.assertEqual(result['arguments'][0]['incoming_gprs'],[7])
 
+    def test_beq_same_unknown_gpr_only_takes_branch(self):
+        words=[i(4,4,4,2),0,i(9,6,4,1),i(9,7,4,2),i(3),0]
+        result=run(words)
+        self.assertTrue(result['window_usable'])
+        self.assertEqual(result['paths_to_call'],1)
+        self.assertEqual(result['arguments'][0]['incoming_gprs'],[7])
+
+    def test_bne_same_unknown_gpr_never_takes_branch(self):
+        words=[i(5,4,4,2),0,i(9,6,4,1),0,i(3),0]
+        result=run(words)
+        self.assertTrue(result['window_usable'])
+        self.assertEqual(result['paths_to_call'],1)
+        self.assertEqual(result['arguments'][0]['incoming_gprs'],[6])
+
     def test_delay_slot_executes_on_both_branches(self):
         words=[i(4,4,6,2),i(9,29,5,16),0,i(9,0,10,0),i(3),0]
         result=run(words)
