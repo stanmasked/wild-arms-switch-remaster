@@ -107,6 +107,7 @@ def main(argv=None):
             result['store_values'] = verification['store_values']
             result['strict_arithmetic_events_required'] = verification['strict_arithmetic_events_required']
             result['arithmetic_events'] = verification['arithmetic_events']
+            result['arithmetic_matrix_attribution'] = verification['arithmetic_matrix_attribution']
             result['matches_complete_reference'] = verification['matches_complete_reference']
         _write_private(args.output, fixture)
         print(json.dumps(result, sort_keys=True))
