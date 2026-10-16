@@ -535,3 +535,13 @@ set_tests_properties(wa_mips_arithmetic_event_sequence PROPERTIES WORKING_DIRECT
 add_test(NAME wa_ps1_arithmetic_capture
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_arithmetic_capture.py)
 set_tests_properties(wa_ps1_arithmetic_capture PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 220: map numeric arithmetic reference mismatches to last matrix SH.
+add_test(NAME wa_mips_matrix_arithmetic_attribution
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_matrix_arithmetic_attribution.py)
+set_tests_properties(wa_mips_matrix_arithmetic_attribution PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 220: integration of private PS1 reference mismatch-to-slot diagnostics.
+add_test(NAME wa_ps1_arithmetic_matrix_attribution
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_arithmetic_matrix_attribution.py)
+set_tests_properties(wa_ps1_arithmetic_matrix_attribution PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
