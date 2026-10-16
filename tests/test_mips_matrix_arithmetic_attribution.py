@@ -417,6 +417,66 @@ class AttributionTests(unittest.TestCase):
         self.assertEqual(outcome['reason_code'],'guest_code_write_unmodeled')
         self.assertTrue(outcome['executed_code_write_observed'])
 
+    def test_kseg1_alias_store_to_code_withholds_attribution(self):
+        alias=0xa0010000
+        regs=[0]*32;regs[6]=alias;regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),op(43,6,0,0)]
+        words += [op(41,5,10,2*i) for i in range(9)]
+        image,trace,expected=custom(words,regs,snapshots=[(alias,bytes(4))])
+        mismatched=list(expected)
+        pc,kind,value,secondary=mismatched[0]
+        mismatched[0]=(pc,kind,12,secondary)
+        output=analyze(image,BASE,trace,MATRIX,tuple(mismatched),
+                       guest_stopped_at_expected_pc=True)
+        self.assertFalse(output['attribution_performed'])
+        self.assertEqual(output['reason_code'],'guest_code_write_unmodeled')
+        self.assertTrue(output['executed_code_write_observed'])
+        self.assertEqual(output['candidate_affected_slot_indices'],[])
+        self.assertNotIn(hex(alias),str(output))
+
+    def test_two_megabyte_mirror_store_to_code_withholds_attribution(self):
+        alias=0xa0410000
+        regs=[0]*32;regs[6]=alias;regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),op(43,6,0,0)]
+        words += [op(41,5,10,2*i) for i in range(9)]
+        image,trace,expected=custom(words,regs,snapshots=[(alias,bytes(4))])
+        wrong=list(expected)
+        pc,kind,value,aux=wrong[0]
+        wrong[0]=(pc,kind,12,aux)
+        result=analyze(image,BASE,trace,MATRIX,tuple(wrong),
+                       guest_stopped_at_expected_pc=True)
+        self.assertFalse(result['attribution_performed'])
+        self.assertEqual(result['reason_code'],'guest_code_write_unmodeled')
+
+    def test_kuseg_alias_to_code_is_conservatively_rejected(self):
+        alias=0x00010000
+        regs=[0]*32;regs[6]=alias;regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),op(43,6,0,0)]
+        words += [op(41,5,10,2*i) for i in range(9)]
+        image,trace,expected=custom(words,regs,snapshots=[(alias,bytes(4))])
+        changed=list(expected)
+        pc,kind,value,aux=changed[0]
+        changed[0]=(pc,kind,12,aux)
+        result=analyze(image,BASE,trace,MATRIX,tuple(changed),
+                       guest_stopped_at_expected_pc=True)
+        self.assertFalse(result['attribution_performed'])
+        self.assertTrue(result['executed_code_write_observed'])
+
+    def test_nearby_noncode_mirror_store_keeps_attribution_available(self):
+        alias=0xa0010800
+        regs=[0]*32;regs[6]=alias;regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),op(43,6,0,0)]
+        words += [op(41,5,10,2*i) for i in range(9)]
+        image,trace,expected=custom(words,regs,snapshots=[(alias,bytes(4))])
+        wrong=list(expected)
+        pc,kind,value,aux=wrong[0]
+        wrong[0]=(pc,kind,12,aux)
+        result=analyze(image,BASE,trace,MATRIX,tuple(wrong),
+                       guest_stopped_at_expected_pc=True)
+        self.assertTrue(result['attribution_performed'])
+        self.assertFalse(result['executed_code_write_observed'])
+        self.assertEqual(result['candidate_affected_slot_indices'],list(range(9)))
+
     def test_wrong_store_trace_fails_closed(self):
         regs=[0]*32;regs[8]=4;regs[9]=7
         image,trace,expected=custom([reg(33,rs=8,rt=9,rd=10),op(41,5,10,0)],regs)
