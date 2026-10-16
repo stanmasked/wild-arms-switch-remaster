@@ -27,6 +27,8 @@ def entry_address(base,angle):
     return base+ENTRY_BYTES*index_angle(angle)
 
 def table_memory(base, packed_bytes):
+    if base<0 or base&3:
+        raise ValueError('unaligned or negative table address')
     if len(packed_bytes)!=ENTRY_COUNT*ENTRY_BYTES:
         raise ValueError('expected exactly 4096 packed entries')
     return Memory(base,packed_bytes)
