@@ -25,6 +25,7 @@ try:
     from .mips_caller_cfg_sources import inspect as inspect_caller_cfg_sources
     from .mips_input_sensitivity import probe_input_registers
     from .mips_load_access_profile import summarize as summarize_load_accesses
+    from .mips_trig_index_provenance import summarize as summarize_trig_index
 except ImportError:
     from audit_original_nclip_winding import parse_exe
     from audit_gp0_rotation_matrix_builder import BUILDER, RETURN, CALL, jal_target
@@ -37,6 +38,7 @@ except ImportError:
     from mips_caller_cfg_sources import inspect as inspect_caller_cfg_sources
     from mips_input_sensitivity import probe_input_registers
     from mips_load_access_profile import summarize as summarize_load_accesses
+    from mips_trig_index_provenance import summarize as summarize_trig_index
 
 
 def instruction_family(word):
@@ -250,6 +252,9 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
             stack_base=STACK_BASE, stack_size=STACK_SIZE,
             matrix_address=matrix_address, table_address=table,
             table_entries=ENTRIES),
+        'trig_address_provenance': summarize_trig_index(
+            image, base, trace['visited_pcs'], trace['load_accesses'],
+            table_address=table, table_entries=ENTRIES),
         'distinct_executed_pcs': len(set(trace['visited_pcs'])),
         'matrix_slot_store_count': sum(addr in matrix_addresses
                                        for addr in trace['store_addresses']),
