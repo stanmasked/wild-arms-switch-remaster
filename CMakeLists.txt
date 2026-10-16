@@ -385,3 +385,18 @@ set_tests_properties(wa_mips_matrix_value_lineage PROPERTIES WORKING_DIRECTORY $
 add_test(NAME wa_gp0_matrix_value_lineage
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_value_lineage.py)
 set_tests_properties(wa_gp0_matrix_value_lineage PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Independent, host-only fixed-point oracle for explicit synthetic PS1 Q12 schedules.
+add_test(NAME wa_mips_q12_arithmetic_reference
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_q12_arithmetic_reference.py)
+set_tests_properties(wa_mips_q12_arithmetic_reference PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Full MIPS LH/MULT/MFLO/SRA/SH numeric differential checks for nine matrix slots.
+add_test(NAME wa_mips_q12_differential
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_q12_differential.py)
+set_tests_properties(wa_mips_q12_differential PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Safe deterministic summary CLI: no original game executable or assets needed.
+add_test(NAME wa_audit_mips_q12_differential
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_audit_mips_q12_differential.py)
+set_tests_properties(wa_audit_mips_q12_differential PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
