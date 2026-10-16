@@ -212,6 +212,30 @@ class ReplayPreflightTests(unittest.TestCase):
         self.assertEqual(tr['halt_instruction_family'], 'coprocessor')
         self.assertNotIn('gpr', tr)
 
+    def test_jr_requires_successful_delay_slot(self):
+        # Executing JR alone is not completion when its delay slot traps.
+        body = [(31 << 21) | 8, 18 << 26]
+        blob, call, builder, ret = self._caller_program(body)
+        tr = analyze(blob, start=builder, end=ret, call=call,
+                     caller_replay=True)['exploratory_trace']
+        self.assertFalse(tr['return_instruction_executed'])
+        self.assertFalse(tr['returned_to_caller'])
+        self.assertEqual(tr['halt_category'], 'unsupported_instruction')
+
+    def test_early_jr_is_not_builder_final_return(self):
+        # An early JR did not execute the identified final return instruction.
+        body = [(31 << 21) | 8, 0, 0, (31 << 21) | 8, 0]
+        blob, call, builder, ret = self._caller_program(body)
+        tr = analyze(blob, start=builder, end=ret, call=call,
+                     caller_replay=True)['exploratory_trace']
+        self.assertFalse(tr['return_instruction_executed'])
+        self.assertFalse(tr['returned_to_caller'])
+
+    def test_reserved_branch_rt_classification(self):
+        self.assertEqual(instruction_family(ins(6, 8, 1, 1)), ('branch', False))
+        self.assertEqual(instruction_family(ins(7, 8, 1, 1)), ('branch', False))
+        self.assertEqual(instruction_family(ins(6, 8, 0, 1)), ('branch', True))
+
     def test_trace_bounded_loop(self):
         jump_to_self = (2<<26) | ((BASE>>2)&0x03ffffff)
         r = analyze(fixture([jump_to_self,0,0]), start=BASE, end=BASE+8,
