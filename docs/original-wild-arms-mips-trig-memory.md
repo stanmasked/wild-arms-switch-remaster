@@ -24,3 +24,15 @@ Actions. **Execution of these tests and full CI success are not yet
 verified.** The reconstructed program covers only a synthetic
 linear instruction chain, not the original matrix builder or GTE.
 Original game executable and texture/audio assets are not committed.
+
+## Stage 189 — extraction from both packed halves
+
+Two further synthetic regressions execute MIPS instructions over negative
+cardinal values: `LW; NOP; SLL 16; SRA 16` isolates and sign extends
+the low sine halfword; `LW; NOP; SRA 16` isolates and sign extends the
+high cosine halfword. Both assert `0xFFFFF000` (-4096 in Q12).
+
+These tests check actual instruction composition against synthetic packed
+words, rather than only calling `decode_entry()`. The original game's
+matrix-builder execution and a successful full CI result are not yet
+confirmed. No game data are published.
