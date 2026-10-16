@@ -430,3 +430,13 @@ set_tests_properties(wa_mips_builder_execution_evidence PROPERTIES WORKING_DIREC
 add_test(NAME wa_gp0_builder_execution_evidence
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_builder_execution_evidence.py)
 set_tests_properties(wa_gp0_builder_execution_evidence PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 210: verify the synthetic caller -> six Q12 loads -> nine matrix SH -> JR return chain.
+add_test(NAME wa_mips_builder_integrity_gate
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_builder_integrity_gate.py)
+set_tests_properties(wa_mips_builder_integrity_gate PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 210: synthetic whole-path PS-X EXE with known Wild Arms guest code sites.
+add_test(NAME wa_gp0_builder_integrity_gate
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_builder_integrity_gate.py)
+set_tests_properties(wa_gp0_builder_integrity_gate PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
