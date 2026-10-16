@@ -85,3 +85,18 @@ for a taken path. Two synthetic regression cases cover these edges.
 No original game executable or trigonometric samples are committed.
 The GitHub changes are written, but a successful native CI run is
 not yet verified.
+
+## Stage 169: branch entry into a delay-slot context
+
+A direct branch may syntactically target the instruction which is also
+identified as the delay slot of another control transfer. Reusing the
+same instruction node for both contexts is not valid for this simple CFG.
+
+Direct targets into recognized delay slots are therefore reported as
+`target_enters_delay_slot` and no successor edge is emitted. A synthetic
+test covers the situation. This is a conservative exclusion and not a
+hardware-exact treatment of the alternate entry context. A future
+context-sensitive CFG should represent normal and delayed entry separately.
+
+The updated test source was committed; full test execution and original
+WILDARMS.EXE results have not been independently verified.
