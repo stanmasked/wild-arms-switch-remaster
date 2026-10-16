@@ -46,7 +46,7 @@ class ContextTests(unittest.TestCase):
 
     def test_regimm_likely_taken_and_annulled_edges(self):
         for subop in (2,3):
-            instruction=(1<<26)|(subop<<16)|2
+            instruction=(1<<26)|(8<<21)|(subop<<16)|2
             report=run([instruction,0,0,0])
             edges={(e['from'],e['to']) for e in report['edges']}
             self.assertIn((f'0x{START:08X}',f'0x{START+8:08X}'),edges)
@@ -75,6 +75,32 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(report['edges'][0],
                          {'from':f'0x{START:08X}','to':f'0x{START+8:08X}'})
         self.assertFalse(any('@delay_of_' in e['to'] for e in report['edges']))
+
+    def test_zero_register_blez_is_taken_after_slot(self):
+        branch=(6<<26)|2
+        report=run([branch,0,0,0])
+        edges={(e['from'],e['to']) for e in report['edges']}
+        self.assertIn((f'0x{START+4:08X}@delay_of_0x{START:08X}',
+                       f'0x{START+12:08X}'),edges)
+        self.assertNotIn((f'0x{START+4:08X}@delay_of_0x{START:08X}',
+                          f'0x{START+8:08X}'),edges)
+
+    def test_zero_register_bgtzl_annuls_slot(self):
+        branch=(23<<26)|2
+        report=run([branch,0,0,0])
+        edges={(e['from'],e['to']) for e in report['edges']}
+        self.assertIn((f'0x{START:08X}',f'0x{START+8:08X}'),edges)
+        self.assertFalse(any('@delay_of_' in edge[1] for edge in edges))
+
+    def test_zero_register_regimm_likely_predicates(self):
+        for rt,taken in ((2,False),(3,True)):
+            branch=(1<<26)|(rt<<16)|2
+            report=run([branch,0,0,0])
+            edges={(e['from'],e['to']) for e in report['edges']}
+            taken_slot=(f'0x{START:08X}',f'0x{START+4:08X}@delay_of_0x{START:08X}')
+            skip_slot=(f'0x{START:08X}',f'0x{START+8:08X}')
+            self.assertEqual(taken_slot in edges,taken)
+            self.assertEqual(skip_slot in edges,not taken)
 
     def test_invalid(self):
         self.assertFalse(trace(b'',BASE,START,START)['valid_range'])
