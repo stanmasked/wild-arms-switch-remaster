@@ -45,6 +45,10 @@ def main(argv=None):
     parser.add_argument('--max-steps', type=int, default=4096)
     parser.add_argument('--synthetic', action='store_true',
                         help='mark capture as synthetic rather than unverified external PS1')
+    parser.add_argument('--arithmetic-events', type=Path,
+                        help='private independent ordered MULT MFLO SRA ADDU debugger outcomes')
+    parser.add_argument('--require-arithmetic-events', action='store_true',
+                        help='require exact intermediate arithmetic result trace')
     parser.add_argument('--store-value-events', type=Path,
                         help='independent private ordered debugger store trace including values')
     parser.add_argument('--require-store-values', action='store_true',
@@ -81,7 +85,10 @@ def main(argv=None):
             require_store_sequence=args.require_store_sequence,
             store_values=(json.loads(args.store_value_events.read_text(encoding='utf-8'))
                           if args.store_value_events is not None else None),
-            require_store_values=args.require_store_values)
+            require_store_values=args.require_store_values,
+            arithmetic_events=(json.loads(args.arithmetic_events.read_text(encoding='utf-8'))
+                               if args.arithmetic_events is not None else None),
+            require_arithmetic_events=args.require_arithmetic_events)
         result = summarize_capture(fixture)
         # The only printed comparison details are safe counts/slot indices.
         if args.compare:
@@ -98,6 +105,8 @@ def main(argv=None):
             result['store_sequence'] = verification['store_sequence']
             result['strict_store_values_required'] = verification['strict_store_values_required']
             result['store_values'] = verification['store_values']
+            result['strict_arithmetic_events_required'] = verification['strict_arithmetic_events_required']
+            result['arithmetic_events'] = verification['arithmetic_events']
             result['matches_complete_reference'] = verification['matches_complete_reference']
         _write_private(args.output, fixture)
         print(json.dumps(result, sort_keys=True))
