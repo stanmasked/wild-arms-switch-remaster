@@ -29,8 +29,14 @@ def _parse_register_snapshot(raw, *, require_gpr):
     values = [_u32(v) for v in gprs]
     if values[0] != 0:
         raise ValueError('r0 must equal zero')
+    if 'pending_load' not in raw or 'in_branch_delay_slot' not in raw:
+        raise ValueError('debugger capture must declare MIPS pipeline state')
+    # Pipeline interpretation and word-range checks belong to stage 211's
+    # strict fixture decoder, avoiding two conflicting implementations.
     return {'pc': pc, 'gpr': values,
-            'hi': _u32(raw.get('hi')), 'lo': _u32(raw.get('lo'))}
+            'hi': _u32(raw.get('hi')), 'lo': _u32(raw.get('lo')),
+            'pending_load': raw['pending_load'],
+            'in_branch_delay_slot': raw['in_branch_delay_slot']}
 
 
 def pack(exe_blob, before_registers, after_registers, before_ram, after_ram,
@@ -83,6 +89,8 @@ def pack(exe_blob, before_registers, after_registers, before_ram, after_ram,
         'gpr': before['gpr'],
         'hi': before['hi'],
         'lo': before['lo'],
+        'pending_load': before['pending_load'],
+        'in_branch_delay_slot': before['in_branch_delay_slot'],
         'max_steps': max_steps,
         'memory_segments': [{'address': base, 'data_hex': before_ram.hex()}],
         'expected_matrix_s16': expected,
