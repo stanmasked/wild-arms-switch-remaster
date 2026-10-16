@@ -639,3 +639,67 @@ blob checksums. CTest and GitHub Actions registrations were updated.
 A successful full remote CI run, original `WILDARMS.EXE` evaluation,
 actual nine-coefficient PS1 comparison and a playable Switch NRO
 are **not yet verified**.
+
+## Stage 205 — packed Q12 values into the nine matrix halfword slots
+
+The new `tools/mips_matrix_value_lineage.py` goes beyond the address
+provenance established at stage 204. It replays **data dependence** over
+the exact instruction PCs, successful load events and successful store
+addresses already produced by the bounded MIPS interpreter.
+
+Every genuine aligned 32-bit load from the packed Q12 table receives
+a private *event identity* (not an exposed index or address). The
+shadow interpreter follows these identities through MIPS GPR ALU
+operations, shifts, `MULT/MULTU` into HI/LO, `MFHI/MFLO`, and
+`MTHI/MTLO`. It honors the one-instruction R3000A load delay,
+including loads overwritten in the immediately following instruction.
+A byte-level shadow of previously written memory preserves lineage
+across explicit stack spills and re-loads, conservatively marking
+unknown/uninitialized external bytes as unresolved.
+
+Only **successful final `SH` stores** at the nine halfword matrix
+offsets 0,2,...,16 are attributed to matrix output. A later `SH`
+replaces the previous lineage; any overlapping `SB` or `SW` clears
+the older SH-output claim for the affected coefficient. Failed loads,
+skipped branch-likely delay slots, unexecuted writes and unrelated
+Q12 reads do not create false output evidence.
+
+With `--explore` or `--caller-replay`, the safe preflight JSON now
+contains `exploratory_trace.matrix_value_lineage`, including:
+
+- total observed packed Q12 loads and number of distinct observed
+  lookup events that actually contribute to final matrix slots;
+- counts of the nine SH slots written, slots retaining packed-Q12
+  data lineage, slots passing through MULT/HI/LO or a memory roundtrip,
+  and slots with unresolved external data contributions;
+- nine fixed slot indices with booleans and contributing lookup
+  *counts*, not any matrix values;
+- `gameplay_angle_values_known: false`,
+  `bit_exact_ps1_matrix_math_proven: false` and
+  `private_values_emitted: false`.
+
+Example invocation with privately owned extracted executable:
+
+```sh
+python3 -m tools.audit_gp0_matrix_replay_preflight \
+  /private/path/WILDARMS.EXE --caller-replay --max-steps 4096
+```
+
+**Proof boundary:** taint/dependency tracking is conservative rather
+than symbolic bit-exact evaluation. Arithmetic cancellation can yield
+a mathematically constant result even when a Q12 taint still reaches
+the output. Missing taint from a given table load does not prove a
+coefficient has no trigonometric dependence along other paths or from
+different initial game state. Nor does nine-slot taint coverage prove
+that the original game has been successfully executed or that its
+coefficient values match PS1 hardware.
+
+**Verification:** in the available locally reconstructed source tree
+`/mnt/data/wa205`, **200/200** synthetic unit/integration tests
+passed and Python `compileall -q tools tests` succeeded. This adds
+18 new shadow-value-lineage tests and 4 synthetic PS-X EXE preflight
+integration tests to 178 earlier tests. The three newly published
+files' Git blob hashes exactly match the locally tested copies.
+The full repo's GitHub Actions and Switch console/hardware results
+are not confirmed. No original `WILDARMS.EXE` bytes were uploaded
+or published.
