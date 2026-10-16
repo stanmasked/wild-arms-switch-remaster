@@ -365,3 +365,43 @@ LO-versus-HI matrix destinations, and the complete synthetic reference
 comparison. These tests do **not** authenticate real PS1 captures or
 demonstrate Switch runtime compatibility. Private numeric reference data
 must stay outside the repository.
+
+
+## Stage 222 — fail-closed mismatch-dependent paths and pointers
+
+The optional `arithmetic_matrix_attribution` report now withholds its
+slot-by-slot candidate list when a **mismatching arithmetic event** is
+conservatively found in the data ancestry of a memory access base
+register, or a conditional/indirect control-flow operand. This covers
+observed CPU `LB/LBU/LH/LHU/LW`, `SB/SH/SW`, conditional branches
+(including supported branch-likely instructions), `JR`, and `JALR`.
+The live interpreter's actual addresses and executed branch outcomes
+are still used for numeric replay. They are **not** valid evidence that
+the same memory accesses or branch path would occur if an intermediate
+reference value were substituted.
+
+The safe report uses `reason_code:
+"mismatch_dependent_execution_path"` and two booleans:
+`mismatch_dependent_address_observed` and
+`mismatch_dependent_control_observed`. When either is true,
+`attribution_performed` is false; the public affected-slot list,
+unlinked-mismatch list and all per-slot candidates remain empty.
+An aligned reference can still report
+`reference_event_alignment_confirmed: true`. This guard does not
+alter numeric matching or the strict arithmetic reference comparison;
+it only prevents a misleading *dataflow attribution* claim.
+
+Only dependencies from **actual mismatching** arithmetic results
+activate the guard. Matched arithmetic used as a pointer does not,
+and overwritten mismatch dependencies are no longer attributed after
+the overwrite. As before, an incomplete replay or misaligned event
+reference withholds attribution, and neither guest PCs nor pointer
+values are emitted. This remains a bounded, structural heuristic:
+algebraic cancellation, implicit hardware state, DMA, code mutation,
+or missing original debugger traces can still limit conclusions.
+
+Regression cases cover mismatched store and load base pointers,
+a mismatched BEQ operand, a mismatched JR target, correctly matched
+computed pointers, and a mismatched arithmetic value overwritten before
+a branch. The original Wild Arms runtime and Nintendo Switch build
+remain unverified by these synthetic tests.
