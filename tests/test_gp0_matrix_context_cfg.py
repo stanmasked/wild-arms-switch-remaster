@@ -53,6 +53,13 @@ class ContextTests(unittest.TestCase):
             self.assertIn((f'0x{START:08X}',f'0x{START+4:08X}@delay_of_0x{START:08X}'),edges)
             self.assertIn((f'0x{START+4:08X}@delay_of_0x{START:08X}',f'0x{START+12:08X}'),edges)
 
+    def test_cop2_branch_does_not_make_false_reachable_edges(self):
+        bc2=(18<<26)|(8<<21)|(1<<16)|2
+        report=run([bc2,0,0,0])
+        self.assertEqual(report['edges'],[])
+        self.assertTrue(any(x['reason']=='coprocessor_branch_requires_semantics'
+                            for x in report['unresolved']))
+
     def test_invalid(self):
         self.assertFalse(trace(b'',BASE,START,START)['valid_range'])
 
