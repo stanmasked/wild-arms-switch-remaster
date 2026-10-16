@@ -477,6 +477,115 @@ class AttributionTests(unittest.TestCase):
         self.assertFalse(result['executed_code_write_observed'])
         self.assertEqual(result['candidate_affected_slot_indices'],list(range(9)))
 
+    def test_cross_segment_store_then_load_same_physical_ram_withholds(self):
+        physical=MATRIX+40
+        alias=0xa0110028
+        regs=[0]*32;regs[6]=physical;regs[7]=alias
+        regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),
+               op(43,6,10,0),op(35,7,11,0),0]
+        words += [op(41,5,11,2*i) for i in range(9)]
+        image,trace,expected=custom(
+            words,regs,snapshots=[(physical,bytes(4)),(alias,bytes(4))])
+        wrong=list(expected)
+        pc,kind,value,aux=wrong[0]
+        wrong[0]=(pc,kind,12,aux)
+        out=analyze(image,BASE,trace,MATRIX,tuple(wrong),
+                    guest_stopped_at_expected_pc=True)
+        self.assertTrue(out['reference_event_alignment_confirmed'])
+        self.assertFalse(out['attribution_performed'])
+        self.assertEqual(out['reason_code'],'ram_alias_access_unmodeled')
+        self.assertTrue(out['ram_alias_access_observed'])
+        self.assertEqual(out['candidate_affected_slot_indices'],[])
+        self.assertEqual(out['mismatching_events_without_final_matrix_dependency'],[])
+        self.assertFalse(any(s['final_sh_observed'] for s in out['matrix_slots']))
+        self.assertNotIn(hex(alias),str(out))
+
+    def test_mirrored_store_then_kseg0_load_withholds(self):
+        primary=MATRIX+40
+        alias=0xa0110028
+        regs=[0]*32;regs[6]=alias;regs[7]=primary
+        regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),
+               op(43,6,10,0),op(35,7,11,0),0]
+        words += [op(41,5,11,2*i) for i in range(9)]
+        image,trace,expected=custom(
+            words,regs,snapshots=[(primary,bytes(4)),(alias,bytes(4))])
+        wrong=list(expected)
+        wrong[0]=(wrong[0][0],wrong[0][1],12,wrong[0][3])
+        out=analyze(image,BASE,trace,MATRIX,tuple(wrong),
+                    guest_stopped_at_expected_pc=True)
+        self.assertFalse(out['attribution_performed'])
+        self.assertTrue(out['ram_alias_access_observed'])
+        self.assertEqual(out['reason_code'],'ram_alias_access_unmodeled')
+
+    def test_two_reads_through_different_ram_mirrors_withhold(self):
+        primary=MATRIX+40
+        alias=0xa0110028
+        regs=[0]*32;regs[6]=primary;regs[7]=alias
+        regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=12),
+               op(35,6,10,0),0,op(35,7,11,0),0]
+        words += [op(41,5,12,2*i) for i in range(9)]
+        image,trace,expected=custom(
+            words,regs,snapshots=[(primary,bytes(4)),(alias,bytes(4))])
+        wrong=list(expected)
+        wrong[0]=(wrong[0][0],wrong[0][1],12,wrong[0][3])
+        out=analyze(image,BASE,trace,MATRIX,tuple(wrong),
+                    guest_stopped_at_expected_pc=True)
+        self.assertFalse(out['attribution_performed'])
+        self.assertEqual(out['reason_code'],'ram_alias_access_unmodeled')
+
+    def test_store_into_matrix_through_only_mirror_still_withholds(self):
+        alias=0xa0110000
+        regs=[0]*32;regs[6]=alias;regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),op(41,6,10,0)]
+        words += [op(41,5,10,2*i) for i in range(9)]
+        image,trace,expected=custom(
+            words,regs,snapshots=[(alias,bytes(2))])
+        wrong=list(expected)
+        wrong[0]=(wrong[0][0],wrong[0][1],12,wrong[0][3])
+        out=analyze(image,BASE,trace,MATRIX,tuple(wrong),
+                    guest_stopped_at_expected_pc=True)
+        self.assertFalse(out['attribution_performed'])
+        self.assertTrue(out['ram_alias_access_observed'])
+        self.assertFalse(out['executed_code_write_observed'])
+        self.assertEqual(out['reason_code'],'ram_alias_access_unmodeled')
+
+    def test_repeated_same_virtual_ram_access_retains_lineage(self):
+        scratch=MATRIX+40
+        regs=[0]*32;regs[6]=scratch;regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),
+               op(43,6,10,0),op(35,6,11,0),0]
+        words += [op(41,5,11,2*i) for i in range(9)]
+        image,trace,expected=custom(
+            words,regs,snapshots=[(scratch,bytes(4))])
+        wrong=list(expected)
+        wrong[0]=(wrong[0][0],wrong[0][1],12,wrong[0][3])
+        out=analyze(image,BASE,trace,MATRIX,tuple(wrong),
+                    guest_stopped_at_expected_pc=True)
+        self.assertTrue(out['attribution_performed'])
+        self.assertFalse(out['ram_alias_access_observed'])
+        self.assertEqual(out['candidate_affected_slot_indices'],list(range(9)))
+
+    def test_distinct_physical_ram_bytes_do_not_trigger_alias_guard(self):
+        primary=MATRIX+40
+        different=0xa011002c
+        regs=[0]*32;regs[6]=primary;regs[7]=different
+        regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),
+               op(43,6,10,0),op(35,7,11,0),0]
+        words += [op(41,5,10,2*i) for i in range(9)]
+        image,trace,expected=custom(
+            words,regs,snapshots=[(primary,bytes(4)),(different,bytes(4))])
+        wrong=list(expected)
+        wrong[0]=(wrong[0][0],wrong[0][1],12,wrong[0][3])
+        out=analyze(image,BASE,trace,MATRIX,tuple(wrong),
+                    guest_stopped_at_expected_pc=True)
+        self.assertTrue(out['attribution_performed'])
+        self.assertFalse(out['ram_alias_access_observed'])
+        self.assertEqual(out['candidate_affected_slot_indices'],list(range(9)))
+
     def test_wrong_store_trace_fails_closed(self):
         regs=[0]*32;regs[8]=4;regs[9]=7
         image,trace,expected=custom([reg(33,rs=8,rt=9,rd=10),op(41,5,10,0)],regs)
