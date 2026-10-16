@@ -495,3 +495,13 @@ set_tests_properties(wa_mips_final_cpu_state PROPERTIES WORKING_DIRECTORY ${CMAK
 add_test(NAME wa_ps1_final_cpu_capture
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_final_cpu_capture.py)
 set_tests_properties(wa_ps1_final_cpu_capture PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 216: private full-after-RAM block digests and outside-matrix side effects.
+add_test(NAME wa_mips_final_memory_state
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_final_memory_state.py)
+set_tests_properties(wa_mips_final_memory_state PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 216: snapshot packaging and strict guest memory comparison with synthetic PS-X EXE.
+add_test(NAME wa_ps1_final_memory_capture
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_final_memory_capture.py)
+set_tests_properties(wa_ps1_final_memory_capture PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
