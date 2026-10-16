@@ -1,6 +1,10 @@
 """Synthetic end-to-end PS-X EXE CFG path/replay correlation."""
 import struct
 import unittest
+from unittest.mock import patch
+from contextlib import redirect_stdout
+from io import StringIO
+from pathlib import Path
 from tools.audit_gp0_matrix_replay_preflight import analyze
 
 BASE = 0x80010000
@@ -79,6 +83,19 @@ class CFGReplayCorrelationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             analyze(blob,start=builder,end=end,call=call,caller_replay=True,
                     caller_cfg=True,caller_lookback=3,replay_cfg_window=True)
+
+    def test_cli_passes_full_window_flag_to_analyzer(self):
+        from tools.audit_gp0_matrix_replay_preflight import main
+        with patch('sys.argv', ['preflight','synthetic.exe',
+                                '--caller-cfg','--caller-replay',
+                                '--replay-cfg-window','--caller-lookback','8']), \
+             patch.object(Path,'read_bytes',return_value=b'placeholder'), \
+             patch('tools.audit_gp0_matrix_replay_preflight.analyze',
+                   return_value={'valid_range':False}) as evaluate, \
+             redirect_stdout(StringIO()):
+            main()
+        self.assertTrue(evaluate.call_args.kwargs['replay_cfg_window'])
+        self.assertEqual(evaluate.call_args.kwargs['caller_lookback'],8)
 
     def test_invalid_cfg_path_cannot_be_replayed(self):
         blob,call,builder,end = example()
