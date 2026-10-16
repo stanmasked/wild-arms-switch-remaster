@@ -88,3 +88,36 @@ An incomplete or incorrect return prevents
 mode. These are only booleans; they do not reveal code addresses,
 registers or numerical matrix contents. The external capture's
 authenticity still cannot be established by this mechanism.
+
+## Stage 215 — optional complete final CPU-state reference
+
+The private JSON may include `"require_final_cpu_state": true`,
+together with an `"expected_final_cpu_state"` object containing
+**exactly** `gpr` (all 32 unsigned words), `hi`, `lo`,
+`pending_load` (null or destination/result object), and
+`in_branch_delay_slot: false`. Do not duplicate the PC: the
+existing `stop_pc` defines the post-return boundary.
+All register contents must come from the **after** capture, not
+from the initial register state or the emulator's predicted state.
+
+When the strict option is true, missing or partial final state
+is rejected before guest replay. If an optional state object is
+present but malformed it is also rejected. If the guest does not
+actually reach `stop_pc`, the CPU comparison is withheld rather
+than issuing speculative register mismatches.
+
+The report retains
+`matches_supplied_nine_coefficients` for numerical matrix agreement,
+and adds `matches_complete_reference` for the final decision.
+The latter also requires CPU state agreement when requested.
+`final_cpu_state` is `null` if no after-register state was supplied;
+otherwise it provides only mismatch **GPR numbers**, matching GPR
+count and booleans for HI, LO and pending-load equality. The
+private state itself is never included in printed JSON. The
+CLI uses `matches_complete_reference` for its exit status.
+
+Use `--require-final-cpu-state --require-jr-return --compare`
+in the packaging tool when both authentic stop and post-return
+register state are available. These comparisons validate only
+consistency with **supplied** reference data; PS1 hardware origin
+and Nintendo Switch native execution remain unverified.
