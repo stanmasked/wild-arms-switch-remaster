@@ -55,3 +55,16 @@ exact arithmetic results or concrete branch predicates.
 
 CI execution remains unverified; no original game executable bytes are
 included in the repository.
+
+## Stage 179 — GPR writes from coprocessor moves
+
+The shared register-provenance transfer recognizes MFCn and CFCn
+(COP0–COP3 with `rs=0` or `rs=2`) as GPR writes to `rt`.
+Because this analysis does not model coprocessor register contents,
+the previous GPR source set is killed. MTCn and CTCn (`rs=4/6`)
+write into the coprocessor, leaving the source GPR unchanged.
+
+Two synthetic test methods check the COP2 variants of both cases.
+The model is still not a complete GTE interpreter and does not
+derive numeric matrix coefficients. No game executable bytes are
+committed and successful CI remains to be verified.
