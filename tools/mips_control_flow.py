@@ -83,6 +83,7 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
     delayed_target = None
     visited = []
     writes = []
+    loads = []
     completed_transfers = []
     pending_transfer = None
 
@@ -90,6 +91,7 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
         return {'completed': completed, 'reason': reason, 'pc': pc,
                 'executed': len(visited), 'visited_pcs': tuple(visited),
                 'store_addresses': tuple(writes),
+                'load_accesses': tuple(loads),
                 'control_transfers': tuple(completed_transfers), 'gpr': regs,
                 'hi': hi, 'lo': lo, 'pending_load': pending_load}
 
@@ -114,6 +116,7 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
             next_hi, next_lo = hi, lo
             next_pending = None
             store_addr = None
+            load_access = None
             destination = _gpr_destination(word)
             annul = False
             next_pc = u32(pc + 4)
@@ -146,6 +149,7 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
                 if op in LOADS:
                     value = memory.read(addr, LOADS[op], signed=op in (32, 33))
                     next_pending = (rt, value) if rt else None
+                    load_access = (pc, addr, LOADS[op], rt)
                 else:
                     memory.write(addr, STORES[op], regs[rt])
                     store_addr = addr
@@ -169,6 +173,8 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
             visited.append(pc)
             if store_addr is not None:
                 writes.append(store_addr)
+            if load_access is not None:
+                loads.append(load_access)
             pc, delayed_target = next_pc, next_delayed_target
             pending_transfer = next_pending_transfer
         except (ValueError, OverflowError) as exc:
