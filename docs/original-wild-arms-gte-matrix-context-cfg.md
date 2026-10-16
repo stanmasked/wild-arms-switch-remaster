@@ -31,3 +31,17 @@ register sources are yet derived using this graph.
 CTest, but a successful full CI run or audit on the original EXE is
 not established. This graph is incomplete and not PlayStation hardware
 certification. No original game assets or binaries are committed.
+
+## Stage 174: branch-likely annulment in the context-labelled CFG
+
+Ordinary MIPS branch-likely opcodes 20–23 now produce two alternatives:
+the taken path enters a branch-specific delay-slot context and afterwards
+jumps to `PC+4+(sign_extend(imm16)<<2)`; the not-taken path skips the
+slot and directly enters `PC+8`. Two synthetic cases check both edges.
+This applies only to the context-sensitive prototype; the older
+context-insensitive CFG still excludes such instructions.
+
+The instruction-specific branch predicates remain symbolic (both paths
+are considered possible), and REGIMM likely/link forms are still unresolved.
+This is an analysis improvement, not confirmation of exact game execution.
+The update was committed without an independently confirmed CI result.
