@@ -233,3 +233,51 @@ pipeline value does not match.
 These checks do **not** independently authenticate the source
 of either debugger export, emulate missing GTE/interrupt behavior,
 or prove full original-game equivalence or a working Switch port.
+
+## Stage 216 — optional exact after-RAM comparison, including side effects
+
+Add `--require-final-memory-state` to request an exact comparison of
+the **entire captured after-RAM range**, not just the nine matrix SH
+coefficients and optional CPU state:
+
+```sh
+python3 -m tools.audit_ps1_capture_pack \
+  --exe /private/WILDARMS.EXE \
+  --before-registers /private/before-registers.json \
+  --after-registers /private/after-registers.json \
+  --before-ram /private/before-ram.bin \
+  --after-ram /private/after-ram.bin \
+  --ram-base 0x80000000 \
+  --output /private/matrix-cpu-and-ram.json \
+  --require-jr-return \
+  --require-final-cpu-state \
+  --require-final-memory-state --compare
+```
+
+The packer computes one SHA-256 **per 4096-byte block** of the
+full captured after-RAM data and records the count of bytes whose
+value changed **outside the known 18-byte matrix**. This compact
+reference is saved **only** in the owner-restricted private JSON;
+raw after-RAM bytes and block digests are **not** written to the
+console or to GitHub.
+
+During replay, the verifier checks that the original before-RAM
+range was **fully mapped**, including any EXE-load-image overlap.
+A hole is an error; it is never guessed or filled with zeros.
+Only after the guest reaches its expected stop PC does the tool
+compute final RAM block hashes and compare the net changed-byte
+count outside the matrix.
+
+The public result contains only `final_memory_state` booleans,
+counts, and the **indices** of 4-KiB blocks that differ. The
+`matches_supplied_nine_coefficients` boolean remains solely
+numerical; `matches_complete_reference` also requires exact
+after-RAM equality if `require_final_memory_state` is enabled.
+A side-effect mismatch therefore returns CLI exit code **1** even
+if all nine matrix halfwords and the full CPU state match.
+
+A byte written with exactly its previous value cannot be detected
+from before/after snapshots alone; this is a **net final-memory**
+check, not a trace of all writes, DMA, GTE, or memory-mapped
+peripheral interactions. The caller-supplied capture is not
+independently authenticated as original PlayStation gameplay.
