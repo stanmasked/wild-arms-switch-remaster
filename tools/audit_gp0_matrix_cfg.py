@@ -81,7 +81,9 @@ def analyze(image, base, start=BUILDER, end=RETURN):
             unresolved.append({'pc': f'0x{pc:08X}', 'reason': kind + '_requires_semantics'})
             continue
         for target in targets:
-            if start <= target <= end and target % 4 == 0:
+            if target in delay_slots:
+                unresolved.append({'pc': f'0x{pc:08X}', 'reason': 'target_enters_delay_slot'})
+            elif start <= target <= end and target % 4 == 0:
                 edges.append({'from': f'0x{slot:08X}', 'to': f'0x{target:08X}',
                               'kind': kind, 'via': f'0x{pc:08X}'})
             else:
