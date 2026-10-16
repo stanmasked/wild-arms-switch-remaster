@@ -4,8 +4,9 @@ Executes a subset of MIPS integer instructions with delay slots and one-cycle
 load delay. Branch conditions are evaluated BEFORE the delay-slot instruction.
 No GTE, dynamic address aliases, exceptions, coprocessors, or code mutation.
 Unsupported operations terminate with an explicit reason. The in-process
-trace now contains private written values in store_value_accesses; never
-publish that raw trace when replaying original game data.
+trace contains private written values in store_value_accesses and
+intermediate arithmetic outputs in arithmetic_accesses. Never publish
+this raw trace when replaying original game data.
 """
 import struct
 
