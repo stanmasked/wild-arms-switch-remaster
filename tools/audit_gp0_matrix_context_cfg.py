@@ -56,7 +56,8 @@ def trace(image, base, start=BUILDER, end=RETURN):
             elif kind in ('unsupported_regimm','call','indirect'):
                 unresolved.add((pc,kind+'_requires_semantics'))
                 continue
-            next_nodes=[(pc+4,pc)]
+            else:
+                next_nodes=[(pc+4,pc)]
         elif kind=='unrecognized_special':
             unresolved.add((pc,'malformed_jump_encoding'))
             continue
