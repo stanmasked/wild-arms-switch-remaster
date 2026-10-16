@@ -85,6 +85,16 @@ class CFGTests(unittest.TestCase):
                              e['to']==f'0x{START+12:08X}'
                              for e in report['edges']))
 
+    def test_cop2_conditional_branch_is_not_linear(self):
+        # COP2 rs=8 denotes BC2F/BC2T, not an ordinary instruction.
+        bc2=(18<<26)|(8<<21)|(1<<16)|2
+        kind, targets, delayed=direct_successors(bc2,START)
+        self.assertEqual((kind,targets,delayed),('coprocessor_branch',(),True))
+        report=check([bc2,0,0,0])
+        self.assertTrue(any(x['reason']=='coprocessor_branch_requires_semantics'
+                            for x in report['unresolved']))
+        self.assertFalse(any(e['from']==f'0x{START:08X}' for e in report['edges']))
+
     def test_out_of_range(self):
         self.assertFalse(analyze(b'', BASE, START, START)['valid_range'])
 
