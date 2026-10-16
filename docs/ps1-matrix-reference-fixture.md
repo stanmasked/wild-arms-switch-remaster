@@ -215,3 +215,53 @@ truncation flag. Raw addresses, PCs, register or memory values are
 not emitted. A guest that did not stop at the required PC has no
 published mismatch indices. A file claiming to originate from
 external PS1 hardware is **not** independently authenticated.
+
+## Stage 218 — independent full store-value reference
+
+A private snapshot may additionally set
+`"require_store_values": true` and supply
+`"expected_store_values"`:
+
+```json
+{
+  "require_store_values": true,
+  "expected_store_values": {
+    "schema": "wild-arms-ps1-store-values-v1",
+    "events": [
+      {"pc": "0x80010004", "address": "0x80110000",
+       "width": 2, "value_u32": "0x00001000"}
+    ]
+  }
+}
+```
+
+The data above is a **synthetic placeholder**, not an original
+PlayStation capture. The private debugger must record every
+successfully completed CPU store, including identical-value
+writes and temporary writes subsequently restored. The written
+`value_u32` is strictly limited to the low bits represented by
+the store width: 0–255 for `SB`, 0–65535 for `SH`, and
+0–4294967295 for `SW`. Larger or malformed values are
+rejected, not truncated silently during reference decoding.
+All store events must be in execution order and aligned by width.
+
+The interpreter privately retains `store_value_accesses`
+as `(pc, address, width, rt, actual_low_bits)`, alongside
+the backward-compatible `store_addresses` and
+`store_accesses`. The evaluator cross-checks their consistency
+before comparing the ordered reference. If both the legacy
+`expected_store_sequence` and the value-bearing reference
+are present, their PC/address/width sequences must be
+identical or the input is rejected.
+
+With `require_store_values` enabled, all observed values,
+sites and event counts must match before
+`matches_complete_reference` can be true. A missing
+required log or malformed optional log fails closed.
+`matches_supplied_nine_coefficients` retains its separate
+nine-halfword meaning. The public `store_values` report
+contains *only* counts and capped mismatch indices; it
+never reveals values or guest addresses.
+
+Original PS1 debugger provenance and hardware equivalence
+cannot be independently proven by this synthetic verifier.
