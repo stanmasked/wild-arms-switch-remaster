@@ -97,6 +97,7 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
     visited = []
     writes = []
     store_accesses = []
+    store_value_accesses = []
     loads = []
     completed_transfers = []
     pending_transfer = None
@@ -106,6 +107,7 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
                 'executed': len(visited), 'visited_pcs': tuple(visited),
                 'store_addresses': tuple(writes),
                 'store_accesses': tuple(store_accesses),
+                'store_value_accesses': tuple(store_value_accesses),
                 'load_accesses': tuple(loads),
                 'control_transfers': tuple(completed_transfers), 'gpr': regs,
                 'hi': hi, 'lo': lo, 'pending_load': pending_load}
@@ -131,6 +133,7 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
             next_hi, next_lo = hi, lo
             next_pending = None
             store_addr = None
+            regs_before_store_value = regs[rt] if op in STORES else 0
             load_access = None
             destination = _gpr_destination(word)
             annul = False
@@ -192,6 +195,11 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
             if store_addr is not None:
                 writes.append(store_addr)
                 store_accesses.append((pc, store_addr, STORES[op], rt))
+                # Private exact *written* bit pattern, truncated by SB/SH/SW.
+                # Register value is sampled before the instruction retires a
+                # delayed load; never publish it in a sanitized report.
+                store_value_accesses.append((pc, store_addr, STORES[op], rt,
+                    regs_before_store_value & ((1 << (8 * STORES[op])) - 1)))
             if load_access is not None:
                 loads.append(load_access)
             pc, delayed_target = next_pc, next_delayed_target
