@@ -505,3 +505,13 @@ set_tests_properties(wa_mips_final_memory_state PROPERTIES WORKING_DIRECTORY ${C
 add_test(NAME wa_ps1_final_memory_capture
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_final_memory_capture.py)
 set_tests_properties(wa_ps1_final_memory_capture PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 217: record and compare successful SB/SH/SW event order.
+add_test(NAME wa_mips_store_event_sequence
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_store_event_sequence.py)
+set_tests_properties(wa_mips_store_event_sequence PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 217: private debugger write-trace integration and CLI validation.
+add_test(NAME wa_ps1_store_sequence_capture
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_store_sequence_capture.py)
+set_tests_properties(wa_ps1_store_sequence_capture PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
