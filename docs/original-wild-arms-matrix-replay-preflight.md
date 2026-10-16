@@ -80,3 +80,42 @@ COP2 blocker and unmapped load) and 25/25 related MIPS/matrix/trig tests
 passed locally in the previously reconstructed source tree. Syntax was
 also compile-checked locally. A complete private repository checkout,
 GitHub CI run and original `WILDARMS.EXE` comparison remain unverified.
+
+## Stage 194 — verify the original caller contract and probe its frame layout
+
+The static preflight now checks two opcode facts at the original caller:
+- the `JAL` at `0x80077980` targets the matrix builder at `0x800B7118`;
+- the instruction at `0x80077970` computes `$a1 = $sp + 16`.
+
+The `caller_linkage` JSON contains only booleans. When the call site
+is missing from an incomplete load image, all flags are false. No
+original instruction words or register values are output.
+
+The **opt-in** frame-layout probe can use the caller's observed pointer
+relationship instead of a separate matrix allocation:
+
+```sh
+python3 -m tools.audit_gp0_matrix_replay_preflight \
+  /private/path/WILDARMS.EXE --explore --frame-layout --max-steps 512
+```
+
+In this mode a bounded synthetic 4 KiB scratch stack is mapped,
+`$sp` is seeded near its upper edge, and `$a1 = $sp + 16`.
+The 18-byte matrix is written **inside that stack region**, so a
+second overlapping mapping is not needed. Attempts to override
+`$a1` or `$sp` via the probe's Python API are rejected in this mode.
+The former independent matrix mapping remains the default for
+backward compatibility.
+
+The probe reports `frame_layout: "a1_sp_plus_16"` or
+`"separate_matrix"` and the count of distinct matrix halfword slots
+written; it does not emit the stack address or coefficient contents.
+
+**Verification:** Seven new synthetic tests cover confirmed and
+rejected caller linkage, missing call site, all nine `SH` matrix
+writes on the scratch stack, `sp+16` aliasing, conflicting register
+overrides and backward compatibility. In a locally reconstructed
+source environment, the related complete suite passed **42/42**:
+the earlier 35 tests plus seven new ones. This is **not** a confirmed
+GitHub Actions run, and neither the original `WILDARMS.EXE` nor
+hardware output has been exercised. Inputs remain synthetic.
