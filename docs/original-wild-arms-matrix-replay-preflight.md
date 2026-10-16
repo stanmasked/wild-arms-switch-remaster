@@ -119,3 +119,44 @@ source environment, the related complete suite passed **42/42**:
 the earlier 35 tests plus seven new ones. This is **not** a confirmed
 GitHub Actions run, and neither the original `WILDARMS.EXE` nor
 hardware output has been exercised. Inputs remain synthetic.
+
+## Stage 195 — replay the caller JAL and verify the builder's JR return
+
+An additional **opt-in** mode now begins at the caller's argument
+setup instruction (`CALL - 16`) rather than directly at the builder
+entry. It requires the known caller opcodes to pass validation before
+execution. The interpreter follows the actual `JAL` and its delay
+slot into the builder and runs until it **returns to `CALL + 8`**,
+or until a bounded/unsupported-operation halt:
+
+```sh
+python3 -m tools.audit_gp0_matrix_replay_preflight \
+  /private/path/WILDARMS.EXE --caller-replay --max-steps 4096
+```
+
+`--caller-replay` implies exploratory execution and the `a1=sp+16`
+stack-resident synthetic matrix layout. The caller's `ADDIU a1,sp,16`
+instruction must actually execute; the harness does **not** inject the
+matrix address into `$a1` in advance.
+
+The sanitized `exploratory_trace` now also reports
+`replay_origin`, `caller_jal_executed`,
+`builder_entry_reached`, `return_instruction_executed` and
+`returned_to_caller`. A reported return requires that a `JR $ra`
+executed immediately before its delay slot, that the `JAL` and the
+builder entry were visited, and that execution stopped at the
+caller's continuation. A direct `J` to the continuation is **not**
+accepted as a genuine function return.
+
+Four new synthetic tests cover JAL → nine matrix halfword stores →
+JR return, wrong JAL target, a deceptive direct jump to the return
+address, and an unsupported COP2 opcode at builder entry. Existing
+preflight and MIPS/trig tests were also run on the local source
+reconstruction: **46/46 passed**, and Python compile-check passed.
+The new cases reuse the existing test filename already registered in
+CTest and GitHub Actions, so no workflow changes are needed.
+
+These tests are synthetic and cannot establish original Wild Arms
+numerical outputs. Original executable bytes, guest register values,
+table samples and matrix coefficients remain excluded from reports.
+No full checkout CI success or real-device execution is claimed.
