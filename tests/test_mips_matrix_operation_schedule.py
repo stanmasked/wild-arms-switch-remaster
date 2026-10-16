@@ -92,6 +92,17 @@ class OperationScheduleTests(unittest.TestCase):
         # SH in the load-delay slot sees the prior SRA result.
         self.assertEqual(r['matrix_slots'][0]['schedule'],'single_product_sra12')
 
+    def test_trapping_add_not_confused_with_addu_schedule(self):
+        program=list(build_nine_dot3_program())
+        # Replace all ADDU accumulator opcodes with ADD. The synthetic
+        # zero operands avoid overflow, but the opcode schedule differs.
+        program=[(word & ~63) | 32 if (word >> 26 == 0 and word & 63 == 33
+                    and (word >> 21) & 31 == 11) else word for word in program]
+        _,trace,r=run(program)
+        self.assertTrue(trace['completed'])
+        self.assertEqual(r['arithmetic_schedule_counts']['shift_after_three_products'],0)
+        self.assertEqual(r['arithmetic_schedule_counts']['unclassified'],9)
+
     def test_unsigned_mult_not_confused_with_signed(self):
         program=list(build_nine_product_program()[:7]);program[3]=(program[3]&~63)|25
         _,trace,r=run(program)
