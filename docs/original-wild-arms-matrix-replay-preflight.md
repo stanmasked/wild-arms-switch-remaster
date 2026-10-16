@@ -253,3 +253,47 @@ To rerun:
 python3 -m unittest discover -s tests -p test_mips_entry_dependencies.py -v
 python3 -m unittest discover -s tests -p test_gp0_matrix_replay_preflight.py -v
 ```
+
+## Stage 198 — privacy-safe differential probes of caller inputs
+
+A new opt-in `--input-sensitivity` flag executes the previously validated
+`--caller-replay` entry path four times against a **fresh** synthetic
+stack each time: baseline, then a single perturbation to `$a0` (GPR 4),
+`$a2` (GPR 6), and `$a3` (GPR 7). The caller's stack and `$a1=$sp+16`
+relationship are preserved; neither `$sp` nor `$a1` is perturbed.
+
+```sh
+python3 -m tools.audit_gp0_matrix_replay_preflight \
+  /private/path/WILDARMS.EXE \
+  --caller-replay --input-sensitivity --sensitivity-delta 1 \
+  --max-steps 4096
+```
+
+The `input_sensitivity` result reports which GPR was perturbed;
+whether the guest execution path or set of matrix stores changed;
+whether both executions genuinely returned through the expected
+`JR $ra`; and, **only if both returned and wrote all nine SH slots**,
+how many signed-16 matrix coefficients differ (0–9).
+
+The actual nine coefficients, guest register values, private table
+entries, code bytes and dynamic addresses are **never printed**.
+An interrupted run or partial matrix always produces
+`changed_coefficient_count: null`, not a misleading comparison.
+A zero difference for a one-step perturbation is **not** proof of
+independence; other seeds, input increments or branch paths could
+yield a different outcome. This is a synthetic sensitivity test,
+**not** known gameplay calling-state reconstruction.
+
+Seven tests in the new pure module and four integrated preflight tests
+cover complete and incomplete matrices, changed control flow, safe
+summary structure, independently mapped memory, a synthetic nine-slot
+builder using `$a0`, a caller-only mode guard and an artificial PS-X
+image containing a synthetic Q12 sin/cos table. The locally available
+project subset ran **75/75 tests** (64 earlier tests plus 11 new ones),
+and Python `compileall` passed. The related CI workflow and CTest
+entry were extended; successful remote GitHub Actions and Switch
+hardware execution have not been verified.
+
+The exact user's original `WILDARMS.EXE` remains unavailable in
+this session. Thus no conclusion about actual coefficient sensitivity
+in the original game has been established.
