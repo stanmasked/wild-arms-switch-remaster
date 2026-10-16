@@ -26,19 +26,19 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(r['edges'],[])
         self.assertTrue(r['unresolved'])
     def test_branch_likely_taken_executes_delay_slot(self):
-        report=run([20<<26|2,0,0,0])
+        report=run([20<<26|8<<21|9<<16|2,0,0,0])
         edges={(e['from'],e['to']) for e in report['edges']}
         self.assertIn((f'0x{START:08X}',f'0x{START+4:08X}@delay_of_0x{START:08X}'),edges)
         self.assertIn((f'0x{START+4:08X}@delay_of_0x{START:08X}',f'0x{START+12:08X}'),edges)
 
     def test_branch_likely_not_taken_annuls_slot(self):
-        report=run([20<<26|1,0,0,0])
+        report=run([20<<26|8<<21|9<<16|1,0,0,0])
         edges={(e['from'],e['to']) for e in report['edges']}
         self.assertIn((f'0x{START:08X}',f'0x{START+8:08X}'),edges)
         self.assertNotIn((f'0x{START:08X}',f'0x{START+4:08X}'),edges)
 
     def test_branch_likely_annulled_edge_is_not_a_delay_context(self):
-        report=run([20<<26|2,0,0,0])
+        report=run([20<<26|8<<21|9<<16|2,0,0,0])
         edges={(e['from'],e['to']) for e in report['edges']}
         self.assertIn((f'0x{START:08X}', f'0x{START+8:08X}'),edges)
         self.assertIn((f'0x{START:08X}', f'0x{START+4:08X}@delay_of_0x{START:08X}'),edges)
