@@ -22,6 +22,7 @@ try:
     from .mips_entry_dependencies import read_before_write
     from .mips_call_boundary import analyze_boundary
     from .mips_caller_sources import inspect as inspect_caller_sources
+    from .mips_caller_cfg_sources import inspect as inspect_caller_cfg_sources
     from .mips_input_sensitivity import probe_input_registers
 except ImportError:
     from audit_original_nclip_winding import parse_exe
@@ -32,6 +33,7 @@ except ImportError:
     from mips_entry_dependencies import read_before_write
     from mips_call_boundary import analyze_boundary
     from mips_caller_sources import inspect as inspect_caller_sources
+    from mips_caller_cfg_sources import inspect as inspect_caller_cfg_sources
     from mips_input_sensitivity import probe_input_registers
 
 
@@ -103,7 +105,7 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
             matrix_address=0x80110000, explore=False, max_steps=512,
             initial_registers=None, frame_layout=False, call=CALL,
             caller_replay=False, input_sensitivity=False, sensitivity_delta=1,
-            caller_lookback=4):
+            caller_lookback=4, caller_cfg=False):
     base, image = parse_exe(blob)
     if (start < base or end < start or end + 4 > base + len(image)
             or (start - base) % 4 or (end - base) % 4):
@@ -130,6 +132,9 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
         'caller_linkage': inspect_caller(image, base, call=call, builder=start),
         'caller_argument_sources': inspect_caller_sources(
             image, base, call, lookback_words=caller_lookback),
+        'caller_argument_cfg': (inspect_caller_cfg_sources(
+            image, base, call, lookback_words=caller_lookback)
+            if caller_cfg else None),
         'original_game_state_known': False,
         'bit_exact_original_coefficients_proven': False,
     }
@@ -266,6 +271,8 @@ def main():
     p.add_argument('--explore', action='store_true',
                    help='probe with synthetic zero-filled GPRs')
     p.add_argument('--max-steps', type=int, default=512)
+    p.add_argument('--caller-cfg', action='store_true',
+                   help='enumerate bounded conditional paths before JAL')
     p.add_argument('--caller-lookback', type=int, default=4,
                    help='straight-line instructions to audit before JAL (1..128)')
     p.add_argument('--frame-layout', action='store_true',
@@ -283,7 +290,8 @@ def main():
                              caller_replay=args.caller_replay,
                              input_sensitivity=args.input_sensitivity,
                              sensitivity_delta=args.sensitivity_delta,
-                     caller_lookback=args.caller_lookback), indent=2))
+                     caller_lookback=args.caller_lookback,
+                     caller_cfg=args.caller_cfg), indent=2))
 
 
 if __name__ == '__main__':
