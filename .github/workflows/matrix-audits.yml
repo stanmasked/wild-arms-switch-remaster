@@ -36,6 +36,9 @@ on:
       - 'tests/test_mips_input_sensitivity.py'
       - 'tools/mips_entry_dependencies.py'
       - 'tests/test_mips_entry_dependencies.py'
+      - 'tools/mips_builder_integrity_gate.py'
+      - 'tests/test_mips_builder_integrity_gate.py'
+      - 'tests/test_gp0_builder_integrity_gate.py'
       - 'tools/mips_builder_execution_evidence.py'
       - 'tests/test_mips_builder_execution_evidence.py'
       - 'tests/test_gp0_builder_execution_evidence.py'
@@ -94,6 +97,8 @@ jobs:
           python -m unittest discover -s tests -p 'test_mips_matrix_operation_schedule.py' -v
           python -m unittest discover -s tests -p 'test_mips_builder_opcode_evidence.py' -v
           python -m unittest discover -s tests -p 'test_mips_builder_execution_evidence.py' -v
+          python -m unittest discover -s tests -p 'test_mips_builder_integrity_gate.py' -v
+          python -m unittest discover -s tests -p 'test_gp0_builder_integrity_gate.py' -v
           python -m unittest discover -s tests -p 'test_gp0_builder_execution_evidence.py' -v
           python -m unittest discover -s tests -p 'test_gp0_builder_opcode_evidence.py' -v
           python -m unittest discover -s tests -p 'test_gp0_matrix_operation_schedule.py' -v
