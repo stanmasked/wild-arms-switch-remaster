@@ -475,3 +475,13 @@ set_tests_properties(wa_ps1_pipeline_capture PROPERTIES WORKING_DIRECTORY ${CMAK
 add_test(NAME wa_mips_load_pipeline_shadow
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_load_pipeline_shadow.py)
 set_tests_properties(wa_mips_load_pipeline_shadow PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 214: completed JR $ra transfer, return delay-slot and drained pipeline.
+add_test(NAME wa_mips_return_boundary
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_return_boundary.py)
+set_tests_properties(wa_mips_return_boundary PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 214: opt-in strict nine-coefficient PS1 snapshot return verification.
+add_test(NAME wa_ps1_reference_return_boundary
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_reference_return_boundary.py)
+set_tests_properties(wa_ps1_reference_return_boundary PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
