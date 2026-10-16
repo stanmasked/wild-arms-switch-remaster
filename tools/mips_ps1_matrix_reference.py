@@ -119,7 +119,7 @@ def _prepare_memory(image, base, segments):
                 extras.append((above_start, data[above_start-address:]))
         # Segments entirely outside the executable interval are mapped once.
         if seg_end <= base or address >= end:
-            # Recovered below/above part is already in extras.
+            # Recovered below/above part is already in `extras`.
             pass
     memory = MappedMemory().map_region(base, image, writable=True)
     for address, data in extras:
