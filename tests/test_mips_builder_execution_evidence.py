@@ -86,7 +86,7 @@ class BuilderExecutionEvidenceTests(unittest.TestCase):
     def test_static_a1_sh_with_wrong_resolved_address_is_not_verified(self):
         words=(ins(41,5,8,0),0)
         # Setting a1 to a mapped buffer other than MATRIX is fine.
-        # LEFT is read-only, so use an overlapping mapped (writable) region?
+        # LEFT is read-only, so use an overlapping mapped (writable) region? 
         # We instead use MATRIX+2 and SH lands at slot 1, not encoded slot 0.
         _,r=run(words,extra_regs={5:MATRIX+2})
         self.assertTrue(r['matrix_slots'][1]['final_successful_sh_observed'])
