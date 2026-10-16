@@ -460,3 +460,18 @@ set_tests_properties(wa_mips_ps1_capture_pack PROPERTIES WORKING_DIRECTORY ${CMA
 add_test(NAME wa_audit_ps1_capture_pack
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_audit_ps1_capture_pack.py)
 set_tests_properties(wa_audit_ps1_capture_pack PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 213: captured R3000A pending-load hazards and branch-delay state.
+add_test(NAME wa_mips_initial_pipeline
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_initial_pipeline.py)
+set_tests_properties(wa_mips_initial_pipeline PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 213: strict external PS1 capture pipeline declarations.
+add_test(NAME wa_ps1_pipeline_capture
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_pipeline_capture.py)
+set_tests_properties(wa_ps1_pipeline_capture PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 213: consistency across code execution and dependency shadows.
+add_test(NAME wa_mips_load_pipeline_shadow
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_load_pipeline_shadow.py)
+set_tests_properties(wa_mips_load_pipeline_shadow PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
