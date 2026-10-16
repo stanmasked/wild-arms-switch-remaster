@@ -44,6 +44,15 @@ class ContextTests(unittest.TestCase):
         self.assertIn((f'0x{START:08X}', f'0x{START+4:08X}@delay_of_0x{START:08X}'),edges)
         self.assertNotIn((f'0x{START:08X}', f'0x{START+4:08X}'),edges)
 
+    def test_regimm_likely_taken_and_annulled_edges(self):
+        for subop in (2,3):
+            instruction=(1<<26)|(subop<<16)|2
+            report=run([instruction,0,0,0])
+            edges={(e['from'],e['to']) for e in report['edges']}
+            self.assertIn((f'0x{START:08X}',f'0x{START+8:08X}'),edges)
+            self.assertIn((f'0x{START:08X}',f'0x{START+4:08X}@delay_of_0x{START:08X}'),edges)
+            self.assertIn((f'0x{START+4:08X}@delay_of_0x{START:08X}',f'0x{START+12:08X}'),edges)
+
     def test_invalid(self):
         self.assertFalse(trace(b'',BASE,START,START)['valid_range'])
 
