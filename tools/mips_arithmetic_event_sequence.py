@@ -138,11 +138,14 @@ def compare(trace, expected, *, guest_stopped_at_expected_pc):
             missing.append(i)
         elif actual[i][:2] != expected[i][:2]:
             site_bad.append(i)
-        elif actual[i][2] != expected[i][2]:
-            value_bad.append(i)
-        elif actual[i][3] != expected[i][3]:
-            aux_bad.append(i)
-    bad = sorted(missing + site_bad + value_bad + aux_bad)
+        else:
+            # LO/primary and HI can differ in the same MULT/MULTU event.
+            # Classify both, but count each event only once in the summary.
+            if actual[i][2] != expected[i][2]:
+                value_bad.append(i)
+            if actual[i][3] != expected[i][3]:
+                aux_bad.append(i)
+    bad = sorted(set(missing + site_bad + value_bad + aux_bad))
     out['matches_reference'] = not bad
     out['matching_event_count'] = max(len(actual), len(expected)) - len(bad)
     out['mismatching_event_indices'] = bad[:MAX_MISMATCH_INDICES]
