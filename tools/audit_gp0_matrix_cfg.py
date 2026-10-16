@@ -28,6 +28,9 @@ def direct_successors(word, pc):
     if op in (4, 5, 6, 7) or (op == 1 and rt in (0, 1)):
         target = (pc + 4 + (signed16(word & 65535) << 2)) & 0xffffffff
         return 'conditional', (target, pc + 8), True
+    if op == 1 and rt in (2,3):
+        target = (pc + 4 + (signed16(word & 65535) << 2)) & 0xffffffff
+        return 'regimm_likely', (target, pc+8), True
     if op == 1:
         return 'unsupported_regimm', (), True
     if op in (2, 3):
@@ -68,7 +71,7 @@ def analyze(image, base, start=BUILDER, end=RETURN):
         if slot > end:
             unresolved.append({'pc': f'0x{pc:08X}', 'reason': 'delay_slot_out_of_range'})
             continue
-        if kind in ('branch_likely', 'unsupported_regimm'):
+        if kind in ('branch_likely', 'regimm_likely', 'unsupported_regimm'):
             # The delay slot can be annulled (or the encoding is unsupported).
             # Do not assert unconditional execution of that slot.
             unresolved.append({'pc': f'0x{pc:08X}', 'reason': kind + '_requires_semantics'})
