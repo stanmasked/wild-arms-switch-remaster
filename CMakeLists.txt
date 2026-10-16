@@ -305,3 +305,8 @@ set_tests_properties(wa_mips_memory_sequence PROPERTIES WORKING_DIRECTORY ${CMAK
 add_test(NAME wa_mips_trig_memory
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_trig_memory.py)
 set_tests_properties(wa_mips_trig_memory PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Separate protected trig table and nine writable PS1 matrix coefficient slots.
+add_test(NAME wa_mips_matrix_memory
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_matrix_memory.py)
+set_tests_properties(wa_mips_matrix_memory PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
