@@ -59,6 +59,25 @@ def _decode_reference(fixture, exe_sha):
     if start & 3 or stop & 3 or matrix & 1 or matrix > 0xffffffff - 17:
         raise ValueError('unaligned reference entry/stop/matrix pointer')
     hi, lo = _u32(fixture['hi']), _u32(fixture['lo'])
+    # Captures claiming external PS1 provenance must explicitly account for
+    # the pipeline state. An absent field is only a legacy *synthetic* default.
+    explicit_pipeline = ('pending_load' in fixture and
+                         'in_branch_delay_slot' in fixture)
+    if fixture['source'] == 'external_ps1_capture_claim' and not explicit_pipeline:
+        raise ValueError('external capture lacks explicit pipeline state')
+    in_delay_slot = fixture.get('in_branch_delay_slot', False)
+    if type(in_delay_slot) is not bool or in_delay_slot:
+        # A captured branch slot requires its earlier branch target, not just
+        # a PC. Refuse to incorrectly replay it as straight-line code.
+        raise ValueError('initial control-flow delay slot is unsupported')
+    load = fixture.get('pending_load')
+    if load is not None:
+        if not isinstance(load, dict) or set(load) != {'gpr', 'value_u32'}:
+            raise ValueError('malformed pending MIPS load state')
+        index = load['gpr']
+        if type(index) is not int or not 1 <= index <= 31:
+            raise ValueError('invalid pending load destination GPR')
+        load = (index, _u32(load['value_u32']))
     max_steps = fixture.get('max_steps', 4096)
     if type(max_steps) is not int or not 1 <= max_steps <= 100000:
         raise ValueError('invalid bounded instruction budget')
@@ -83,7 +102,8 @@ def _decode_reference(fixture, exe_sha):
         parsed.append((addr, data))
     return {'source':fixture['source'], 'gpr':regs, 'expected':expected,
             'entry_pc':start,'stop_pc':stop, 'matrix_address':matrix,
-            'hi':hi,'lo':lo,'max_steps':max_steps,'segments':parsed}
+            'hi':hi,'lo':lo,'max_steps':max_steps,'segments':parsed,
+            'pending_load':load,'pipeline_state_explicit':explicit_pipeline}
 
 
 def _prepare_memory(image, base, segments):
@@ -173,7 +193,8 @@ def compare(blob, fixture):
         raise ValueError('snapshot must map all nine matrix halfwords') from None
     trace = execute(code, base, capture['entry_pc'], memory, capture['gpr'],
                     hi=capture['hi'], lo=capture['lo'],
-                    stop_pc=capture['stop_pc'],max_steps=capture['max_steps'])
+                    stop_pc=capture['stop_pc'],max_steps=capture['max_steps'],
+                    initial_pending_load=capture['pending_load'])
     final_sh = _final_sh_slots(code,base,trace,capture['matrix_address'])
     at_stop = trace['completed'] and trace['reason'] == 'stop_pc'
     eligible = bool(at_stop and all(final_sh))
@@ -187,6 +208,8 @@ def compare(blob, fixture):
     return {
         'reference_schema': SCHEMA,
         'sha256_match': True,
+        'initial_load_pipeline_state_explicit': capture['pipeline_state_explicit'],
+        'initial_pending_load_applied': capture['pending_load'] is not None,
         'executable_memory_overlaid': overlaid,
         'guest_completed_at_expected_stop': bool(at_stop),
         'guest_stop_reason': trace['reason'] if trace['reason'] in _SAFE_REASONS else 'other',
