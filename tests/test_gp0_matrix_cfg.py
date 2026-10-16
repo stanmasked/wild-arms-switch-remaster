@@ -31,6 +31,14 @@ class CFGTests(unittest.TestCase):
     def test_branch_likely_unresolved(self):
         report = check([20<<26, 0, 0])
         self.assertTrue(any(x['reason']=='branch_likely_requires_semantics' for x in report['unresolved']))
+    def test_unsupported_regimm_does_not_fallthrough(self):
+        # REGIMM rt=2 is BLTZL (branch likely): delay-slot semantics differ.
+        report = check([(1<<26)|(2<<16),0,0])
+        self.assertTrue(any(x['reason']=='unsupported_regimm_requires_semantics'
+                            for x in report['unresolved']))
+        self.assertFalse(any(e['from']==f'0x{START+4:08X}' and
+                             e['to']==f'0x{START+8:08X}'
+                             for e in report['edges']))
     def test_out_of_range(self):
         self.assertFalse(analyze(b'', BASE, START, START)['valid_range'])
 
