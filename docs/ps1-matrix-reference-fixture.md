@@ -170,3 +170,48 @@ This checks only **net resulting RAM bytes**: same-value stores,
 transient writes that are later undone, unmodeled peripherals and
 DMA cannot be inferred from snapshots. No real PS1 hardware
 capture has been independently authenticated by this feature.
+
+## Stage 217 — optional independent full SB/SH/SW event reference
+
+A private reference can include `"require_store_sequence": true`
+(default false) and `"expected_store_sequence"`:
+
+```json
+{
+  "require_store_sequence": true,
+  "expected_store_sequence": {
+    "schema": "wild-arms-ps1-store-sequence-v1",
+    "events": [
+      {"pc": "0x80010004", "address": "0x80110000", "width": 2}
+    ]
+  }
+}
+```
+
+This is an *illustrative synthetic* event, not an original-game trace.
+Record all successfully executed CPU `SB` (width 1), `SH` (width 2)
+and `SW` (width 4) with instruction PCs and destination addresses
+from a **separate instruction trace** of the same PS1 run. Event order
+and duplicate records matter; do not infer these events from RAM
+snapshots. Widths and addresses must be aligned; the store list is
+bounded to 100,000 events.
+
+The MIPS interpreter now retains an internal `store_accesses` event
+for every successful CPU store, including the PC, resolved address,
+width and source GPR number. It still records the older
+`store_addresses` array. The comparator checks trace consistency
+and compares the first three fields to the private debugger event
+log in exact order. No synthetic guessed log is ever inserted.
+
+If `require_store_sequence` is enabled without
+`expected_store_sequence`, fixture validation fails. A supplied
+malformed optional log also fails validation. In strict mode, a
+mismatch prevents `matches_complete_reference` even if nine
+coefficients, final CPU, return boundary and final RAM all match.
+
+The safe `store_sequence` result exposes only counts, an event-width
+histogram, and at most 32 **mismatching event indices** with a
+truncation flag. Raw addresses, PCs, register or memory values are
+not emitted. A guest that did not stop at the required PC has no
+published mismatch indices. A file claiming to originate from
+external PS1 hardware is **not** independently authenticated.
