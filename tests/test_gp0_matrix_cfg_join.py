@@ -57,6 +57,22 @@ class CFGJoinTests(unittest.TestCase):
         result=check([lw(8),mtlo,mflo,sh(10,0)],(0,))
         self.assertEqual(result['candidate_stores'][0]['candidate_lookup_sources'],
                          [f'0x{START:08X}'])
+    def test_cop2_register_reads_kill_old_gpr_sources(self):
+        for cop_rs in (0,2):
+            # MFC2/CFC2 write $t0; prior trigonometric lookup is no
+            # longer a proven source of the stored register.
+            cop_read=(18<<26)|(cop_rs<<21)|(8<<16)
+            result=check([lw(8),cop_read,sh(8,0)],(0,))
+            self.assertEqual(result['candidate_stores'][0]['candidate_lookup_sources'],[])
+
+    def test_cop2_register_writes_do_not_kill_source(self):
+        # MTC2/CTC2 transfer GPR into coprocessor and do not change $t0.
+        for cop_rs in (4,6):
+            cop_write=(18<<26)|(cop_rs<<21)|(8<<16)
+            result=check([lw(8),cop_write,sh(8,0)],(0,))
+            self.assertEqual(result['candidate_stores'][0]['candidate_lookup_sources'],
+                             [f'0x{START:08X}'])
+
     def test_invalid_range(self):
         self.assertFalse(analyze(b'',BASE,START,START)['valid_range'])
 
