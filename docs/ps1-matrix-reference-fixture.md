@@ -339,3 +339,29 @@ unmodeled external inputs remain possible. The report always
 identifies this boundary with
 *proven_numeric_causation: false*. Without an independently
 recorded original PS1 event trace the field is null.
+
+
+## Stage 221 — independent LO and HI mismatch accounting
+
+For a single aligned `MULT` or `MULTU` reference event, **both**
+`result_u32` (LO) and `secondary_u32` (HI) can disagree with the
+replayed MIPS result. The arithmetic comparison now checks the two halves
+independently: the **same event index** may appear in
+`result_value_mismatch_indices` and `secondary_result_mismatch_indices`.
+The top-level `mismatching_event_indices` list remains unique,
+`matching_event_count` is calculated from unique incorrect events, and
+all three mismatch-index lists retain their 32-entry cap.
+
+When an optional private reference is supplied, the existing Stage 220
+dependency report continues to keep primary and HI-half candidates separate
+for the last successful SH write to each matrix slot. An event can be a
+candidate for different slots through LO and HI simultaneously, but this
+does **not** prove numeric causation. A PC/kind alignment error still
+prevents numeric classification and any slot attribution.
+
+Regression coverage includes one multiply with both halves incorrect,
+more than 32 dual-half mismatches, site mismatch precedence, independent
+LO-versus-HI matrix destinations, and the complete synthetic reference
+comparison. These tests do **not** authenticate real PS1 captures or
+demonstrate Switch runtime compatibility. Private numeric reference data
+must stay outside the repository.
