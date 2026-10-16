@@ -96,6 +96,7 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
     delayed_target = None
     visited = []
     writes = []
+    store_accesses = []
     loads = []
     completed_transfers = []
     pending_transfer = None
@@ -104,6 +105,7 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
         return {'completed': completed, 'reason': reason, 'pc': pc,
                 'executed': len(visited), 'visited_pcs': tuple(visited),
                 'store_addresses': tuple(writes),
+                'store_accesses': tuple(store_accesses),
                 'load_accesses': tuple(loads),
                 'control_transfers': tuple(completed_transfers), 'gpr': regs,
                 'hi': hi, 'lo': lo, 'pending_load': pending_load}
@@ -189,6 +191,7 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
             visited.append(pc)
             if store_addr is not None:
                 writes.append(store_addr)
+                store_accesses.append((pc, store_addr, STORES[op], rt))
             if load_access is not None:
                 loads.append(load_access)
             pc, delayed_target = next_pc, next_delayed_target
