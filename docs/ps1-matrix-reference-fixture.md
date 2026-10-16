@@ -405,3 +405,42 @@ a mismatched BEQ operand, a mismatched JR target, correctly matched
 computed pointers, and a mismatched arithmetic value overwritten before
 a branch. The original Wild Arms runtime and Nintendo Switch build
 remain unverified by these synthetic tests.
+
+
+## Stage 223 — delayed loads, branch slots, repeated RAM writes, and code-store guard
+
+The arithmetic mismatch dependency analyzer has additional *synthetic*
+regressions for MIPS load-delay semantics and executed control flow. Two
+back-to-back loads to the same GPR leave the earlier load visible during
+the instruction immediately after the second load, while the newer load
+retires after that instruction. An immediate ALU write to the pending
+destination cancels the older pending-load result. Writing a mismatching
+arithmetic result to private RAM and reloading it can carry the mismatch
+into a later branch condition; overwriting the same RAM bytes first
+clears that observed dependency. A branch evaluates its operands
+before its delay slot, while an annulled branch-likely slot does not
+create an arithmetic event or an executed-instruction dependency.
+
+One further **fail-closed guard** addresses the existing static-image
+limitation of the MIPS guest runner: `execute()` does not refetch
+instructions from RAM after a store into its executable image. If any
+successfully observed CPU SB/SH/SW overlaps the executable address range,
+the attribution analyzer now returns
+`reason_code: "guest_code_write_unmodeled"` and
+`executed_code_write_observed: true`. It withholds per-slot candidates
+and the unlinked-mismatch list, even for an apparently same-value code
+write, because runtime instruction mutation is not faithfully modeled.
+The flag is a boolean; no guest instruction bytes, addresses, PCs, or
+private arithmetic numbers are published.
+
+The new guard is **only for attribution**. Numeric replay and its
+separately reported nine-coefficient comparison are unchanged; therefore
+a numeric match in the presence of executable writes is not evidence of
+runtime self-modification fidelity. This is deliberately conservative,
+not a hardware-accurate CPU or Switch runtime implementation.
+
+Stage 223 adds eight synthetic tests: spill/reload to a branch, RAM
+overwrite before a branch, back-to-back loads, superseded pending loads,
+arithmetic in a branch delay slot, annulled branch-likely arithmetic,
+writes to executable bytes, and same-value code writes. Independent
+original PS1 debugger traces are still required for reference claims.
