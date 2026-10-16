@@ -45,7 +45,11 @@ def add32(rs,rt,trap_overflow=False):
     return u32(value),overflow
 
 def sub32(rs,rt,trap_overflow=False):
-    return add32(rs,-s32(rt),trap_overflow)
+    value=s32(rs)-s32(rt)
+    overflow=not (-(1<<31) <= value <= (1<<31)-1)
+    if trap_overflow and overflow:
+        raise OverflowError('MIPS signed arithmetic overflow')
+    return u32(value),overflow
 
 def addiu(rs,imm16):
     return u32(u32(rs)+sign_extend16(imm16))
