@@ -70,7 +70,7 @@ def read_before_write(image, base, visited_pcs):
         needs.update(r for r in reads if r not in known and r != 0)
         # Prior load is committed after the current instruction has read its
         # registers. A current GPR write to the same destination supersedes it.
-        if pending and pending != immediate_write and pending != load_dest:
+        if pending and pending != immediate_write:
             known.add(pending)
         if immediate_write:
             known.add(immediate_write)
