@@ -485,3 +485,13 @@ set_tests_properties(wa_mips_return_boundary PROPERTIES WORKING_DIRECTORY ${CMAK
 add_test(NAME wa_ps1_reference_return_boundary
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_reference_return_boundary.py)
 set_tests_properties(wa_ps1_reference_return_boundary PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 215: private 32-register, HI/LO and pending-load post-return comparison.
+add_test(NAME wa_mips_final_cpu_state
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_final_cpu_state.py)
+set_tests_properties(wa_mips_final_cpu_state PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 215: stage-211 reference and stage-212 capture pack integration.
+add_test(NAME wa_ps1_final_cpu_capture
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_final_cpu_capture.py)
+set_tests_properties(wa_ps1_final_cpu_capture PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
