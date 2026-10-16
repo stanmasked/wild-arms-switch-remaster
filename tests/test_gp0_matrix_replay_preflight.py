@@ -311,6 +311,25 @@ class ReplayPreflightTests(unittest.TestCase):
         self.assertTrue(all(x['changed_coefficient_count'] is None
                             for x in report['input_sensitivity']['observations']))
 
+    def test_call_boundary_separates_prepared_and_unknown_inputs(self):
+        body=[ins(9,4,8,1),ins(41,5,8,0),(31<<21)|8,0]
+        blob,call,builder,end=self._caller_program(body)
+        trace=analyze(blob,start=builder,end=end,call=call,
+                      caller_replay=True)['exploratory_trace']
+        boundary=trace['call_boundary']
+        self.assertTrue(boundary['builder_entry_reached'])
+        self.assertEqual(boundary['builder_read_before_write_gprs'],[4,5,31])
+        self.assertEqual(boundary['builder_inputs_prepared_by_caller'],[5,31])
+        self.assertEqual(boundary['builder_inputs_unresolved'],[4])
+
+    def test_call_boundary_marks_entry_unexecuted_when_cop2_blocks(self):
+        blob,call,builder,end=self._caller_program([18<<26,(31<<21)|8,0])
+        trace=analyze(blob,start=builder,end=end,call=call,
+                      caller_replay=True)['exploratory_trace']
+        self.assertTrue(trace['builder_entry_reached'])
+        self.assertFalse(trace['call_boundary']['builder_entry_reached'])
+        self.assertEqual(trace['call_boundary']['builder_inputs_unresolved'],[])
+
     def test_trace_bounded_loop(self):
         jump_to_self = (2<<26) | ((BASE>>2)&0x03ffffff)
         r = analyze(fixture([jump_to_self,0,0]), start=BASE, end=BASE+8,
