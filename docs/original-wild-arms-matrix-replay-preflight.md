@@ -1097,3 +1097,60 @@ CTest and the `matrix-audits.yml` GitHub Actions workflow.
 A successful complete GitHub Actions run, original WILDARMS.EXE
 numerical replay, hardware verification, and a native Switch game
 build **remain unverified**.
+
+## Stage 211 — private nine-coefficient PS1 reference comparison
+
+The new `tools/mips_ps1_matrix_reference.py` is a **separate**
+numerical comparison tool for privately supplied, captured guest state.
+Unlike stages 195–210, it requires nine independent **signed 16-bit**
+coefficient expectations. It uses the existing bounded MIPS executor,
+not a pre-invented rotation formula.
+
+A companion CLI is available:
+
+```sh
+python3 -m tools.audit_ps1_matrix_reference \
+  --exe /private/WILDARMS.EXE \
+  --reference /private/ps1-matrix-capture.json
+```
+
+The capture format is documented in
+`docs/ps1-matrix-reference-fixture.md`. It requires a verified
+**full-file EXE SHA-256**, all 32 GPRs, HI and LO, guest start/stop PCs,
+matrix output address, explicit RAM snapshot segment(s), and exactly
+nine observed signed 16-bit reference coefficients. Up to 4 MiB of
+captured RAM can be overlaid across the loaded EXE image or mapped
+outside it; overlapping segments are rejected. Missing RAM, malformed
+registers, the wrong executable hash or a partial state cause
+validation or guest-replay failure, rather than guessed zero state.
+
+The comparison is withheld unless the replay reaches its *expected*
+stop PC and all nine final matrix halfwords have **successful, final
+SH writes**. A later overlapping SB or SW revokes that halfword's
+eligibility. For an eligible execution, only the count of matching
+coefficients and a list of mismatching **slot indices** (0–8) are
+printed; raw coefficients, registers, instructions and RAM are never
+returned. The CLI exits 0 on full match, 1 for mismatch or
+incomplete execution, and 2 for invalid inputs (with generic JSON
+error metadata, not raw exceptions).
+
+**Proof boundary:** `external_ps1_capture_claim` in the JSON is a
+*user-declared source*, not an independently authenticated
+PlayStation observation. Even nine matches cannot establish that
+the capture truly came from original Wild Arms, or prove emulator
+cycle accuracy, GTE support, self-modifying-code execution, or
+Nintendo Switch gameplay. The report always marks real hardware
+authentication, PS1 equivalence and native Switch port completion
+as **false**. In particular, a RAM snapshot may override initially
+loaded code, but later executable-code mutation is not modeled.
+
+**Verification:** The local reconstructed module suite in
+`/mnt/data/wa211` passes **359/359** Python tests and
+`python3 -m compileall -q tools tests`. This adds 23
+snapshot-and-arithmetic tests (including comparisons against the
+independent stage-206 Q12 oracle) and 8 CLI/privacy regressions to
+328 previous tests. The five new source/test/doc files were
+published to GitHub, and the two new test suites were added to
+CTest and `matrix-audits.yml`. Full remote CI, original
+hardware-derived coefficient capture and native Switch execution
+remain unverified.
