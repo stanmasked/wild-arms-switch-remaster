@@ -1012,3 +1012,88 @@ added to CTest and `matrix-audits.yml`; remote full CI remains
 unverified. No privately owned original `WILDARMS.EXE`, bit-exact
 PS1 coefficient values or playable Nintendo Switch native build
 were available for validation in this stage.
+
+## Stage 210 — fail-closed end-to-end synthetic MIPS matrix integrity gate
+
+Stage 210 introduces `tools/mips_builder_integrity_gate.py`. Rather
+than introducing another independent source of decoded registers or
+matrix values, the gate **cross-checks existing independently tested
+static and dynamic audit reports** from stages 195–209. It answers a
+narrow question: *did this one bounded, synthetic MIPS replay exhibit
+an internally consistent caller → six packed Q12 loads → nine matrix
+SH coefficients → caller return path?*
+
+The report is included as
+`exploratory_trace.builder_integrity` whenever an exploratory guest
+replay is attempted. It evaluates **ten independently named checks**:
+
+1. The caller's JAL linkage and `a1=sp+16` frame match.
+2. A completed `JAL` transfer reaches the expected builder entry.
+3. A completed `JR $ra` transfer returns to the expected caller.
+4. The bounded guest completes at the expected stop PC.
+5. All six known original trig lookup sites exist and encode `LW`.
+6. All six of those sites actually execute complete packed-table LW.
+7. Every observed packed-table load receives consistent address
+   provenance, with no unresolved address origin.
+8. Nine **final** matrix SH halfwords match the expected builder
+   `SH rt,offset(a1)` sites; overlapping SB/SW or subsequent SH
+   writes must not invalidate them.
+9. All nine final coefficients retain lineage from a successful
+   packed-table Q12 load.
+10. The independently derived operation schedule, store trace, and
+    coefficient lineage agree on all nine slot states.
+
+The output contains the **boolean** field
+`synthetic_end_to_end_evidence_complete`, a count of passed checks,
+a `checks` dictionary and `unmet_requirement_codes` identifiers.
+Incomplete calls and branch paths fail closed; they never become
+positive evidence just because nine static SH instructions were
+present in the original-looking code interval.
+
+To ensure an affirmative result is genuinely reachable *within this
+model*, the synthetic integration fixture constructs a PS-X EXE using
+the exact historical address layout: the caller at `0x80077980`,
+the builder at `0x800B7118–0x800B739C`, all six known Q12 LW code
+sites, packed Q12 data at `0x800CBE44`, eight interior SH stores
+plus a **ninth SH in the verified JR delay slot**. A synthetic
+caller JAL and stack layout are executed, and all ten checks pass.
+The fixture **does not contain or extract original Wild Arms code**.
+Regression variants remove a known LW instruction, skip it with a
+branch, overwrite a coefficient with SW, misdirect the final SH,
+interrupt the replay, omit JR, or bypass caller replay. Each
+variant reports the corresponding unmet condition rather than
+claiming complete integrity.
+
+Example for a *privately owned* extracted original executable:
+
+```sh
+python3 -m tools.audit_gp0_matrix_replay_preflight \
+  /private/path/WILDARMS.EXE --caller-replay --max-steps 4096
+```
+
+The returned `exploratory_trace.builder_integrity` remains a report
+about **synthetically seeded** MIPS registers and a synthetic stack,
+not a recording of actual PlayStation gameplay. Even a fully positive
+result cannot prove the original input angles, nine original numeric
+coefficients, complete PS1 CPU correctness, or a playable native
+Nintendo Switch port. These invariants are explicit:
+
+```json
+{
+  "original_gameplay_inputs_verified": false,
+  "original_playstation_matrix_values_compared": false,
+  "playable_native_switch_build_proven": false,
+  "private_values_emitted": false
+}
+```
+
+**Verification:** the relevant-module local source tree
+`/mnt/data/wa210` passed **328/328** Python tests and Python
+`compileall` (301 prior tests, 16 new isolated gate tests and
+11 synthetic whole-path PS-X EXE integration cases).
+The three new source/test files are byte-for-byte identical to
+their GitHub Git blob hashes. Both new suites were registered in
+CTest and the `matrix-audits.yml` GitHub Actions workflow.
+A successful complete GitHub Actions run, original WILDARMS.EXE
+numerical replay, hardware verification, and a native Switch game
+build **remain unverified**.
