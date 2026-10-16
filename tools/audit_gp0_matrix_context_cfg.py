@@ -19,6 +19,16 @@ except ImportError:
     from audit_gp0_matrix_cfg import direct_successors
 
 
+def branch_outcomes(word):
+    """Return known predicate for equal-register BEQ/BNE, else None."""
+    op=(word>>26)&63
+    rs=(word>>21)&31
+    rt=(word>>16)&31
+    if rs == rt and op in (4,5,20,21):
+        return op in (4,20)
+    return None
+
+
 def trace(image, base, start=BUILDER, end=RETURN):
     if start < base or end < start or (start-base)%4 or (end-base)%4 or end+4 > base+len(image):
         return {'valid_range':False,'edges':[],'unresolved':[]}
@@ -48,11 +58,18 @@ def trace(image, base, start=BUILDER, end=RETURN):
                 imm=imm-65536 if imm&32768 else imm
                 next_nodes=[((controller+4+(imm<<2))&0xffffffff,None)]
             else:
+                if parent_kind == 'conditional':
+                    known=branch_outcomes(words[controller])
+                    if known is not None:
+                        parent_targets=parent_targets[:1] if known else parent_targets[1:]
                 next_nodes=[(target,None) for target in parent_targets] if parent_kind in ('conditional','jump') else []
         elif delayed:
             if kind in ('branch_likely','regimm_likely'):
                 # Taken: execute the delay slot. Not taken: annul it.
-                next_nodes=[(pc+4,pc),(pc+8,None)]
+                known=branch_outcomes(words[pc])
+                next_nodes=([(pc+4,pc)] if known is True else
+                            [(pc+8,None)] if known is False else
+                            [(pc+4,pc),(pc+8,None)])
             elif kind in ('unsupported_regimm','call','indirect','coprocessor_branch'):
                 unresolved.add((pc,kind+'_requires_semantics'))
                 continue
