@@ -335,3 +335,8 @@ set_tests_properties(wa_mips_input_sensitivity PROPERTIES WORKING_DIRECTORY ${CM
 add_test(NAME wa_mips_call_boundary
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_call_boundary.py)
 set_tests_properties(wa_mips_call_boundary PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Conservative caller-side argument source classification before matrix JAL.
+add_test(NAME wa_mips_caller_sources
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_caller_sources.py)
+set_tests_properties(wa_mips_caller_sources PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
