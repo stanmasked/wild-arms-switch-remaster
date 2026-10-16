@@ -20,6 +20,7 @@ try:
     from .mips_control_flow import execute, LOADS, STORES
     from .mips_matrix_memory import MappedMemory, MATRIX_OFFSETS, MATRIX_SIZE
     from .mips_entry_dependencies import read_before_write
+    from .mips_call_boundary import analyze_boundary
     from .mips_input_sensitivity import probe_input_registers
 except ImportError:
     from audit_original_nclip_winding import parse_exe
@@ -28,6 +29,7 @@ except ImportError:
     from mips_control_flow import execute, LOADS, STORES
     from mips_matrix_memory import MappedMemory, MATRIX_OFFSETS, MATRIX_SIZE
     from mips_entry_dependencies import read_before_write
+    from mips_call_boundary import analyze_boundary
     from mips_input_sensitivity import probe_input_registers
 
 
@@ -198,6 +200,8 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
     result['exploratory_trace'] = {
         'initial_registers_are_synthetic': True,
         'read_before_first_write_gprs': list(read_before_write(image, base, visited)),
+        'call_boundary': (analyze_boundary(image, base, visited, start)
+                          if caller_replay else None),
         'synthetic_stack_mapped': True,
         'frame_layout': 'a1_sp_plus_16' if frame_layout else 'separate_matrix',
         'replay_origin': 'caller_before_jal' if caller_replay else 'builder_entry',
