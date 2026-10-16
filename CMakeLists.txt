@@ -325,3 +325,8 @@ set_tests_properties(wa_gp0_matrix_replay_preflight PROPERTIES WORKING_DIRECTORY
 add_test(NAME wa_mips_entry_dependencies
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_entry_dependencies.py)
 set_tests_properties(wa_mips_entry_dependencies PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Synthetic PS1 caller-register sensitivity and matrix output comparisons.
+add_test(NAME wa_mips_input_sensitivity
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_input_sensitivity.py)
+set_tests_properties(wa_mips_input_sensitivity PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
