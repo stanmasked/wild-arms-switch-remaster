@@ -30,6 +30,21 @@ class ContextSourcesTests(unittest.TestCase):
         r=fixture([lw(8),3<<26,0,sh(8,0)],(0,))
         self.assertEqual(r['candidate_stores'],[])
         self.assertTrue(r['unresolved_transfers'])
+    def test_same_store_has_distinct_delay_and_normal_contexts(self):
+        r=fixture([beq(0),sh(8,0),sh(8,2)])
+        labels={store['context'] for store in r['candidate_stores'] if store['offset']==0}
+        self.assertEqual(labels,{
+            f'0x{START+4:08X}',
+            f'0x{START+4:08X}@delay_of_0x{START:08X}'
+        })
+
+    def test_branch_source_merge_preserves_both_candidates(self):
+        # A delayed conditional branches to index 5 or falls through to 2;
+        # a direct J in the fallthrough leg rejoins at index 7.
+        r=fixture([beq(4),0,lw(8),j(START+28),0,lw(8),0,sh(8,0)],(2,5))
+        self.assertEqual(r['candidate_stores'][0]['candidate_lookup_sources'],
+                         [f'0x{START+8:08X}',f'0x{START+20:08X}'])
+
     def test_invalid_range(self):
         self.assertFalse(analyze(b'',BASE,START,START)['valid_range'])
 
