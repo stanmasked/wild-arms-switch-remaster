@@ -150,6 +150,68 @@ class ReplayPreflightTests(unittest.TestCase):
         self.assertEqual(report['exploratory_trace']['frame_layout'],'separate_matrix')
         self.assertEqual(report['exploratory_trace']['distinct_matrix_slots_written'],1)
 
+    def _caller_program(self, builder_body):
+        call = BASE + 16
+        builder = BASE + 64
+        jal = (3 << 26) | ((builder >> 2) & 0x03ffffff)
+        words = [ins(9, 29, 5, 16), 0, 0, 0, jal, 0, 0]
+        words.extend([0] * (16 - len(words)))
+        words.extend(builder_body)
+        return fixture(words), call, builder, BASE + 4 * (len(words) - 2)
+
+    def test_caller_jal_executes_builder_nine_stores_and_jr(self):
+        # Caller computes a1=sp+16; JAL sets ra=caller+8; JR ra returns.
+        body = [ins(9, 0, 9, 4096)]
+        body.extend(ins(41, 5, 9, offset) for offset in range(0, 18, 2))
+        body.extend([(31 << 21) | 8, 0])
+        blob, call, builder, ret = self._caller_program(body)
+        tr = analyze(blob, start=builder, end=ret, call=call,
+                     caller_replay=True)['exploratory_trace']
+        self.assertEqual(tr['replay_origin'], 'caller_before_jal')
+        self.assertEqual(tr['frame_layout'], 'a1_sp_plus_16')
+        self.assertTrue(tr['caller_jal_executed'])
+        self.assertTrue(tr['builder_entry_reached'])
+        self.assertTrue(tr['return_instruction_executed'])
+        self.assertTrue(tr['returned_to_caller'])
+        self.assertTrue(tr['all_matrix_slots_written'])
+        self.assertEqual(tr['distinct_matrix_slots_written'], 9)
+        self.assertEqual(tr['reason'], 'stop_pc')
+        self.assertNotIn('gpr', tr)
+        self.assertNotIn('matrix_address', tr)
+
+    def test_caller_probe_rejects_mismatched_jal(self):
+        body = [ins(9, 0, 9, 1), (31 << 21) | 8, 0]
+        blob, call, builder, ret = self._caller_program(body)
+        data = bytearray(blob)
+        struct.pack_into('<I', data, 2048 + 16,
+                         (3 << 26) | (((builder + 4) >> 2) & 0x03ffffff))
+        with self.assertRaisesRegex(ValueError, 'caller instructions'):
+            analyze(bytes(data), start=builder, end=ret,
+                    call=call, caller_replay=True)
+
+    def test_caller_probe_does_not_claim_return_on_direct_jump(self):
+        # A jump to caller+8 is not evidence of JR $ra execution.
+        call = BASE + 16
+        goto_caller = (2 << 26) | (((call + 8) >> 2) & 0x03ffffff)
+        blob, call, builder, ret = self._caller_program([goto_caller, 0, 0])
+        tr = analyze(blob, start=builder, end=ret, call=call,
+                     caller_replay=True)['exploratory_trace']
+        self.assertTrue(tr['caller_jal_executed'])
+        self.assertTrue(tr['builder_entry_reached'])
+        self.assertFalse(tr['returned_to_caller'])
+        self.assertFalse(tr['return_instruction_executed'])
+
+    def test_caller_probe_reports_cop_blocker_without_registers(self):
+        blob, call, builder, ret = self._caller_program([18 << 26, 0, 0])
+        tr = analyze(blob, start=builder, end=ret, call=call,
+                     caller_replay=True)['exploratory_trace']
+        self.assertTrue(tr['caller_jal_executed'])
+        self.assertTrue(tr['builder_entry_reached'])
+        self.assertFalse(tr['returned_to_caller'])
+        self.assertEqual(tr['halt_category'], 'unsupported_instruction')
+        self.assertEqual(tr['halt_instruction_family'], 'coprocessor')
+        self.assertNotIn('gpr', tr)
+
     def test_trace_bounded_loop(self):
         jump_to_self = (2<<26) | ((BASE>>2)&0x03ffffff)
         r = analyze(fixture([jump_to_self,0,0]), start=BASE, end=BASE+8,
