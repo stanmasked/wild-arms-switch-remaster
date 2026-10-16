@@ -37,6 +37,25 @@ class AttributionIntegrationTests(unittest.TestCase):
         self.assertEqual(out['arithmetic_matrix_attribution']['candidate_affected_slot_indices'],[])
         self.assertEqual(out['arithmetic_matrix_attribution']['mismatching_events_without_final_matrix_dependency'],[0])
 
+    def test_one_multiply_with_both_halves_wrong_is_one_event_in_summary(self):
+        blob,fixture,events=synthetic_builder()
+        entry=events['events'][0]
+        entry['result_u32']=(entry['result_u32']+1)&0xffffffff
+        entry['secondary_u32']=(entry['secondary_u32']+1)&0xffffffff
+        fixture['expected_arithmetic_events']=events
+        fixture['require_arithmetic_events']=True
+        out=compare(blob,fixture)
+        comparison=out['arithmetic_events']
+        self.assertEqual(comparison['mismatching_event_indices'],[0])
+        self.assertEqual(comparison['result_value_mismatch_indices'],[0])
+        self.assertEqual(comparison['secondary_result_mismatch_indices'],[0])
+        self.assertEqual(comparison['matching_event_count'],
+                         comparison['executed_event_count']-1)
+        self.assertEqual(out['arithmetic_matrix_attribution']['matrix_slots'][0]
+                         ['candidate_primary_mismatch_indices'],[0])
+        self.assertFalse(out['arithmetic_matrix_attribution']['proven_numeric_causation'])
+        self.assertNotIn('result_u32',str(out))
+
     def test_false_site_alignment_cannot_generate_slot_causation(self):
         blob,fixture,events=synthetic_builder()
         events['events'][0]['pc']=events['events'][1]['pc']
