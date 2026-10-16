@@ -320,3 +320,8 @@ set_tests_properties(wa_mips_control_flow PROPERTIES WORKING_DIRECTORY ${CMAKE_S
 add_test(NAME wa_gp0_matrix_replay_preflight
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_replay_preflight.py)
 set_tests_properties(wa_gp0_matrix_replay_preflight PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# MIPS register input dependencies discovered along completed concrete paths.
+add_test(NAME wa_mips_entry_dependencies
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_entry_dependencies.py)
+set_tests_properties(wa_mips_entry_dependencies PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
