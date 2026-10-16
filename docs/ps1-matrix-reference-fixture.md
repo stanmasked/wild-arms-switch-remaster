@@ -63,3 +63,28 @@ The comparator exposes only
 `initial_load_pipeline_state_explicit` and
 `initial_pending_load_applied` booleans; it does not include the
 pending target or value in its public summary.
+
+## Stage 214 optional verified JR-return boundary
+
+A reference JSON may now contain `"require_completed_jr_ra": true`
+(default: false for backward-compatible synthetic testing). When enabled,
+a simple nine-of-nine SH value match is insufficient: the bounded guest
+must reach `stop_pc` by **completing `JR $ra`**, including successful
+execution of its delay-slot instruction, and must have no pending load
+left at that stop.
+
+The safe numerical report provides:
+
+- `strict_jr_ra_return_required`
+- `return_boundary.guest_stopped_at_expected_pc`
+- `return_boundary.last_completed_transfer_is_jr_ra_to_stop`
+- `return_boundary.jr_ra_delay_slot_executed_last`
+- `return_boundary.no_pending_delayed_load_at_stop`
+- `return_boundary.verified_complete_jr_ra_return`
+
+An incomplete or incorrect return prevents
+`coefficient_comparison_performed` and
+`matches_supplied_nine_coefficients` from becoming true in strict
+mode. These are only booleans; they do not reveal code addresses,
+registers or numerical matrix contents. The external capture's
+authenticity still cannot be established by this mechanism.
