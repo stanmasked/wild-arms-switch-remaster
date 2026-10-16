@@ -45,6 +45,8 @@ def main(argv=None):
     parser.add_argument('--max-steps', type=int, default=4096)
     parser.add_argument('--synthetic', action='store_true',
                         help='mark capture as synthetic rather than unverified external PS1')
+    parser.add_argument('--require-final-cpu-state', action='store_true',
+                        help='compare all 32 final GPRs, HI/LO and pending load')
     parser.add_argument('--require-jr-return', action='store_true',
                         help='require completed JR $ra and delay slot at expected stop PC')
     parser.add_argument('--compare', action='store_true',
@@ -61,7 +63,8 @@ def main(argv=None):
             matrix_address=args.matrix_address,
             source='synthetic' if args.synthetic else 'external_ps1_capture_claim',
             max_steps=args.max_steps,
-            require_completed_jr_ra=args.require_jr_return)
+            require_completed_jr_ra=args.require_jr_return,
+            require_final_cpu_state=args.require_final_cpu_state)
         result = summarize_capture(fixture)
         # The only printed comparison details are safe counts/slot indices.
         if args.compare:
@@ -70,9 +73,12 @@ def main(argv=None):
             result['matching_coefficient_count'] = verification['matching_coefficient_count']
             result['mismatch_slot_indices'] = verification['mismatch_slot_indices']
             result['matches_supplied_nine_coefficients'] = verification['matches_supplied_nine_coefficients']
+            result['strict_final_cpu_state_required'] = verification['strict_final_cpu_state_required']
+            result['final_cpu_state'] = verification['final_cpu_state']
+            result['matches_complete_reference'] = verification['matches_complete_reference']
         _write_private(args.output, fixture)
         print(json.dumps(result, sort_keys=True))
-        if args.compare and not result['matches_supplied_nine_coefficients']:
+        if args.compare and not result['matches_complete_reference']:
             return 1
         return 0
     except (OSError, ValueError, KeyError, TypeError, UnicodeError, RecursionError):
