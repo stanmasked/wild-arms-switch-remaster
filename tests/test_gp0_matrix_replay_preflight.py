@@ -369,6 +369,37 @@ class ReplayPreflightTests(unittest.TestCase):
         self.assertFalse(report['caller_argument_sources']['window_usable'])
         self.assertEqual(report['caller_argument_sources']['arguments'],[])
 
+    def test_caller_cfg_handles_unknown_branch_alternatives(self):
+        # Unknown BEQ condition: one branch writes a0, one retains old a0.
+        call = BASE + 32
+        target = BASE + 48
+        jal = (3 << 26) | ((target >> 2) & 0x03ffffff)
+        words = [ins(4,4,6,2),0,ins(9,6,4,1),0,
+                 ins(9,29,5,16),0,0,0,jal,0,0,0,(31<<21)|8,0]
+        report = analyze(fixture(words),start=target,end=target+4,
+                         call=call,caller_lookback=8,caller_cfg=True)
+        self.assertFalse(report['caller_argument_sources']['window_usable'])
+        cfg = report['caller_argument_cfg']
+        self.assertTrue(cfg['window_usable'])
+        self.assertEqual(cfg['paths_to_call'],2)
+        self.assertEqual(cfg['arguments'][0]['incoming_gprs'],[4,6])
+        self.assertFalse(cfg['arguments'][0]['same_origin_across_paths'])
+        self.assertFalse(cfg['runtime_path_confirmed'])
+
+    def test_cfg_probe_is_opt_in(self):
+        report=analyze(fixture([0,0]),start=BASE,end=BASE+4)
+        self.assertIsNone(report['caller_argument_cfg'])
+
+    def test_cfg_does_not_guess_loop_origins(self):
+        call=BASE+16
+        target=BASE+32
+        jal=(3<<26)|((target>>2)&0x03ffffff)
+        words=[ins(9,29,5,16),ins(4,4,6,-1),0,0,jal,0,0,0,0]
+        report=analyze(fixture(words),start=target,end=target,
+                       call=call,caller_cfg=True)
+        self.assertFalse(report['caller_argument_cfg']['window_usable'])
+        self.assertEqual(report['caller_argument_cfg']['arguments'],[])
+
     def test_trace_bounded_loop(self):
         jump_to_self = (2<<26) | ((BASE>>2)&0x03ffffff)
         r = analyze(fixture([jump_to_self,0,0]), start=BASE, end=BASE+8,
