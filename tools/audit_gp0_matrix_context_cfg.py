@@ -53,7 +53,7 @@ def trace(image, base, start=BUILDER, end=RETURN):
             if kind in ('branch_likely','regimm_likely'):
                 # Taken: execute the delay slot. Not taken: annul it.
                 next_nodes=[(pc+4,pc),(pc+8,None)]
-            elif kind in ('unsupported_regimm','call','indirect'):
+            elif kind in ('unsupported_regimm','call','indirect','coprocessor_branch'):
                 unresolved.add((pc,kind+'_requires_semantics'))
                 continue
             else:
