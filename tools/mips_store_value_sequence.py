@@ -7,10 +7,16 @@ Public summaries disclose bounded event indices and aggregate counts, never
 actual values, checksums, source registers or addresses.
 """
 
-from .mips_store_event_sequence import (
-    MAX_EVENTS, MAX_MISMATCH_INDICES, WIDTHS, _parse_event, trace_events,
-    u32_word,
-)
+try:
+    from .mips_store_event_sequence import (
+        MAX_EVENTS, MAX_MISMATCH_INDICES, WIDTHS, _parse_event, trace_events,
+        u32_word,
+    )
+except ImportError:
+    from mips_store_event_sequence import (
+        MAX_EVENTS, MAX_MISMATCH_INDICES, WIDTHS, _parse_event, trace_events,
+        u32_word,
+    )
 
 SCHEMA = 'wild-arms-ps1-store-values-v1'
 
