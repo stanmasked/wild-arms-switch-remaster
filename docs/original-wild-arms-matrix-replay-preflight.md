@@ -371,7 +371,10 @@ contents, packed sine/cosine data, or output matrix coefficients.
 The analysis recognizes a conservative subset of ALU operations,
 LUI/ORI constant construction, GPR moves/shifts, HI/LO transfers,
 and aligned memory loads. It models the single-instruction MIPS
-load delay, including writes in the JAL delay slot. If the window
+load delay, including writes in the JAL delay slot. Reads of HI/LO via
+MFHI/MFLO fail closed unless this window establishes the relevant
+special register with MULT/MTHI/MTLO; its unknown incoming value is
+never silently presented as a confirmed argument source. If the window
 contains a branch, coprocessor opcode, or other unsupported
 instruction, it reports `window_usable: false` and refuses to
 invent argument origins.
@@ -391,10 +394,10 @@ deliberately invalidate the inference rather than yielding
 misleading sources.
 
 **Verification:** The local source test environment in
-`/mnt/data/wa200` ran **110/110 synthetic unit tests** including
-21 new source-provenance cases and 3 new preflight integration
+`/mnt/data/wa200` ran **112/112 synthetic unit tests** including
+23 new source-provenance cases and 3 new preflight integration
 cases, alongside the prior 86 tests. Python compile-check completed
-without errors. The source module and standalone 21-test suite
+without errors. The source module and standalone 23-test suite
 were additionally verified against the GitHub file blob hashes.
 CTest and the matrix-audits GitHub Actions workflow now include
 the new tests. A successful full CI run, private original
