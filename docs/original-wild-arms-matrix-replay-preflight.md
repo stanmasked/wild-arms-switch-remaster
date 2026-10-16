@@ -1418,3 +1418,77 @@ debugger states; they do **not** independently verify an
 authentic original `WILDARMS.EXE`, original PlayStation
 hardware behavior, a successful full GitHub Actions CI run,
 or a playable Nintendo Switch build.
+
+## Stage 216 — compare complete after-RAM, not just matrix coefficients
+
+Stages 211–215 establish strict numerical matrix and post-return
+CPU-state comparisons using private debugger captures. Stage 216
+adds `tools/mips_final_memory_state.py` to verify all captured RAM
+bytes after the bounded MIPS builder replay, including **net memory
+changes outside the known 18-byte matrix**.
+
+When `tools.audit_ps1_capture_pack` is invoked with
+`--require-final-memory-state`, it constructs a compact private
+`expected_final_memory_state` containing the captured RAM range,
+a SHA-256 digest for each consecutive **4096-byte block** of
+**after** RAM, and a count of net changed bytes **outside** the nine
+matrix halfwords. A 2-MiB raw PS1 memory capture therefore needs
+512 per-block digests, rather than duplicating the entire after
+RAM as hex in the reference. The full before RAM is still required
+and is mapped at its original guest virtual base.
+
+The stage-211 comparison engine takes a private in-memory copy of
+the before RAM (including any overlap with the EXE image) and
+executes the bounded guest. If the stop PC is reached, it reads
+exact final mapped bytes across contiguous mapped regions, hashes
+each block, and compares these with the private after-RAM
+digests and the outside-matrix changed-byte count. Incomplete
+mapping or malformed digests fails closed; an incomplete guest run
+does not publish speculative block mismatches.
+
+The public `final_memory_state` report shows **only**:
+- whether comparison was performed and matched;
+- number of blocks checked and indices of mismatching blocks;
+- expected and observed **counts** of net changed bytes outside
+  the matrix; and
+- a boolean indicating those change counts matched.
+
+It does **not** publish any RAM bytes, PS1 virtual addresses,
+digest strings, matrix values, GPR contents or private filenames.
+The existing `matches_supplied_nine_coefficients` remains a
+strictly nine-value numeric assertion. With
+`require_final_memory_state: true`, the overall
+`matches_complete_reference` must additionally have the entire
+after-RAM region match, or the CLI exits **1**. Legacy synthetic
+reference fixtures can omit the new memory section; a supplied
+malformed one is rejected even in non-strict mode.
+
+For a privately owned PS1 debugger state:
+
+```sh
+python3 -m tools.audit_ps1_capture_pack \
+  --exe /private/WILDARMS.EXE \
+  --before-registers /private/before-registers.json \
+  --after-registers /private/after-registers.json \
+  --before-ram /private/before-ram.bin \
+  --after-ram /private/after-ram.bin \
+  --ram-base 0x80000000 \
+  --output /private/ps1-matrix-cpu-ram.json \
+  --require-jr-return --require-final-cpu-state \
+  --require-final-memory-state --compare
+```
+
+**Verification:** in the relevant locally reconstructed source
+tree `/mnt/data/wa216`, **501/501** Python tests passed
+(471 previous, 16 new memory-oracle tests and 14 synthetic
+PS-X EXE end-to-end tests), and Python `compileall` passed.
+All six new or modified source/test files match their checked
+GitHub Git blob hashes. Both new test suites were registered
+in host CTest and `matrix-audits.yml`.
+
+This is a final-memory **net change** comparison, not proof of
+every individual store: same-value writes and writes later
+reversed leave no detectable final difference. Original
+PlayStation hardware provenance, complete CPU/GTE emulation,
+full remote CI success and the native Nintendo Switch game
+remain **unverified**.
