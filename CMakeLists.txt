@@ -295,3 +295,8 @@ set_tests_properties(wa_mips_integer_step PROPERTIES WORKING_DIRECTORY ${CMAKE_S
 add_test(NAME wa_mips_integer_sequence
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_integer_sequence.py)
 set_tests_properties(wa_mips_integer_sequence PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Linear bounded memory access and one-instruction MIPS load delay.
+add_test(NAME wa_mips_memory_sequence
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_memory_sequence.py)
+set_tests_properties(wa_mips_memory_sequence PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
