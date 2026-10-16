@@ -55,7 +55,7 @@ def instruction_family(word):
     if op in STORES:
         return 'aligned_store', True
     if op in (4, 5, 6, 7, 20, 21, 22, 23):
-        return 'branch', True
+        return 'branch', not (op in (6, 7, 22, 23) and rt != 0)
     if op == 1:
         return 'regimm_branch', rt in (0, 1, 2, 3)
     if op in (2, 3):
@@ -178,24 +178,17 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
                 halt_category = 'execution_semantics_or_overflow'
     unique_matrix_stores = set(trace['store_addresses']) & matrix_addresses
     visited = trace['visited_pcs']
-    # Merely arriving at the caller's continuation is not proof of a return:
-    # its preceding executed control instruction must be JR $ra.
-    has_return_jr = False
-    if caller_replay and len(visited) >= 2:
-        last_control = visited[-2]
-        if base <= last_control and last_control + 4 <= base + len(image):
-            insn, = struct.unpack_from('<I', image, last_control - base)
-            has_return_jr = insn == ((31 << 21) | 8)
-    end_is_jr_ra = False
-    if caller_replay and base <= end and end + 4 <= base + len(image):
-        end_word, = struct.unpack_from('<I', image, end - base)
-        end_is_jr_ra = end_word == ((31 << 21) | 8)
-    return_instruction_executed = bool(caller_replay and end_is_jr_ra
-                                        and end in visited)
-    returned = (caller_replay and trace['completed']
-                and trace['reason'] == 'stop_pc'
-                and call in visited and call + 4 in visited
-                and start in visited and has_return_jr)
+    # A completed JR $ra transfer proves its delay slot has run.
+    # A direct jump or a failed delay slot cannot count as a return.
+    transfers = trace['control_transfers']
+    return_instruction_executed = bool(caller_replay and any(
+        source == end and kind == 'jr_ra'
+        for source, kind, target in transfers))
+    returned = bool(caller_replay and trace['completed']
+                    and trace['reason'] == 'stop_pc'
+                    and (call, 'jal', start) in transfers
+                    and (end, 'jr_ra', call + 8) in transfers
+                    and start in visited)
     result['exploratory_trace'] = {
         'initial_registers_are_synthetic': True,
         'synthetic_stack_mapped': True,
