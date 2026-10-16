@@ -18,6 +18,7 @@ try:
     from .mips_final_cpu_state import decode_expected, compare as compare_cpu_state
     from .mips_final_memory_state import decode as decode_final_ram, compare as compare_final_ram, snapshot as memory_snapshot
     from .mips_store_event_sequence import decode as decode_store_events, compare as compare_store_events
+    from .mips_store_value_sequence import decode as decode_store_values, compare as compare_store_values, project_sites as store_value_sites
 except ImportError:
     from audit_original_nclip_winding import parse_exe
     from mips_control_flow import execute, STORES
@@ -26,6 +27,7 @@ except ImportError:
     from mips_final_cpu_state import decode_expected, compare as compare_cpu_state
     from mips_final_memory_state import decode as decode_final_ram, compare as compare_final_ram, snapshot as memory_snapshot
     from mips_store_event_sequence import decode as decode_store_events, compare as compare_store_events
+    from mips_store_value_sequence import decode as decode_store_values, compare as compare_store_values, project_sites as store_value_sites
 
 SCHEMA = 'wild-arms-ps1-matrix-reference-v1'
 _MAX_PATCHES = 256
@@ -66,6 +68,13 @@ def _decode_reference(fixture, exe_sha):
                            ('entry_pc', 'stop_pc', 'matrix_address'))
     if start & 3 or stop & 3 or matrix & 1 or matrix > 0xffffffff - 17:
         raise ValueError('unaligned reference entry/stop/matrix pointer')
+    strict_values = fixture.get('require_store_values', False)
+    if type(strict_values) is not bool:
+        raise ValueError('invalid strict store-value requirement')
+    store_values = (decode_store_values(fixture['expected_store_values'])
+                    if 'expected_store_values' in fixture else None)
+    if strict_values and store_values is None:
+        raise ValueError('required independent store-value event log missing')
     strict_stores = fixture.get('require_store_sequence', False)
     if type(strict_stores) is not bool:
         raise ValueError('invalid store sequence requirement')
@@ -73,6 +82,9 @@ def _decode_reference(fixture, exe_sha):
                       if 'expected_store_sequence' in fixture else None)
     if strict_stores and store_sequence is None:
         raise ValueError('strict store comparison needs debugger event log')
+    if (store_values is not None and store_sequence is not None and
+            store_value_sites(store_values) != store_sequence):
+        raise ValueError('conflicting private debugger store and value traces')
     strict_memory = fixture.get('require_final_memory_state', False)
     if type(strict_memory) is not bool:
         raise ValueError('invalid final RAM comparison requirement')
@@ -142,7 +154,9 @@ def _decode_reference(fixture, exe_sha):
             'require_final_memory_state':strict_memory,
             'expected_final_memory_state':final_memory,
             'require_store_sequence':strict_stores,
-            'expected_store_sequence':store_sequence}
+            'expected_store_sequence':store_sequence,
+            'require_store_values':strict_values,
+            'expected_store_values':store_values}
 
 
 def _prepare_memory(image, base, segments):
@@ -253,6 +267,9 @@ def compare(blob, fixture):
         trace, capture['expected_store_sequence'],
         guest_stopped_at_expected_pc=bool(at_stop))
         if capture['expected_store_sequence'] is not None else None)
+    values_report = (compare_store_values(trace, capture['expected_store_values'],
+        guest_stopped_at_expected_pc=bool(at_stop))
+        if capture['expected_store_values'] is not None else None)
     eligible = bool(at_stop and all(final_sh) and
                     (not capture['require_completed_jr_ra'] or
                      return_boundary['verified_complete_jr_ra_return']))
@@ -267,6 +284,7 @@ def compare(blob, fixture):
     final_cpu_match = bool(cpu_state and cpu_state['final_cpu_state_matches_reference'])
     final_ram_match = bool(final_ram and final_ram['matches_reference'])
     store_match = bool(store_report and store_report['matches_reference'])
+    value_match = bool(values_report and values_report['matches_reference'])
     return {
         'reference_schema': SCHEMA,
         'sha256_match': True,
@@ -278,13 +296,16 @@ def compare(blob, fixture):
         'strict_final_cpu_state_required': capture['require_final_cpu_state'],
         'strict_final_memory_state_required': capture['require_final_memory_state'],
         'strict_store_sequence_required': capture['require_store_sequence'],
+        'strict_store_values_required': capture['require_store_values'],
+        'store_values': values_report,
         'store_sequence': store_report,
         'final_memory_state': final_ram,
         'final_cpu_state': cpu_state,
         'matches_complete_reference': bool(numeric_match and
             (not capture['require_final_cpu_state'] or final_cpu_match) and
             (not capture['require_final_memory_state'] or final_ram_match) and
-            (not capture['require_store_sequence'] or store_match)),
+            (not capture['require_store_sequence'] or store_match) and
+            (not capture['require_store_values'] or value_match)),
         'return_boundary': return_boundary,
         'guest_stop_reason': trace['reason'] if trace['reason'] in _SAFE_REASONS else 'other',
         'final_halfword_slots_written_by_sh':sum(final_sh),
