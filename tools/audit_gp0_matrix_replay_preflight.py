@@ -11,16 +11,17 @@ from collections import Counter
 
 STACK_BASE = 0x80120000
 STACK_SIZE = 0x1000
+STACK_POINTER_MARGIN = 0x80
 from pathlib import Path
 try:
     from .audit_original_nclip_winding import parse_exe
-    from .audit_gp0_rotation_matrix_builder import BUILDER, RETURN
+    from .audit_gp0_rotation_matrix_builder import BUILDER, RETURN, CALL, jal_target
     from .audit_gp0_trig_table import TABLE, ENTRIES
     from .mips_control_flow import execute, LOADS, STORES
     from .mips_matrix_memory import MappedMemory, MATRIX_OFFSETS, MATRIX_SIZE
 except ImportError:
     from audit_original_nclip_winding import parse_exe
-    from audit_gp0_rotation_matrix_builder import BUILDER, RETURN
+    from audit_gp0_rotation_matrix_builder import BUILDER, RETURN, CALL, jal_target
     from audit_gp0_trig_table import TABLE, ENTRIES
     from mips_control_flow import execute, LOADS, STORES
     from mips_matrix_memory import MappedMemory, MATRIX_OFFSETS, MATRIX_SIZE
@@ -68,9 +69,31 @@ def instruction_family(word):
     return 'unsupported_opcode', False
 
 
+def inspect_caller(image, base, call=CALL, builder=BUILDER):
+    """Check the known JAL and the caller's ADDIU a1,sp,16 pattern.
+
+    Only boolean results are exposed; no executable bytes are returned.
+    """
+    found = (call - 16 >= base and call + 4 <= base + len(image)
+             and (call - base) % 4 == 0)
+    if not found:
+        return {'callsite_in_image': False, 'jal_targets_builder': False,
+                'a1_is_sp_plus_16': False, 'linkage_confirmed': False}
+    jal, = struct.unpack_from('<I', image, call - base)
+    setup, = struct.unpack_from('<I', image, call - 16 - base)
+    target_ok = jal_target(jal, call) == builder
+    pointer_ok = (setup >> 26 in (8, 9)
+                  and ((setup >> 21) & 31) == 29
+                  and ((setup >> 16) & 31) == 5
+                  and (setup & 65535) == 16)
+    return {'callsite_in_image': True, 'jal_targets_builder': target_ok,
+            'a1_is_sp_plus_16': pointer_ok,
+            'linkage_confirmed': target_ok and pointer_ok}
+
+
 def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
             matrix_address=0x80110000, explore=False, max_steps=512,
-            initial_registers=None):
+            initial_registers=None, frame_layout=False, call=CALL):
     base, image = parse_exe(blob)
     if (start < base or end < start or end + 4 > base + len(image)
             or (start - base) % 4 or (end - base) % 4):
@@ -94,6 +117,7 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
         'static_supported_count': sum(counts.values()) - sum(unsupported.values()),
         'trig_table_mapped_in_image': table_present,
         'assets_emitted': False,
+        'caller_linkage': inspect_caller(image, base, call=call, builder=start),
         'original_game_state_known': False,
         'bit_exact_original_coefficients_proven': False,
     }
@@ -103,15 +127,25 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
         raise ValueError('max_steps must be positive')
     if initial_registers is None:
         initial_registers = {}
-    if any(not 0 <= k <= 31 for k in initial_registers):
+    if any(not isinstance(k, int) or not 0 <= k <= 31
+           for k in initial_registers):
         raise ValueError('register indexes must be 0..31')
+    if frame_layout and ({5, 29} & set(initial_registers)):
+        raise ValueError('frame_layout owns a1 and sp register seeds')
     memory = MappedMemory().map_region(base, image, writable=False)
-    memory.map_region(matrix_address, bytes(MATRIX_SIZE), writable=True)
-    # Synthetic bounded stack: never claim this is the original game SP.
-    memory.map_region(STACK_BASE, bytes(STACK_SIZE), writable=True)
+    stack_pointer = STACK_BASE + STACK_SIZE - (
+        STACK_POINTER_MARGIN if frame_layout else 0x20)
+    if frame_layout:
+        # Caller sets a1=sp+16 at CALL-16. Matrix lives INSIDE the
+        # bounded writable stack, not in a separately mapped region.
+        matrix_address = stack_pointer + 16
+        memory.map_region(STACK_BASE, bytes(STACK_SIZE), writable=True)
+    else:
+        memory.map_region(matrix_address, bytes(MATRIX_SIZE), writable=True)
+        memory.map_region(STACK_BASE, bytes(STACK_SIZE), writable=True)
     regs = [0] * 32
     regs[5] = matrix_address
-    regs[29] = STACK_BASE + STACK_SIZE - 0x20
+    regs[29] = stack_pointer
     for reg, value in initial_registers.items():
         if reg:
             regs[reg] = value
@@ -137,6 +171,7 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
     result['exploratory_trace'] = {
         'initial_registers_are_synthetic': True,
         'synthetic_stack_mapped': True,
+        'frame_layout': 'a1_sp_plus_16' if frame_layout else 'separate_matrix',
         'executed_instruction_families': dict(sorted(visited_counts.items())),
         'halt_instruction_family': halt_family,
         'halt_category': halt_category,
@@ -160,9 +195,12 @@ def main():
     p.add_argument('--explore', action='store_true',
                    help='probe with synthetic zero-filled GPRs')
     p.add_argument('--max-steps', type=int, default=512)
+    p.add_argument('--frame-layout', action='store_true',
+                   help='probe synthetic a1=sp+16 stack-resident matrix')
     args = p.parse_args()
     print(json.dumps(analyze(args.exe.read_bytes(), explore=args.explore,
-                             max_steps=args.max_steps), indent=2))
+                             max_steps=args.max_steps,
+                             frame_layout=args.frame_layout), indent=2))
 
 
 if __name__ == '__main__':
