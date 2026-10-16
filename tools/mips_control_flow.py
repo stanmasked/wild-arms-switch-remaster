@@ -15,12 +15,16 @@ except ImportError:
     from mips_fixed32 import s32, u32, sign_extend16
     from mips_integer_step import step
 
+
 LOADS = {32: 1, 33: 2, 35: 4, 36: 1, 37: 2}
 STORES = {40: 1, 41: 2, 43: 4}
 
 
 def _control(word, pc, regs):
-    """Return (target, annulled_delay_slot, link_register) or None."""
+    """(is_control, target, likely_annulled, link_register) or None.
+
+    A target of pc+8 is the fallthrough after the mandatory delay slot.
+    """
     op = word >> 26
     rs, rt = (word >> 21) & 31, (word >> 16) & 31
     imm = sign_extend16(word)
