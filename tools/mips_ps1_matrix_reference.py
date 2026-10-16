@@ -15,11 +15,13 @@ try:
     from .mips_control_flow import execute, STORES
     from .mips_matrix_memory import MappedMemory, matrix_coefficients
     from .mips_return_boundary import verify as verify_return_boundary
+    from .mips_final_cpu_state import decode_expected, compare as compare_cpu_state
 except ImportError:
     from audit_original_nclip_winding import parse_exe
     from mips_control_flow import execute, STORES
     from mips_matrix_memory import MappedMemory, matrix_coefficients
     from mips_return_boundary import verify as verify_return_boundary
+    from mips_final_cpu_state import decode_expected, compare as compare_cpu_state
 
 SCHEMA = 'wild-arms-ps1-matrix-reference-v1'
 _MAX_PATCHES = 256
@@ -60,6 +62,14 @@ def _decode_reference(fixture, exe_sha):
                            ('entry_pc', 'stop_pc', 'matrix_address'))
     if start & 3 or stop & 3 or matrix & 1 or matrix > 0xffffffff - 17:
         raise ValueError('unaligned reference entry/stop/matrix pointer')
+    strict_cpu = fixture.get('require_final_cpu_state', False)
+    if type(strict_cpu) is not bool:
+        raise ValueError('invalid strict final CPU requirement')
+    # Even a non-mandatory supplied post-return state must be complete.
+    final_cpu = (decode_expected(fixture['expected_final_cpu_state'])
+                 if 'expected_final_cpu_state' in fixture else None)
+    if strict_cpu and final_cpu is None:
+        raise ValueError('strict final CPU comparison needs complete post-return state')
     strict_return = fixture.get('require_completed_jr_ra', False)
     if type(strict_return) is not bool:
         raise ValueError('invalid strict JR return requirement')
@@ -109,7 +119,8 @@ def _decode_reference(fixture, exe_sha):
             'entry_pc':start,'stop_pc':stop, 'matrix_address':matrix,
             'hi':hi,'lo':lo,'max_steps':max_steps,'segments':parsed,
             'pending_load':load,'pipeline_state_explicit':explicit_pipeline,
-            'require_completed_jr_ra':strict_return}
+            'require_completed_jr_ra':strict_return,
+            'require_final_cpu_state':strict_cpu,'expected_final_cpu_state':final_cpu}
 
 
 def _prepare_memory(image, base, segments):
@@ -204,6 +215,9 @@ def compare(blob, fixture):
     final_sh = _final_sh_slots(code,base,trace,capture['matrix_address'])
     at_stop = trace['completed'] and trace['reason'] == 'stop_pc'
     return_boundary = verify_return_boundary(trace, capture['stop_pc'])
+    cpu_state = (compare_cpu_state(trace, capture['expected_final_cpu_state'],
+                                   guest_stopped_at_expected_pc=bool(at_stop))
+                 if capture['expected_final_cpu_state'] is not None else None)
     eligible = bool(at_stop and all(final_sh) and
                     (not capture['require_completed_jr_ra'] or
                      return_boundary['verified_complete_jr_ra_return']))
@@ -214,6 +228,8 @@ def compare(blob, fixture):
         mismatch_indices = [i for i,(a,b) in enumerate(zip(actual,capture['expected']))
                             if a != b]
         match_count = 9 - len(mismatch_indices)
+    numeric_match = bool(eligible and not mismatch_indices)
+    final_cpu_match = bool(cpu_state and cpu_state['final_cpu_state_matches_reference'])
     return {
         'reference_schema': SCHEMA,
         'sha256_match': True,
@@ -222,6 +238,10 @@ def compare(blob, fixture):
         'executable_memory_overlaid': overlaid,
         'guest_completed_at_expected_stop': bool(at_stop),
         'strict_jr_ra_return_required': capture['require_completed_jr_ra'],
+        'strict_final_cpu_state_required': capture['require_final_cpu_state'],
+        'final_cpu_state': cpu_state,
+        'matches_complete_reference': bool(numeric_match and
+            (not capture['require_final_cpu_state'] or final_cpu_match)),
         'return_boundary': return_boundary,
         'guest_stop_reason': trace['reason'] if trace['reason'] in _SAFE_REASONS else 'other',
         'final_halfword_slots_written_by_sh':sum(final_sh),
@@ -229,7 +249,7 @@ def compare(blob, fixture):
         'coefficient_comparison_performed':eligible,
         'matching_coefficient_count':match_count if eligible else None,
         'mismatch_slot_indices':mismatch_indices if eligible else [],
-        'matches_supplied_nine_coefficients':bool(eligible and not mismatch_indices),
+        'matches_supplied_nine_coefficients':numeric_match,
         'supplied_reference_is_claimed_external_capture': (
             capture['source'] == 'external_ps1_capture_claim'),
         'external_ps1_capture_authenticity_independently_verified':False,
