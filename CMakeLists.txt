@@ -420,3 +420,13 @@ set_tests_properties(wa_mips_builder_opcode_evidence PROPERTIES WORKING_DIRECTOR
 add_test(NAME wa_gp0_builder_opcode_evidence
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_builder_opcode_evidence.py)
 set_tests_properties(wa_gp0_builder_opcode_evidence PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 209: count only successful executed matrix SH sites and validated Q12 reads.
+add_test(NAME wa_mips_builder_execution_evidence
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_builder_execution_evidence.py)
+set_tests_properties(wa_mips_builder_execution_evidence PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 209: compare static and executed sites inside synthetic PS-X EXE.
+add_test(NAME wa_gp0_builder_execution_evidence
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_builder_execution_evidence.py)
+set_tests_properties(wa_gp0_builder_execution_evidence PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
