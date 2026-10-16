@@ -13,6 +13,7 @@ from .mips_final_cpu_state import decode_expected
 from .mips_final_memory_state import pack as pack_final_ram
 from .mips_store_event_sequence import decode as decode_store_events
 from .mips_store_value_sequence import decode as decode_store_values, project_sites as value_sites
+from .mips_arithmetic_event_sequence import decode as decode_arithmetic
 
 RAM_LIMIT = 4 * 1024 * 1024
 REGISTERS_SCHEMA = 'wild-arms-ps1-debugger-registers-v1'
@@ -57,7 +58,8 @@ def pack(exe_blob, before_registers, after_registers, before_ram, after_ram,
          require_completed_jr_ra=False, require_final_cpu_state=False,
          require_final_memory_state=False, store_sequence=None,
          require_store_sequence=False, store_values=None,
-         require_store_values=False):
+         require_store_values=False, arithmetic_events=None,
+         require_arithmetic_events=False):
     """Return a stage-211 reference fixture, never log or print it.
 
     `before_ram` is the guest's memory AT the before_registers PC (before
@@ -90,6 +92,12 @@ def pack(exe_blob, before_registers, after_registers, before_ram, after_ram,
         raise ValueError('all matrix halfwords must fit the RAM capture')
     if source not in ('synthetic', 'external_ps1_capture_claim'):
         raise ValueError('unrecognized provenance claim')
+    if type(require_arithmetic_events) is not bool:
+        raise ValueError('invalid strict arithmetic event requirement')
+    if require_arithmetic_events and arithmetic_events is None:
+        raise ValueError('missing independent debugger arithmetic event log')
+    if arithmetic_events is not None:
+        decode_arithmetic(arithmetic_events)
     if type(require_store_values) is not bool:
         raise ValueError('invalid strict store-value requirement')
     if require_store_values and store_values is None:
@@ -134,9 +142,12 @@ def pack(exe_blob, before_registers, after_registers, before_ram, after_ram,
         'require_final_memory_state': require_final_memory_state,
         'require_store_sequence': require_store_sequence,
         'require_store_values':require_store_values,
+        'require_arithmetic_events':require_arithmetic_events,
         'memory_segments': [{'address': base, 'data_hex': before_ram.hex()}],
         'expected_matrix_s16': expected,
     }
+    if arithmetic_events is not None:
+        fixture['expected_arithmetic_events'] = arithmetic_events
     if store_sequence is not None:
         fixture['expected_store_sequence'] = store_sequence
     if store_values is not None:
