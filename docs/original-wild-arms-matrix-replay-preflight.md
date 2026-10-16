@@ -931,3 +931,84 @@ copies. The two new suites are registered in both CTest and
 `matrix-audits.yml`. A full remote GitHub CI run, original
 `WILDARMS.EXE` results, real coefficient equivalence and
 Switch hardware execution are **not verified**.
+
+## Stage 209 — distinguish static builder opcodes from executed guest operations
+
+The stage-208 static code inventory now has a separate **executed-path
+correlator** in `tools/mips_builder_execution_evidence.py`. It consumes
+the existing bounded MIPS interpreter's *actual* executed-PC sequence
+and its successful load/store event streams, then cross-validates
+the last successful matrix `SH` in each of the nine halfword slots
+against the original-looking `SH rt, offset($a1)` instruction
+**at the same executed code site**.
+
+This deliberately separates different strengths of evidence:
+
+- `static_matrix_sh_syntax_site_count`: how many candidate `SH`
+  instruction sites exist in the scanned builder interval (including
+  a possible `JR $ra` delay-slot `SH`);
+- `static_matrix_sh_syntax_sites_executed` versus
+  `static_matrix_sh_syntax_sites_not_executed`: which sites the
+  synthetic interpreter actually visited, accounting for branches
+  and annulled branch-likely delay slots;
+- `final_matrix_slots_written_by_sh`: successful last `SH` writes
+  to the nine resolved matrix halfwords, irrespective of instruction
+  location or base register;
+- `final_matrix_slots_verified_against_static_sh_site`: last
+  successful writes whose instruction lies within the selected
+  builder interval and whose literal `$a1` offset matches the
+  actually modified matrix halfword;
+- `final_verified_slots_with_recognized_arithmetic_schedule`:
+  those validated final sites whose *executed* input expression
+  matches a stage-207 signed-`MULT/MFLO/SRA/ADDU` motif;
+- `known_trig_lw_sites_executed` and
+  `known_trig_lw_sites_with_verified_packed_reads`: number of known
+  table lookup instruction sites actually executed, and the subset
+  that concretely addressed a complete aligned Q12 entry in memory.
+
+The report's `matrix_slots` array contains nine fixed indices with
+booleans for final successful `SH`, matching static code site,
+verified `JR $ra` delay-slot write and packed-Q12 lineage, plus
+the already recognized arithmetic **label**. It never prints an
+original instruction word, actual PC, resolved address, sine/cosine
+value, coefficient, or initial game register.
+
+**Important cases:** A skipped branch path may contain a static
+`SH` without a successful store. A store through a non-`$a1`
+register can still hit the matrix address but does not establish a
+match to the syntactic builder site. A real `SH` can later be
+overwritten by `SW`, `SB`, or another `SH`: the final coefficient
+is then assessed against the last successful write. A valid
+`SH` executed after `JR $ra` is counted as a builder return
+delay-slot write only if the completed return control transfer is
+present in the interpreter trace.
+
+The preflight produces `exploratory_trace.builder_execution_evidence`
+only when bounded replay was requested. Purely static analysis
+continues to expose `builder_opcode_evidence` without inventing
+execution results. Sample command for a user-owned executable:
+
+```sh
+python3 -m tools.audit_gp0_matrix_replay_preflight \
+  /private/path/WILDARMS.EXE --caller-replay --max-steps 4096
+```
+
+This command runs with **synthetic caller registers and stack**, not
+captured real gameplay state. The JSON explicitly reports
+`runtime_inputs_are_synthetic: true`,
+`original_builder_reachability_proven: false`,
+`original_gameplay_coefficients_checked: false`, and
+`private_values_emitted: false`. Even nine verified writes in a
+synthetic fixture do **not** prove the same path is executed by
+the PlayStation game.
+
+**Verification:** In the locally reconstructed relevant-module
+source tree `/mnt/data/wa209`, all **301/301** Python tests
+passed (275 existing plus 19 isolated and 7 synthetic EXE
+integration cases). Python `compileall -q tools tests` passed.
+The three new modules/test files were verified byte-identical by
+Git blob SHA after uploading to GitHub. Test registrations were
+added to CTest and `matrix-audits.yml`; remote full CI remains
+unverified. No privately owned original `WILDARMS.EXE`, bit-exact
+PS1 coefficient values or playable Nintendo Switch native build
+were available for validation in this stage.
