@@ -8,6 +8,8 @@ on:
       - 'tools/audit_gp0_rotation_matrix_builder.py'
       - 'tests/test_gp0_matrix_*.py'
       - 'tests/test_gp0_trig_table.py'
+      - 'tests/test_gp0_rotation_matrix_builder.py'
+      - 'CMakeLists.txt'
       - '.github/workflows/matrix-audits.yml'
   pull_request:
   workflow_dispatch:
@@ -20,8 +22,25 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Compile-check Python analyzers and tests
+        run: |
+          python -m compileall -q tools tests
       - name: Run matrix and trig audit unit tests (synthetic assets only)
         run: |
           python -m unittest discover -s tests -p 'test_gp0_matrix_*.py' -v
           python -m unittest discover -s tests -p 'test_gp0_trig_table.py' -v
           python -m unittest discover -s tests -p 'test_gp0_rotation_matrix_builder.py' -v
+
+  host-ctest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+      - name: Build host reference tests
+        run: cmake --build build --parallel 2
+      - name: Run host regression suite
+        run: ctest --test-dir build --output-on-failure
