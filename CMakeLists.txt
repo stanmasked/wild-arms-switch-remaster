@@ -340,3 +340,8 @@ set_tests_properties(wa_mips_call_boundary PROPERTIES WORKING_DIRECTORY ${CMAKE_
 add_test(NAME wa_mips_caller_sources
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_caller_sources.py)
 set_tests_properties(wa_mips_caller_sources PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Conservative multi-path MIPS caller provenance through branch delay slots.
+add_test(NAME wa_mips_caller_cfg_sources
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_caller_cfg_sources.py)
+set_tests_properties(wa_mips_caller_cfg_sources PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
