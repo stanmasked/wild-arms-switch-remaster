@@ -315,3 +315,8 @@ set_tests_properties(wa_mips_matrix_memory PROPERTIES WORKING_DIRECTORY ${CMAKE_
 add_test(NAME wa_mips_control_flow
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_control_flow.py)
 set_tests_properties(wa_mips_control_flow PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Private PS-X executable matrix-replay coverage and synthetic probe safety.
+add_test(NAME wa_gp0_matrix_replay_preflight
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_replay_preflight.py)
+set_tests_properties(wa_gp0_matrix_replay_preflight PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
