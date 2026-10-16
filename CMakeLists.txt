@@ -450,3 +450,13 @@ set_tests_properties(wa_mips_ps1_matrix_reference PROPERTIES WORKING_DIRECTORY $
 add_test(NAME wa_audit_ps1_matrix_reference
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_audit_ps1_matrix_reference.py)
 set_tests_properties(wa_audit_ps1_matrix_reference PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 212: package private before/after debugger captures into stage-211 references.
+add_test(NAME wa_mips_ps1_capture_pack
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_ps1_capture_pack.py)
+set_tests_properties(wa_mips_ps1_capture_pack PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 212: safe CLI outputs, no private stdout, and restrictive JSON permissions.
+add_test(NAME wa_audit_ps1_capture_pack
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_audit_ps1_capture_pack.py)
+set_tests_properties(wa_audit_ps1_capture_pack PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
