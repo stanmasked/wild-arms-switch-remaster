@@ -45,6 +45,10 @@ def main(argv=None):
     parser.add_argument('--max-steps', type=int, default=4096)
     parser.add_argument('--synthetic', action='store_true',
                         help='mark capture as synthetic rather than unverified external PS1')
+    parser.add_argument('--store-value-events', type=Path,
+                        help='independent private ordered debugger store trace including values')
+    parser.add_argument('--require-store-values', action='store_true',
+                        help='require exact value for every successful SB SH SW event')
     parser.add_argument('--store-events', type=Path,
                         help='private ordered debugger SB/SH/SW event JSON; not inferred from RAM')
     parser.add_argument('--require-store-sequence', action='store_true',
@@ -74,7 +78,10 @@ def main(argv=None):
             require_final_memory_state=args.require_final_memory_state,
             store_sequence=(json.loads(args.store_events.read_text(encoding='utf-8'))
                             if args.store_events is not None else None),
-            require_store_sequence=args.require_store_sequence)
+            require_store_sequence=args.require_store_sequence,
+            store_values=(json.loads(args.store_value_events.read_text(encoding='utf-8'))
+                          if args.store_value_events is not None else None),
+            require_store_values=args.require_store_values)
         result = summarize_capture(fixture)
         # The only printed comparison details are safe counts/slot indices.
         if args.compare:
@@ -89,6 +96,8 @@ def main(argv=None):
             result['final_memory_state'] = verification['final_memory_state']
             result['strict_store_sequence_required'] = verification['strict_store_sequence_required']
             result['store_sequence'] = verification['store_sequence']
+            result['strict_store_values_required'] = verification['strict_store_values_required']
+            result['store_values'] = verification['store_values']
             result['matches_complete_reference'] = verification['matches_complete_reference']
         _write_private(args.output, fixture)
         print(json.dumps(result, sort_keys=True))
