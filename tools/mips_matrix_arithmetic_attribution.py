@@ -53,6 +53,7 @@ def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
         'mismatch_index_lists_truncated': False,
         'mismatch_dependent_address_observed': False,
         'mismatch_dependent_control_observed': False,
+        'executed_code_write_observed': False,
         'synthetic_dynamic_dependency_only': True,
         'proven_numeric_causation': False,
         'original_gameplay_equivalence_proven': False,
@@ -86,6 +87,7 @@ def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
     budget_exceeded = False
     mismatch_dependent_address = False
     mismatch_dependent_control = False
+    executed_code_write = False
 
     def union(*origins):
         nonlocal budget_exceeded
@@ -140,6 +142,12 @@ def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
             store_cursor += 1
             if store_pc != pc or width != STORES[op]:
                 raise ValueError('inconsistent executed store instruction')
+            # A CPU write into the replayed executable invalidates later
+            # static-image instruction decoding: execute() intentionally does
+            # not fetch modified code. Even a same-value write is conservatively
+            # treated as unverified (we do not compare private code bytes).
+            if addr < base + len(image) and addr + width > base:
+                executed_code_write = True
             stored = regs[rt]    # before pending load retirement
             for j in range(width):
                 ram_shadow[addr+j] = stored
@@ -209,6 +217,10 @@ def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
         raise ValueError('unconsumed guest replay events')
     if budget_exceeded:
         output['reason_code'] = 'dependency_budget_exceeded'
+        return output
+    if executed_code_write:
+        output['reason_code'] = 'guest_code_write_unmodeled'
+        output['executed_code_write_observed'] = True
         return output
     if mismatch_dependent_address or mismatch_dependent_control:
         # An observed execution path is insufficient to rule out stores made
