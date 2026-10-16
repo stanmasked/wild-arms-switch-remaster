@@ -38,3 +38,20 @@ These tests protect the integration between the stage-175 CFG and the
 context-sensitive symbolic register dataflow. They do not infer branch
 predicates or recover concrete GTE matrix values. The private original
 WILDARMS.EXE is not stored in the repository.
+
+## Stage 177 — predecessor-state recomputation
+
+Context-sensitive source propagation now stores each node's OUT state
+and recomputes a successor's IN state as a union of the **current** OUT
+states of reachable predecessors. Previously it directly unioned new
+information with the existing IN state, which could retain superseded
+register sources in cyclic dataflow.
+
+A synthetic loop regression writes a lookup source, overwrites the
+register on every route to the matrix store, and loops back. The
+reported candidate store must retain only the later lookup source.
+This remains a possible-source abstraction and does not establish
+exact arithmetic results or concrete branch predicates.
+
+CI execution remains unverified; no original game executable bytes are
+included in the repository.
