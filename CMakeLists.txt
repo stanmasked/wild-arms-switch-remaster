@@ -365,3 +365,13 @@ set_tests_properties(wa_mips_load_access_profile PROPERTIES WORKING_DIRECTORY ${
 add_test(NAME wa_gp0_matrix_load_profile
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_load_profile.py)
 set_tests_properties(wa_gp0_matrix_load_profile PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Shadow provenance for completed MIPS Q12 table-address computations.
+add_test(NAME wa_mips_trig_index_provenance
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_trig_index_provenance.py)
+set_tests_properties(wa_mips_trig_index_provenance PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Synthetic PS-X EXE preflight integration for angle-address chains.
+add_test(NAME wa_gp0_trig_index_provenance
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_trig_index_provenance.py)
+set_tests_properties(wa_gp0_trig_index_provenance PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
