@@ -61,6 +61,17 @@ class ContextSourcesTests(unittest.TestCase):
                          [f'0x{START+4:08X}'])
         self.assertTrue(r['candidate_stores'][0]['merged_predecessors'])
 
+    def test_loop_register_kill_terminates_and_retains_only_possible_sources(self):
+        # Loop back to index 2, where a new lookup overwrites the old one.
+        # Branch outcomes are symbolic: index 4 can be reached from both
+        # the first pass and subsequent passes.
+        r=fixture([lw(8),beq(2),0,lw(8),sh(8,0),
+                   beq(-4),0,0],(0,3))
+        self.assertTrue(r['valid_range'])
+        self.assertLessEqual(r['reachable_contexts'],12)
+        self.assertEqual(r['candidate_stores'][0]['candidate_lookup_sources'],
+                         [f'0x{START+12:08X}'])
+
     def test_invalid_range(self):
         self.assertFalse(analyze(b'',BASE,START,START)['valid_range'])
 
