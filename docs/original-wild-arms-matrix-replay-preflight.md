@@ -578,3 +578,64 @@ CTest and GitHub Actions were extended with the two new test suites.
 This is **not** a confirmed full GitHub Actions run or original
 `WILDARMS.EXE` replay; exact PlayStation matrix equality and
 Nintendo Switch hardware operation remain unverified.
+
+## Stage 204 — executed index-address provenance for packed Q12 sine/cosine
+
+The new `tools/mips_trig_index_provenance.py` performs **shadow
+dependency tracking** over instruction addresses actually visited by
+the bounded MIPS interpreter and its separately recorded **successful**
+load events. A table lookup is counted only if the concrete `LW`
+accessed a 4-byte-aligned entry inside the mapped packed Q12 table.
+Recognizing a code pattern alone is not enough.
+
+The analysis tracks the register numbers on which the **effective
+address** depends, including a conservative lineage across ALU
+instructions, the 12-bit `ANDI 0x0FFF` mask, `SLL` by two bits,
+`ADDU`, `LUI` and preceding memory loads. It mirrors the PS1
+one-instruction load-delay contract: an instruction immediately
+following `LW` still sees the previous register value. When a
+subsequent instruction writes the same destination, it supersedes a
+pending load. Successful reads at repeated PCs (loops) are
+matched in execution order, and inconsistent traces are rejected.
+
+The private preflight's optional exploratory report contains
+`exploratory_trace.trig_address_provenance`:
+
+- `packed_table_loads_with_provenance`: actual successful packed LW
+  events checked;
+- `address_dependency_gprs` and
+  `address_dependency_lookup_counts`: **register numbers and counts
+  only**, not initial register values;
+- counts for lookup address chains containing a left shift by two,
+  a 12-bit mask, or an earlier memory read;
+- counts with unknown provenance or without external address roots;
+- explicit `original_angle_values_recovered: false`,
+  `input_gpr_proven_to_be_game_angle: false` and
+  `private_values_emitted: false`.
+
+**Important distinction:** an input GPR can carry a *pointer to the
+table* rather than an angle, and an observed mask/shift in an address
+chain does not by itself prove what the original gameplay angle was.
+The analysis reports potential dependencies of addresses, not
+complete symbolic identities or bit-exact source values. It is still
+based on synthetic caller register state unless original game state
+has been supplied and validated separately. No original angles,
+table indices, raw addresses, opcode words, matrix values or original
+executable bytes are emitted.
+
+Test coverage includes a synthetic
+`ANDI a0,0x0FFF → SLL index,2 → LUI base → ADDU → LW` chain,
+two-step delayed loads, load overwrite, previous stack-sourced data,
+literal table pointers, invalid event streams, repeated same-PC reads
+and fail-closed nonexistent loads. Four integration tests run the
+preflight on a completely artificial PS-X EXE with a sparse synthetic
+Q12 sine/cosine table.
+
+**Verification:** in the local relevant-module source tree
+`/mnt/data/wa204`, **178/178** Python tests passed (163 earlier
+plus 11 module tests and 4 integration tests); Python `compileall`
+also passed. New module and its 11-test suite match their GitHub Git
+blob checksums. CTest and GitHub Actions registrations were updated.
+A successful full remote CI run, original `WILDARMS.EXE` evaluation,
+actual nine-coefficient PS1 comparison and a playable Switch NRO
+are **not yet verified**.
