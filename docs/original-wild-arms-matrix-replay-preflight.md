@@ -703,3 +703,78 @@ files' Git blob hashes exactly match the locally tested copies.
 The full repo's GitHub Actions and Switch console/hardware results
 are not confirmed. No original `WILDARMS.EXE` bytes were uploaded
 or published.
+
+## Stage 206 — independently verify synthetic PS1 Q12 arithmetic bit-for-bit
+
+To distinguish **data lineage** (stage 205) from actual integer
+arithmetic behavior, stage 206 adds a **separate independent integer
+oracle** `tools/mips_q12_arithmetic_reference.py`. It deliberately
+does not import the concrete MIPS interpreter's fixed32 helpers.
+
+The oracle specifies exact behavior for *synthetic* MIPS schedules:
+
+- `LH`: signed 16-bit extension into the 32-bit operand register;
+- `MULT` versus `MULTU`: signed versus unsigned 32 × 32 product,
+  with independent verification of the HI and LO register words;
+- `MFLO`: only the low 32 bits of the product are retained;
+- `SRA 12`: arithmetic (sign-extending) right shift that rounds
+  a negative fractional quantity toward negative infinity;
+- `ADDU`: 32-bit wraparound without trapping on overflow;
+- `SH`: only the low **16 bits** of the final computed result are
+  committed to each output matrix slot.
+
+A crucial overflow example: with both signed LH operands equal to
+`-32768`, the raw product is `1073741824`; after `SRA 12`
+it becomes `262144`, but the final `SH` writes **zero** because
+`262144 & 0xffff == 0`. This differs from treating the matrix
+coefficient as an unbounded Python integer.
+
+Two precisely specified three-product dot schedules are tested
+separately:
+
+1. **shift after sum:** add all three MFLO words modulo 2³² and
+   shift the wrapped accumulator right by 12 once;
+2. **shift each product:** arithmetic-shift each MFLO word right by
+   12 and then add the three shifted words modulo 2³².
+
+These alternatives can differ. For example, three terms each equal
+to `-1` result in **-1** for shift-after-sum but **-3**
+for shift-each-product (after SH). This distinction is relevant
+when the real PlayStation instruction order is eventually verified.
+
+`tools/mips_q12_differential.py` assembles actual synthetic MIPS
+instruction streams for nine signed-LH pair products and nine
+three-term dot products. It executes the streams with the existing
+bounded MIPS interpreter, reads all nine signed output SH slots from
+mapped memory, and compares them to the independent Python oracle.
+
+A standalone host command reproduces the numeric checks with
+fixed-seed generated input matrices and boundary samples:
+
+```sh
+python3 -m tools.audit_mips_q12_differential --cases 256 --seed 206
+```
+
+The command tested **768 matrix cases** across three schedules, each
+with nine output coefficients (**6912 coefficient comparisons**),
+all matched. Its JSON shows only per-schedule counts and explicit
+`original_gameplay_coefficients_checked: false` and
+`playstation_hardware_equivalence_proven: false`. No original game
+bytes, private coefficients or captured guest registers are exported.
+
+The newly added 11 reference tests, 10 differential MIPS tests and
+six audit/CLI tests bring the locally executable relevant-module
+test suite from **200 to 227 passing tests**. Python compilation
+(`python -m compileall -q tools tests`) passed as well. All six
+new files were verified to match the exact Git blob hashes committed
+to GitHub. CTest registrations and the `matrix-audits.yml`
+GitHub Actions runner have been extended to run the three new
+test files and the deterministic 768-case comparison.
+
+**Proof boundary:** This does NOT establish which arithmetic
+schedule, angles or input matrix values the actual `WILDARMS.EXE`
+uses. A model matching an independently written oracle for a
+synthetic routine does not prove cycle-accurate PS1 hardware
+emulation or a working Nintendo Switch native game. Full remote
+GitHub Actions success, original-game coefficient equality, and
+Switch console execution remain unverified.
