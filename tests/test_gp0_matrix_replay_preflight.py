@@ -254,6 +254,63 @@ class ReplayPreflightTests(unittest.TestCase):
         self.assertEqual(report['exploratory_trace']['read_before_first_write_gprs'],[8])
         self.assertNotIn('register_values',str(report))
 
+    def test_input_sensitivity_on_complete_synthetic_matrix(self):
+        body = [ins(9,4,8,1), ins(9,0,9,4096), ins(41,5,8,0)]
+        body.extend(ins(41,5,9,off) for off in range(2,18,2))
+        body.extend([(31<<21)|8,0])
+        blob,call,builder,end=self._caller_program(body)
+        result=analyze(blob,start=builder,end=end,call=call,
+                       caller_replay=True,input_sensitivity=True)
+        observations=result['input_sensitivity']['observations']
+        self.assertEqual([x['gpr'] for x in observations],[4,6,7])
+        self.assertTrue(result['input_sensitivity']['baseline_returned_to_caller'])
+        self.assertEqual([x['changed_coefficient_count'] for x in observations],
+                         [1,0,0])
+        self.assertTrue(all(x['all_nine_coefficients_comparable'] for x in observations))
+        self.assertNotIn('coefficients',observations[0])
+
+    def test_input_sensitivity_reads_synthetic_q12_table(self):
+        from tools.audit_gp0_trig_table import TABLE
+        from tools.mips_trig_memory import synthetic_cardinal_table
+        def special(fn,rs=0,rt=0,rd=0,sa=0):
+            return (rs<<21)|(rt<<16)|(rd<<11)|(sa<<6)|fn
+        low=TABLE&65535
+        high=((TABLE+0x8000)>>16)&65535
+        signed_low=low-65536 if low&0x8000 else low
+        body=[special(0,rt=4,rd=8,sa=2),ins(15,0,9,high),
+              special(33,rs=9,rt=8,rd=9),ins(35,9,10,signed_low),
+              0,special(3,rt=10,rd=11,sa=16),ins(41,5,11,0),
+              ins(9,0,12,4096)]
+        body.extend(ins(41,5,12,off) for off in range(2,18,2))
+        body.extend([(31<<21)|8,0])
+        blob,call,builder,end=self._caller_program(body)
+        position=2048+TABLE-BASE
+        table=synthetic_cardinal_table()
+        blob=bytearray(blob)
+        blob.extend(bytes(position+len(table)-len(blob)))
+        blob[position:position+len(table)]=table
+        struct.pack_into('<II',blob,0x18,BASE,len(blob)-2048)
+        report=analyze(bytes(blob),start=builder,end=end,call=call,
+                       caller_replay=True,input_sensitivity=True)
+        observations=report['input_sensitivity']['observations']
+        self.assertEqual([x['changed_coefficient_count'] for x in observations],
+                         [1,0,0])
+        self.assertTrue(all(x['all_nine_coefficients_comparable'] for x in observations))
+        self.assertTrue(report['trig_table_mapped_in_image'])
+
+    def test_input_sensitivity_requires_caller_mode(self):
+        with self.assertRaises(ValueError):
+            analyze(fixture([0,0]),start=BASE,end=BASE+4,
+                    input_sensitivity=True)
+
+    def test_unsupported_cop2_does_not_produce_coefficient_comparison(self):
+        blob,call,builder,end=self._caller_program([18<<26,(31<<21)|8,0])
+        report=analyze(blob,start=builder,end=end,call=call,
+                       caller_replay=True,input_sensitivity=True)
+        self.assertFalse(report['input_sensitivity']['baseline_returned_to_caller'])
+        self.assertTrue(all(x['changed_coefficient_count'] is None
+                            for x in report['input_sensitivity']['observations']))
+
     def test_trace_bounded_loop(self):
         jump_to_self = (2<<26) | ((BASE>>2)&0x03ffffff)
         r = analyze(fixture([jump_to_self,0,0]), start=BASE, end=BASE+8,
