@@ -20,6 +20,7 @@ try:
     from .mips_store_event_sequence import decode as decode_store_events, compare as compare_store_events
     from .mips_store_value_sequence import decode as decode_store_values, compare as compare_store_values, project_sites as store_value_sites
     from .mips_arithmetic_event_sequence import decode as decode_arithmetic, compare as compare_arithmetic
+    from .mips_matrix_arithmetic_attribution import analyze as analyze_arithmetic_attribution
 except ImportError:
     from audit_original_nclip_winding import parse_exe
     from mips_control_flow import execute, STORES
@@ -30,6 +31,7 @@ except ImportError:
     from mips_store_event_sequence import decode as decode_store_events, compare as compare_store_events
     from mips_store_value_sequence import decode as decode_store_values, compare as compare_store_values, project_sites as store_value_sites
     from mips_arithmetic_event_sequence import decode as decode_arithmetic, compare as compare_arithmetic
+    from mips_matrix_arithmetic_attribution import analyze as analyze_arithmetic_attribution
 
 SCHEMA = 'wild-arms-ps1-matrix-reference-v1'
 _MAX_PATCHES = 256
@@ -285,6 +287,11 @@ def compare(blob, fixture):
         trace, capture['expected_arithmetic_events'],
         guest_stopped_at_expected_pc=bool(at_stop))
         if capture['expected_arithmetic_events'] is not None else None)
+    arithmetic_attribution = (analyze_arithmetic_attribution(
+        code, base, trace, capture['matrix_address'],
+        capture['expected_arithmetic_events'],
+        guest_stopped_at_expected_pc=bool(at_stop))
+        if capture['expected_arithmetic_events'] is not None else None)
     eligible = bool(at_stop and all(final_sh) and
                     (not capture['require_completed_jr_ra'] or
                      return_boundary['verified_complete_jr_ra_return']))
@@ -315,6 +322,7 @@ def compare(blob, fixture):
         'strict_store_values_required': capture['require_store_values'],
         'strict_arithmetic_events_required': capture['require_arithmetic_events'],
         'arithmetic_events': arithmetic_report,
+        'arithmetic_matrix_attribution': arithmetic_attribution,
         'store_values': values_report,
         'store_sequence': store_report,
         'final_memory_state': final_ram,
