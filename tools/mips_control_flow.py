@@ -12,9 +12,11 @@ import struct
 try:
     from .mips_fixed32 import s32, u32, sign_extend16
     from .mips_integer_step import step
+    from .mips_arithmetic_event_sequence import executed_event
 except ImportError:
     from mips_fixed32 import s32, u32, sign_extend16
     from mips_integer_step import step
+    from mips_arithmetic_event_sequence import executed_event
 
 
 LOADS = {32: 1, 33: 2, 35: 4, 36: 1, 37: 2}
@@ -99,6 +101,7 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
     writes = []
     store_accesses = []
     store_value_accesses = []
+    arithmetic_accesses = []
     loads = []
     completed_transfers = []
     pending_transfer = None
@@ -109,6 +112,7 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
                 'store_addresses': tuple(writes),
                 'store_accesses': tuple(store_accesses),
                 'store_value_accesses': tuple(store_value_accesses),
+                'arithmetic_accesses': tuple(arithmetic_accesses),
                 'load_accesses': tuple(loads),
                 'control_transfers': tuple(completed_transfers), 'gpr': regs,
                 'hi': hi, 'lo': lo, 'pending_load': pending_load}
@@ -141,6 +145,7 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
             next_pc = u32(pc + 4)
             next_delayed_target = None
             next_pending_transfer = None
+            arithmetic_event = None
             if control is not None:
                 target, annul, link = control
                 if link is not None:
@@ -174,6 +179,7 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
                     store_addr = addr
             else:
                 updated, next_hi, next_lo = step(word, regs, hi, lo)
+                arithmetic_event = executed_event(pc, word, updated, next_hi, next_lo)
 
             updated = list(updated)
             if pending_load is not None:
@@ -193,6 +199,8 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
                     completed_transfers.append(pending_transfer)
                 next_pending_transfer = None
             visited.append(pc)
+            if arithmetic_event is not None:
+                arithmetic_accesses.append(arithmetic_event)
             if store_addr is not None:
                 writes.append(store_addr)
                 store_accesses.append((pc, store_addr, STORES[op], rt))
