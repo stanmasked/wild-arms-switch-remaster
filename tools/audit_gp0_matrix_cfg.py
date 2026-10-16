@@ -28,6 +28,8 @@ def direct_successors(word, pc):
     if op in (4, 5, 6, 7) or (op == 1 and rt in (0, 1, 16, 17)):
         target = (pc + 4 + (signed16(word & 65535) << 2)) & 0xffffffff
         return 'conditional', (target, pc + 8), True
+    if op == 1:
+        return 'unsupported_regimm', (), True
     if op in (2, 3):
         target = ((pc + 4) & 0xf0000000) | ((word & 0x03ffffff) << 2)
         return ('call' if op == 3 else 'jump'), (target,), True
@@ -58,7 +60,7 @@ def analyze(image, base, start=BUILDER, end=RETURN):
             unresolved.append({'pc': f'0x{pc:08X}', 'reason': 'delay_slot_out_of_range'})
             continue
         edges.append({'from': f'0x{pc:08X}', 'to': f'0x{slot:08X}', 'kind': 'delay_slot'})
-        if kind in ('indirect', 'branch_likely', 'call'):
+        if kind in ('indirect', 'branch_likely', 'call', 'unsupported_regimm'):
             unresolved.append({'pc': f'0x{pc:08X}', 'reason': kind + '_requires_semantics'})
             continue
         for target in targets:
