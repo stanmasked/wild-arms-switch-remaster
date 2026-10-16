@@ -519,3 +519,62 @@ test files are registered in CTest and GitHub Actions. No complete
 GitHub Actions success, original `WILDARMS.EXE` runtime,
 bit-exact PS1 matrix coefficient comparison or Switch hardware
 execution has been confirmed.
+
+## Stage 203 — identify successful Q12 table and stack loads without disclosing values
+
+The bounded integer interpreter now records *successful* concrete memory
+loads internally as `(instruction_pc, resolved_address, byte_width,
+destination_gpr)` tuples in `execute(...).load_accesses`. These raw
+guest addresses are strictly for local testing and in-memory analysis;
+they are **not** added to the user-facing preflight JSON. Failed loads,
+annulled branch-likely slots and instructions that never execute create
+no load event. A successful load in a completed JR delay slot is
+correctly included. Existing one-instruction R3000A load-delay
+behavior is unchanged.
+
+The host module `tools/mips_load_access_profile.py` converts the raw
+events to a **sanitized, aggregate** profile. An opt-in
+`--explore`, `--caller-replay` or `--replay-cfg-window` preflight
+includes it as `exploratory_trace.memory_read_profile`.
+
+It reports total successful loads; aggregate reads from the protected
+18-byte matrix, scratch stack, other PS-X EXE data and the packed
+Q12 table; number of *distinct* 32-bit trig-table entries reached;
+and count of known original lookup instruction sites that executed a
+genuine packed table LW. Reading at a known code site is counted as a
+trig lookup **only if the dynamically resolved address is inside
+the correct packed table**. Partial LB/LH table accesses are tracked
+separately, not misrepresented as complete sin/cos entries. Only
+destination GPR numbers, counts and booleans are exported.
+
+Example (private EXE, explicitly synthetic registers):
+
+```sh
+python3 -m tools.audit_gp0_matrix_replay_preflight \
+  /private/path/WILDARMS.EXE --caller-replay --max-steps 4096
+```
+
+The JSON always states
+`original_rotation_angles_recovered: false` and
+`private_values_emitted: false`. **This is not recovery of gameplay
+angles or coefficients.** A packed table index may reveal which
+synthetically seeded angle was used in the concrete runner; it is not
+a proven input from a real PS1 save/game state. No indices, addresses,
+table entries or original register contents are printed.
+
+For verification, 12 standalone memory-profile regression cases test
+real LW/LH replay, unique/repeated Q12 table entries, special matrix
+and stack regions, ignored failed reads, skipped delay slots, successful
+JR-delay-slot loads and the distinction between known lookup *sites*
+and actual table addresses. Four more integration tests run the
+private-EXE preflight API on a **fully synthetic PS-X EXE** containing
+synthetic cardinal Q12 entries and a LUI/LW table lookup, plus stack,
+failed-load and static-only cases.
+
+The relevant local source subset passed **163/163 Python tests**
+(previously 147, plus 16) and `python -m compileall -q tools tests`.
+The three new source/test files match their GitHub Git-blob hashes.
+CTest and GitHub Actions were extended with the two new test suites.
+This is **not** a confirmed full GitHub Actions run or original
+`WILDARMS.EXE` replay; exact PlayStation matrix equality and
+Nintendo Switch hardware operation remain unverified.
