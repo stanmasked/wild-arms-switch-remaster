@@ -471,3 +471,44 @@ and an unrelated nearby KSEG1 memory store that must **not** suppress
 valid attribution. The guard is deliberately conservative. It does not
 add PS1 DMA, RAM alias coherence, cache behavior, code invalidation,
 hardware-accurate CPU timing, or a Nintendo Switch executable.
+
+
+## Stage 225 — physical RAM alias ambiguity guard for arithmetic lineage
+
+PS1 main RAM is physically mirrored through KUSEG/KSEG0/KSEG1 and
+within the first 8 MiB of each window. The **current concrete replay**
+uses disjoint virtual `MappedMemory` regions, so an `SW` through
+one virtual address followed by an `LW` through a different address
+that maps to the same physical RAM does **not** reproduce hardware alias
+coherence. Even two independent reads from different virtual mirrors
+could return unverified data if snapshot segments disagree.
+
+The optional dependency analyzer now records the *physical RAM offset*
+for each byte of every successfully observed CPU load/store and
+conservatively detects two different observed virtual byte addresses
+that refer to the same physical byte. It also detects a successful CPU
+store through a mirror of any matrix output byte, even if the canonical
+matrix address is never otherwise accessed.
+
+When this happens, `arithmetic_matrix_attribution` returns
+`reason_code: "ram_alias_access_unmodeled"`,
+`ram_alias_access_observed: true`, and
+`attribution_performed: false`. As in other withheld cases, candidate
+slot lists and the unlinked-mismatch list are empty. The safe report
+does not expose guest addresses, physical offsets, original register
+values, matrix coefficients, memory bytes, or event PCs. The existing
+code-write guard (`guest_code_write_unmodeled`) has precedence.
+
+Repeated accesses through **exactly the same** virtual bytes preserve
+existing register/RAM lineage. Accesses to distinct physical bytes
+do not trigger the new guard. There is intentionally no attempt to
+fabricate coherent alias values from a private snapshot. The numerical
+nine-slot comparison, optional or strict arithmetic-event matching,
+and the exit-code contract remain unchanged.
+
+Seven synthetic regression cases cover cross-segment store/load in
+both directions, read/read aliasing, mirrored matrix stores, safe
+same-address reuse, non-overlapping physical cells, and end-to-end
+optional versus strict numerical comparison. This is defensive
+instrumentation, **not** full PS1 physical memory emulation, original
+gameplay equivalence evidence, or a verified Nintendo Switch build.
