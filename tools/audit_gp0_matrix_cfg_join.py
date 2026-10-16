@@ -30,6 +30,10 @@ def transfer(word, pc, state, lookups):
         out = rt
         if op == 35 and pc in lookups:
             val = {f'0x{pc:08X}'}
+    elif op in (16,17,18,19) and rs in (0,2):
+        # MFCn/CFCn overwrite a GPR with coprocessor data. No proven
+        # source from the previous GPR value survives the transfer.
+        out, val = rt, set()
     elif op in (8,9,10,11,12,13,14):
         out, val = rt, set(regs[rs])
     elif op == 0:
