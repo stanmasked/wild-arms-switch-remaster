@@ -76,6 +76,15 @@ class CFGTests(unittest.TestCase):
                              e['kind']=='delay_slot'
                              for e in report['edges']))
 
+    def test_branch_target_entering_delay_slot_is_unresolved(self):
+        # First branch targets index 3, which is the delay slot of index 2.
+        report = check([4<<26 | 2, 0, 4<<26 | 2, 0, 0, 0])
+        self.assertTrue(any(x['reason']=='target_enters_delay_slot'
+                            for x in report['unresolved']))
+        self.assertFalse(any(e['from']==f'0x{START+4:08X}' and
+                             e['to']==f'0x{START+12:08X}'
+                             for e in report['edges']))
+
     def test_out_of_range(self):
         self.assertFalse(analyze(b'', BASE, START, START)['valid_range'])
 
