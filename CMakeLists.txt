@@ -400,3 +400,13 @@ set_tests_properties(wa_mips_q12_differential PROPERTIES WORKING_DIRECTORY ${CMA
 add_test(NAME wa_audit_mips_q12_differential
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_audit_mips_q12_differential.py)
 set_tests_properties(wa_audit_mips_q12_differential PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Classify executed MULT/MFLO/SRA/ADDU ordering at nine matrix SH outputs.
+add_test(NAME wa_mips_matrix_operation_schedule
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_matrix_operation_schedule.py)
+set_tests_properties(wa_mips_matrix_operation_schedule PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Synthetic PS-X EXE integration for all nine concrete coefficient slots.
+add_test(NAME wa_gp0_matrix_operation_schedule
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_operation_schedule.py)
+set_tests_properties(wa_gp0_matrix_operation_schedule PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
