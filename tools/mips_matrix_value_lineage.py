@@ -160,8 +160,7 @@ def summarize(image, base, trace, matrix_address, *,
                         slots[index] = None
         else:
             dest, new_value, hi, lo = _alu(word, gpr, hi, lo)
-        if pending is not None and pending[0] != dest and (
-                new_pending is None or pending[0] != new_pending[0]):
+        if pending is not None and pending[0] != dest:
             gpr[pending[0]] = pending[1]
         if dest:
             gpr[dest] = new_value
