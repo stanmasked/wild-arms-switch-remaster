@@ -29,6 +29,7 @@ try:
     from .mips_matrix_value_lineage import summarize as summarize_matrix_lineage
     from .mips_matrix_operation_schedule import summarize as summarize_operation_schedule
     from .mips_builder_opcode_evidence import inspect as inspect_builder_opcode_evidence
+    from .mips_builder_execution_evidence import summarize as summarize_builder_execution
 except ImportError:
     from audit_original_nclip_winding import parse_exe
     from audit_gp0_rotation_matrix_builder import BUILDER, RETURN, CALL, jal_target
@@ -45,6 +46,7 @@ except ImportError:
     from mips_matrix_value_lineage import summarize as summarize_matrix_lineage
     from mips_matrix_operation_schedule import summarize as summarize_operation_schedule
     from mips_builder_opcode_evidence import inspect as inspect_builder_opcode_evidence
+    from mips_builder_execution_evidence import summarize as summarize_builder_execution
 
 
 def instruction_family(word):
@@ -235,6 +237,10 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
                     and (call, 'jal', start) in transfers
                     and (end, 'jr_ra', call + 8) in transfers
                     and start in visited)
+    operation_schedule = summarize_operation_schedule(image, base, trace, matrix_address)
+    matrix_value_lineage = summarize_matrix_lineage(
+        image, base, trace, matrix_address, table_address=table,
+        table_entries=ENTRIES)
     result['exploratory_trace'] = {
         'initial_registers_are_synthetic': True,
         'read_before_first_write_gprs': list(read_before_write(image, base, visited)),
@@ -263,11 +269,12 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
         'trig_address_provenance': summarize_trig_index(
             image, base, trace['visited_pcs'], trace['load_accesses'],
             table_address=table, table_entries=ENTRIES),
-        'matrix_value_lineage': summarize_matrix_lineage(
-            image, base, trace, matrix_address, table_address=table,
-            table_entries=ENTRIES),
-        'matrix_operation_schedule': summarize_operation_schedule(
-            image, base, trace, matrix_address),
+        'matrix_value_lineage': matrix_value_lineage,
+        'matrix_operation_schedule': operation_schedule,
+        'builder_execution_evidence': summarize_builder_execution(
+            image, base, start, end, trace, matrix_address,
+            operation_schedule=operation_schedule, value_lineage=matrix_value_lineage,
+            table_address=table, table_entries=ENTRIES),
         'distinct_executed_pcs': len(set(trace['visited_pcs'])),
         'matrix_slot_store_count': sum(addr in matrix_addresses
                                        for addr in trace['store_addresses']),
