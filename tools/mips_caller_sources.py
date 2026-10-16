@@ -141,7 +141,7 @@ def _step(word, regs, pending, hi, lo, at_call=False):
         raise ValueError('unsupported/control instruction')
     # The immediate following instruction sees the pre-commit registers.
     # A load also supersedes a preceding load aimed at that same GPR.
-    if pending and pending[0] != write and (next_load is None or pending[0] != next_load[0]):
+    if pending and pending[0] != write:
         if pending[0] != 0: regs[pending[0]] = pending[1]
     if write is not None and write != 0:
         regs[write] = new_value
