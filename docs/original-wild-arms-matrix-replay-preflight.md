@@ -297,3 +297,50 @@ hardware execution have not been verified.
 The exact user's original `WILDARMS.EXE` remains unavailable in
 this session. Thus no conclusion about actual coefficient sensitivity
 in the original game has been established.
+
+## Stage 199 — separate caller-prepared from unresolved matrix inputs
+
+The new host module `tools/mips_call_boundary.py` splits an **executed**
+MIPS caller replay at the first visited builder entry address. It
+computes which general-purpose registers the builder path reads before
+writing them, then checks which of those have already been prepared by
+instructions in the caller prefix (including `JAL` and its delay slot).
+
+The optional `--caller-replay` preflight JSON includes a sanitized
+`exploratory_trace.call_boundary` structure with:
+
+- `builder_entry_reached`: whether the builder's first instruction
+  was actually *executed*, not just targeted by JAL;
+- `builder_read_before_write_gprs`: register-number dependencies on
+  the executed builder path;
+- `builder_inputs_prepared_by_caller`: dependencies whose values were
+  written by the executed caller prefix;
+- `builder_inputs_unresolved`: dependencies not established by the
+  observed caller prefix;
+- `pending_load_at_entry_gpr`: a caller load destination still in its
+  MIPS one-instruction load-delay window, or null.
+
+All arrays contain **GPR numbers only**. No initial values, matrix
+coefficients, executable instructions or original trigonometric data
+are emitted. This is **not** complete value provenance: builder-side
+load delays, initial HI/LO, memory aliases, and unexecuted branches
+can limit the conclusions. A register listed as unresolved may have a
+legitimate incoming gameplay value supplied by an outer caller;
+a pending load should not be assumed ready on the first builder
+instruction.
+
+For example, in a synthetic caller that executes
+`ADDIU a1,sp,16; JAL builder; NOP`, followed by a builder that
+reads `a0` and `a1` before its return, GPRs 5 (`a1`) and
+31 (`ra`) are attributed to the caller while GPR 4 (`a0`)
+remains an external/unresolved input. If the first builder opcode
+fails (such as unsupported COP2), the report explicitly marks the
+entry as **not executed** and does not invent dependencies.
+
+Verification in the local `wa198` source reconstruction:
+**86 of 86 tests passed** (75 previously tested plus 9 standalone
+call-boundary regressions and 2 preflight integration tests).
+`python3 -m compileall -q tools tests` passed. This is a
+subset checkout: a full GitHub Actions run and a test with the
+user-owned original `WILDARMS.EXE` are not verified. Both CTest
+and the CI workflow have been updated to run the nine new tests.
