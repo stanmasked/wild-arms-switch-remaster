@@ -280,3 +280,8 @@ set_tests_properties(wa_original_gp0_matrix_context_cfg PROPERTIES WORKING_DIREC
 add_test(NAME wa_original_gp0_matrix_context_sources
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_context_sources.py)
 set_tests_properties(wa_original_gp0_matrix_context_sources PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Standalone bit-accurate MIPS arithmetic primitives.
+add_test(NAME wa_mips_fixed32
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_fixed32.py)
+set_tests_properties(wa_mips_fixed32 PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
