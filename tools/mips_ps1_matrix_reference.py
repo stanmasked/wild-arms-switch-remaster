@@ -14,10 +14,12 @@ try:
     from .audit_original_nclip_winding import parse_exe
     from .mips_control_flow import execute, STORES
     from .mips_matrix_memory import MappedMemory, matrix_coefficients
+    from .mips_return_boundary import verify as verify_return_boundary
 except ImportError:
     from audit_original_nclip_winding import parse_exe
     from mips_control_flow import execute, STORES
     from mips_matrix_memory import MappedMemory, matrix_coefficients
+    from mips_return_boundary import verify as verify_return_boundary
 
 SCHEMA = 'wild-arms-ps1-matrix-reference-v1'
 _MAX_PATCHES = 256
@@ -58,6 +60,9 @@ def _decode_reference(fixture, exe_sha):
                            ('entry_pc', 'stop_pc', 'matrix_address'))
     if start & 3 or stop & 3 or matrix & 1 or matrix > 0xffffffff - 17:
         raise ValueError('unaligned reference entry/stop/matrix pointer')
+    strict_return = fixture.get('require_completed_jr_ra', False)
+    if type(strict_return) is not bool:
+        raise ValueError('invalid strict JR return requirement')
     hi, lo = _u32(fixture['hi']), _u32(fixture['lo'])
     # Captures claiming external PS1 provenance must explicitly account for
     # the pipeline state. An absent field is only a legacy *synthetic* default.
@@ -103,7 +108,8 @@ def _decode_reference(fixture, exe_sha):
     return {'source':fixture['source'], 'gpr':regs, 'expected':expected,
             'entry_pc':start,'stop_pc':stop, 'matrix_address':matrix,
             'hi':hi,'lo':lo,'max_steps':max_steps,'segments':parsed,
-            'pending_load':load,'pipeline_state_explicit':explicit_pipeline}
+            'pending_load':load,'pipeline_state_explicit':explicit_pipeline,
+            'require_completed_jr_ra':strict_return}
 
 
 def _prepare_memory(image, base, segments):
@@ -197,7 +203,10 @@ def compare(blob, fixture):
                     initial_pending_load=capture['pending_load'])
     final_sh = _final_sh_slots(code,base,trace,capture['matrix_address'])
     at_stop = trace['completed'] and trace['reason'] == 'stop_pc'
-    eligible = bool(at_stop and all(final_sh))
+    return_boundary = verify_return_boundary(trace, capture['stop_pc'])
+    eligible = bool(at_stop and all(final_sh) and
+                    (not capture['require_completed_jr_ra'] or
+                     return_boundary['verified_complete_jr_ra_return']))
     mismatch_indices = []
     match_count = 0
     if eligible:
@@ -212,6 +221,8 @@ def compare(blob, fixture):
         'initial_pending_load_applied': capture['pending_load'] is not None,
         'executable_memory_overlaid': overlaid,
         'guest_completed_at_expected_stop': bool(at_stop),
+        'strict_jr_ra_return_required': capture['require_completed_jr_ra'],
+        'return_boundary': return_boundary,
         'guest_stop_reason': trace['reason'] if trace['reason'] in _SAFE_REASONS else 'other',
         'final_halfword_slots_written_by_sh':sum(final_sh),
         'all_nine_final_sh_verified':all(final_sh),
