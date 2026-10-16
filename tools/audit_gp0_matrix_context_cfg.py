@@ -26,6 +26,13 @@ def branch_outcomes(word):
     rt=(word>>16)&31
     if rs == rt and op in (4,5,20,21):
         return op in (4,20)
+    # Zero register is mathematically zero regardless of runtime state.
+    if rs == 0 and op in (6,7,22,23):
+        return op in (6,22)  # BLEZ true, BGTZ false
+    if op == 1 and rs == 0:
+        regimm_rt=(word>>16)&31
+        if regimm_rt in (0,1,2,3):
+            return regimm_rt in (1,3)  # BLTZ false, BGEZ true
     return None
 
 
