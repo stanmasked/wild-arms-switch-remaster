@@ -43,14 +43,14 @@ def trace(image, base, start=BUILDER, end=RETURN):
                 unresolved.add((pc,'control_in_delay_slot'))
                 continue
             parent_kind,parent_targets,_=direct_successors(words[controller],controller)
-            if parent_kind == 'branch_likely':
+            if parent_kind in ('branch_likely','regimm_likely'):
                 imm=words[controller]&65535
                 imm=imm-65536 if imm&32768 else imm
                 next_nodes=[((controller+4+(imm<<2))&0xffffffff,None)]
             else:
                 next_nodes=[(target,None) for target in parent_targets] if parent_kind in ('conditional','jump') else []
         elif delayed:
-            if kind == 'branch_likely':
+            if kind in ('branch_likely','regimm_likely'):
                 # Taken: execute the delay slot. Not taken: annul it.
                 next_nodes=[(pc+4,pc),(pc+8,None)]
             elif kind in ('unsupported_regimm','call','indirect'):
