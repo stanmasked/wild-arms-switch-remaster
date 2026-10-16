@@ -17,6 +17,40 @@ except ImportError:
 
 MAX_LINEAGE_TOKENS = 512
 MAX_REPORTED_INDICES = 32
+_PS1_RAM_WINDOW = 0x800000
+_PS1_RAM_SIZE = 0x200000
+
+
+def _ps1_ram_offset(address):
+    """Conservative PS1 2 MiB RAM offset, including its 8 MiB mirrors.
+
+    This is a *guard*, not guest memory translation. Do not use it to
+    synthesize concrete values or claim MIPS physical memory fidelity.
+    """
+    if type(address) is not int:
+        return None
+    if (0 <= address < _PS1_RAM_WINDOW or
+            0x80000000 <= address < 0x80000000 + _PS1_RAM_WINDOW or
+            0xa0000000 <= address < 0xa0000000 + _PS1_RAM_WINDOW):
+        return address & (_PS1_RAM_SIZE - 1)
+    return None
+
+
+def _may_write_replayed_code(address, width, base, image_length):
+    """Detect direct and RAM-mirrored writes into static guest code."""
+    if address < base + image_length and address + width > base:
+        return True
+    code_start = _ps1_ram_offset(base)
+    code_end = _ps1_ram_offset(base + image_length - 1)
+    if code_start is None or code_end is None:
+        return False
+    # A linear loaded image may itself cross the 2 MiB RAM mirror.
+    for byte in range(address, address + width):
+        physical = _ps1_ram_offset(byte)
+        if (physical is not None and
+                ((physical - code_start) % _PS1_RAM_SIZE) < image_length):
+            return True
+    return False
 
 
 def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
@@ -146,7 +180,7 @@ def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
             # static-image instruction decoding: execute() intentionally does
             # not fetch modified code. Even a same-value write is conservatively
             # treated as unverified (we do not compare private code bytes).
-            if addr < base + len(image) and addr + width > base:
+            if _may_write_replayed_code(addr, width, base, len(image)):
                 executed_code_write = True
             stored = regs[rt]    # before pending load retirement
             for j in range(width):
