@@ -1492,3 +1492,71 @@ reversed leave no detectable final difference. Original
 PlayStation hardware provenance, complete CPU/GTE emulation,
 full remote CI success and the native Nintendo Switch game
 remain **unverified**.
+
+## Stage 217 — attest every successful CPU store, not only final RAM
+
+Stage 216 compared the **net after-RAM image**, which cannot reveal
+same-value stores or transient modifications later overwritten.
+Stage 217 adds a concrete per-instruction CPU store event journal
+and an independent reference comparison for successful
+`SB`, `SH` and `SW` operations.
+
+The bounded PS1 MIPS executor now adds `store_accesses` to the
+private trace. Each successful store yields the fixed tuple
+`(instruction_pc, resolved_guest_address, byte_width, source_rt)`
+in exact execution order. Memory write failure does not emit an
+event. The older `store_addresses` array is preserved unchanged
+for compatibility with the existing matrix and dependency analyzers.
+The journal includes successful stores in control-flow delay slots.
+
+The new `tools/mips_store_event_sequence.py` validates an **entirely
+separate** user-supplied debugger log of `(pc, address, width)`
+events, with explicit `schema: wild-arms-ps1-store-sequence-v1`
+and order-sensitive events of widths 1, 2, and 4. It compares
+each event with the concrete MIPS replay including *duplicate*
+or *same-value* writes and temporarily modified bytes. A synthetic
+replay cannot derive an independent expected event log merely
+from the two RAM snapshots: such a log must be recorded by the
+original debugger if this optional test is to have any external
+meaning.
+
+The reference JSON accepts `expected_store_sequence`, with
+`require_store_sequence: true` activating a strict failure if the
+log is missing or if any store PC/address/width/ordering differs.
+`tools.audit_ps1_capture_pack` adds the explicit CLI arguments
+`--store-events /private/stores.json --require-store-sequence`.
+The packer never constructs this expectation from RAM and the
+numerical comparison continues to report separate nine-coefficient,
+CPU, return and final RAM results.
+
+The public `store_sequence` report is deliberately privacy-safe:
+it contains the number of successful stores, counts per byte width,
+expected event count, pass/fail status, and at most **32 indices**
+of mismatching events. Concrete guest PCs, store addresses, source
+registers and written values are **never** printed. An incomplete
+replay withholds mismatching event positions. In strict mode,
+`matches_complete_reference` requires the sequence agreement
+on top of previously enabled checks.
+
+For actual private debugging usage, read
+`docs/ps1-debugger-capture-pack.md` and
+`docs/ps1-matrix-reference-fixture.md`; keep the external log
+and snapshot outside the repository.
+
+**Local verification:** the reconstructed source tree
+`/mnt/data/wa217` passed **530/530** Python tests,
+adding **16** atomic store-event unit tests and **13** synthetic
+PS-X EXE/private CLI integration tests to 501 previous tests.
+`python -m compileall -q tools tests` also passed. The new
+source and two new test files matched their uploaded GitHub
+content blobs exactly, while the existing three integration
+files were patched and tests registered in CTest and
+`matrix-audits.yml`. Full remote Actions success and an
+authentic original PlayStation debugger write trace remain
+**unverified**.
+
+This mechanism checks executed CPU SB/SH/SW **within the bounded
+subset emulator**, not GTE writes, GPU activity, DMA traffic,
+peripheral effects or full PlayStation hardware behavior. A
+matching synthetic trace does not establish the native Switch
+remake as playable.
