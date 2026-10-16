@@ -20,6 +20,7 @@ try:
     from .mips_control_flow import execute, LOADS, STORES
     from .mips_matrix_memory import MappedMemory, MATRIX_OFFSETS, MATRIX_SIZE
     from .mips_entry_dependencies import read_before_write
+    from .mips_input_sensitivity import probe_input_registers
 except ImportError:
     from audit_original_nclip_winding import parse_exe
     from audit_gp0_rotation_matrix_builder import BUILDER, RETURN, CALL, jal_target
@@ -27,6 +28,7 @@ except ImportError:
     from mips_control_flow import execute, LOADS, STORES
     from mips_matrix_memory import MappedMemory, MATRIX_OFFSETS, MATRIX_SIZE
     from mips_entry_dependencies import read_before_write
+    from mips_input_sensitivity import probe_input_registers
 
 
 def instruction_family(word):
@@ -96,7 +98,7 @@ def inspect_caller(image, base, call=CALL, builder=BUILDER):
 def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
             matrix_address=0x80110000, explore=False, max_steps=512,
             initial_registers=None, frame_layout=False, call=CALL,
-            caller_replay=False):
+            caller_replay=False, input_sensitivity=False, sensitivity_delta=1):
     base, image = parse_exe(blob)
     if (start < base or end < start or end + 4 > base + len(image)
             or (start - base) % 4 or (end - base) % 4):
@@ -124,6 +126,8 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
         'original_game_state_known': False,
         'bit_exact_original_coefficients_proven': False,
     }
+    if input_sensitivity and not caller_replay:
+        raise ValueError('input sensitivity requires verified caller replay')
     if caller_replay:
         # Only run verified ADDIU a1,sp,16 + JAL builder callsites.
         if not result['caller_linkage']['linkage_confirmed']:
@@ -216,6 +220,34 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
         'all_matrix_slots_written': matrix_addresses.issubset(
             trace['store_addresses']),
     }
+    if input_sensitivity:
+        # Allocate fresh writable scratch memory for EVERY variation.
+        # The resulting private coefficient values never leave this scope.
+        def one_profile(register, amount):
+            scratch = MappedMemory().map_region(base, image, writable=False)
+            scratch.map_region(STACK_BASE, bytes(STACK_SIZE), writable=True)
+            initial = [0] * 32
+            initial[29] = stack_pointer
+            for index, value in initial_registers.items():
+                if index:
+                    initial[index] = value
+            if register is not None:
+                initial[register] = (initial[register] + amount) & 0xffffffff
+            trial = execute(image, base, replay_entry, scratch, initial,
+                            max_steps=max_steps, stop_pc=expected_stop)
+            returned = (trial['completed'] and trial['reason'] == 'stop_pc'
+                        and (call, 'jal', start) in trial['control_transfers']
+                        and (end, 'jr_ra', call + 8) in trial['control_transfers']
+                        and start in trial['visited_pcs'])
+            written = {addr - matrix_address for addr in trial['store_addresses']
+                       if addr in matrix_addresses}
+            coefficients = tuple(scratch.read(matrix_address + off, 2)
+                                 for off in MATRIX_OFFSETS)
+            return {'returned': returned, 'visited': trial['visited_pcs'],
+                    'written_offsets': written, 'coefficients': coefficients}
+
+        result['input_sensitivity'] = probe_input_registers(
+            one_profile, delta=sensitivity_delta)
     return result
 
 
@@ -227,13 +259,19 @@ def main():
     p.add_argument('--max-steps', type=int, default=512)
     p.add_argument('--frame-layout', action='store_true',
                    help='probe synthetic a1=sp+16 stack-resident matrix')
+    p.add_argument('--input-sensitivity', action='store_true',
+                   help='compare synthetic a0/a2/a3 changes without showing coefficients')
+    p.add_argument('--sensitivity-delta', type=int, default=1,
+                   help='synthetic input variation (default +1)')
     p.add_argument('--caller-replay', action='store_true',
                    help='execute JAL from caller; implies --explore and --frame-layout')
     args = p.parse_args()
     print(json.dumps(analyze(args.exe.read_bytes(), explore=args.explore,
                              max_steps=args.max_steps,
                              frame_layout=args.frame_layout,
-                             caller_replay=args.caller_replay), indent=2))
+                             caller_replay=args.caller_replay,
+                             input_sensitivity=args.input_sensitivity,
+                             sensitivity_delta=args.sensitivity_delta), indent=2))
 
 
 if __name__ == '__main__':
