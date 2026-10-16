@@ -27,7 +27,7 @@ def available_after_path(image, base, pcs):
     pending = None
     for pc in pcs:
         _, write, load = accesses(_word(image, base, pc))
-        if pending and pending != write and pending != load:
+        if pending and pending != write:
             ready.add(pending)
         if write:
             ready.add(write)
