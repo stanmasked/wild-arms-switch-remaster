@@ -48,7 +48,7 @@ class ContextSourcesTests(unittest.TestCase):
     def test_branch_likely_annuls_lookup_in_slot(self):
         # Not-taken path skips index 1. Taken path executes the load and
         # jumps to index 3, so the joined source is possible, not definite.
-        likely=(20<<26)|2
+        likely=(20<<26)|(8<<21)|(9<<16)|2
         r=fixture([likely,lw(8),0,sh(8,0)],(1,))
         self.assertEqual(r['candidate_stores'][0]['candidate_lookup_sources'],
                          [f'0x{START+4:08X}'])
