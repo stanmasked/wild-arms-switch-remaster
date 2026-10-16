@@ -26,6 +26,8 @@ def _control(word, pc, regs):
     imm = sign_extend16(word)
     target = u32(pc + 4 + (imm << 2))
     if op in (4, 5, 6, 7, 20, 21, 22, 23):
+        if op in (6, 7, 22, 23) and rt != 0:
+            raise ValueError('reserved rt bits in BLEZ/BGTZ encoding')
         if op in (4, 20): taken = regs[rs] == regs[rt]
         elif op in (5, 21): taken = regs[rs] != regs[rt]
         elif op in (6, 22): taken = s32(regs[rs]) <= 0
@@ -81,11 +83,14 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
     delayed_target = None
     visited = []
     writes = []
+    completed_transfers = []
+    pending_transfer = None
 
     def result(completed, reason):
         return {'completed': completed, 'reason': reason, 'pc': pc,
                 'executed': len(visited), 'visited_pcs': tuple(visited),
-                'store_addresses': tuple(writes), 'gpr': regs,
+                'store_addresses': tuple(writes),
+                'control_transfers': tuple(completed_transfers), 'gpr': regs,
                 'hi': hi, 'lo': lo, 'pending_load': pending_load}
 
     while True:
@@ -113,16 +118,29 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
             annul = False
             next_pc = u32(pc + 4)
             next_delayed_target = None
+            next_pending_transfer = None
             if control is not None:
                 target, annul, link = control
                 if link is not None:
                     updated = list(regs)
                     updated[link] = u32(pc + 8)
                     destination = link
+                if op == 0:
+                    kind = 'jr_ra' if (word & 63) == 8 and rs == 31 else (
+                        'jr' if (word & 63) == 8 else 'jalr')
+                elif op == 2:
+                    kind = 'j'
+                elif op == 3:
+                    kind = 'jal'
+                else:
+                    kind = 'branch'
+                descriptor = (pc, kind, target)
                 if annul:
                     next_pc = u32(pc + 8)
+                    completed_transfers.append(descriptor)
                 else:
                     next_delayed_target = target
+                    next_pending_transfer = descriptor
             elif op in LOADS or op in STORES:
                 addr = u32(regs[rs] + sign_extend16(word))
                 if op in LOADS:
@@ -145,9 +163,13 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
             if was_delay_slot:
                 next_pc = delayed_target
                 next_delayed_target = None
+                if pending_transfer is not None:
+                    completed_transfers.append(pending_transfer)
+                next_pending_transfer = None
             visited.append(pc)
             if store_addr is not None:
                 writes.append(store_addr)
             pc, delayed_target = next_pc, next_delayed_target
+            pending_transfer = next_pending_transfer
         except (ValueError, OverflowError) as exc:
             return result(False, type(exc).__name__)
