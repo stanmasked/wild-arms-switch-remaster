@@ -49,13 +49,13 @@ def _alu(word, regs, hi, lo):
                     a if fn == 19 else lo)
         if fn == 3 and sa == 12 and rs == 0:
             return rd, Node('sra12', (b,)), hi, lo
-        if fn in (32, 33) and sa == 0:
+        if fn == 33 and sa == 0:  # ADDU: wraps without trapping on overflow
             if a == ZERO:
                 return rd, b, hi, lo
             if b == ZERO:
                 return rd, a, hi, lo
             return rd, Node('add', (a, b)), hi, lo
-        if fn in (0, 2, 3, 4, 6, 7, 34, 35, 36, 37, 38, 39, 42, 43):
+        if fn in (0, 2, 3, 4, 6, 7, 32, 34, 35, 36, 37, 38, 39, 42, 43):
             return rd, Node('other', (a, b)), hi, lo
         return None, None, hi, lo
     if op == 3:
