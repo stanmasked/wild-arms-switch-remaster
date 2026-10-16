@@ -121,3 +121,52 @@ in the packaging tool when both authentic stop and post-return
 register state are available. These comparisons validate only
 consistency with **supplied** reference data; PS1 hardware origin
 and Nintendo Switch native execution remain unverified.
+
+## Stage 216 — optional full after-RAM block-hash reference
+
+The private reference JSON can include:
+
+```json
+{
+  "require_final_memory_state": true,
+  "expected_final_memory_state": {
+    "address": 2147483648,
+    "size": 2097152,
+    "block_size": 4096,
+    "block_sha256": ["<one 64-character lowercase SHA-256 per block>"],
+    "expected_changed_bytes_outside_matrix": 0
+  }
+}
+```
+
+These illustrative numbers are **not** a valid reference: a
+2-MiB export requires exactly **512 real block digests**. Use
+`tools.audit_ps1_capture_pack --require-final-memory-state`
+to derive this object privately from *actual* equal-length before
+and after raw RAM exports rather than generating it by hand.
+The packed format stores digests, not the after-RAM bytes. The
+initial `memory_segments` must still provide the entire before
+RAM range; unmapped bytes are not assumed to be zero.
+
+The verifier compares exact **after-RAM contents** in the selected
+guest virtual interval in 4096-byte blocks. Its public
+`final_memory_state` report includes only
+`comparison_performed`, `matches_reference`,
+`checked_block_count`, `mismatching_block_indices`,
+counts of changed bytes **outside the 18 matrix bytes**, and a
+change-count equality boolean. Raw bytes, addresses and SHA-256
+values stay private. No report of mismatching blocks is emitted
+if the guest fails to reach the stop PC.
+
+An absent reference is permitted for legacy synthetic tests
+unless `require_final_memory_state` is explicitly true.
+Malformed or incomplete supplied reference data always fails
+validation, even when strict mode is off. With strict mode on,
+`matches_complete_reference` and the CLI exit code require
+full-RAM equality **in addition to** the nine coefficient check
+and any enabled CPU/JR requirements.
+
+This checks only **net resulting RAM bytes**: same-value stores,
+transient writes that are later undone, unmodeled peripherals and
+DMA cannot be inferred from snapshots. No real PS1 hardware
+capture has been independently authenticated by this feature.
