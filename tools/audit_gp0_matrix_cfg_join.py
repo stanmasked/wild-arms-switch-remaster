@@ -70,21 +70,27 @@ def analyze(image, base, start=BUILDER, end=RETURN, lookups=TABLE_LOAD_PCS):
         edges.setdefault(a,set()).add(b)
         incoming.setdefault(b,set()).add(a)
     zero = tuple(frozenset() for _ in range(34))
-    states = {start:zero}
+    states = {start: zero}
+    outputs = {}
     queue = deque([start])
-    visits = 0
+    queued = {start}
     while queue:
         pc = queue.popleft()
-        visits += 1
-        word = struct.unpack_from('<I',image,pc-base)[0]
-        after = transfer(word,pc,states[pc],lookups)
-        for dst in sorted(edges.get(pc,())):
-            old = states.get(dst)
-            merged = (after if old is None else
-                      tuple(x|y for x,y in zip(old,after)))
-            if old != merged:
-                states[dst] = merged
-                queue.append(dst)
+        queued.discard(pc)
+        word = struct.unpack_from('<I', image, pc-base)[0]
+        after = transfer(word, pc, states[pc], lookups)
+        if outputs.get(pc) == after:
+            continue
+        outputs[pc] = after
+        for dst in sorted(edges.get(pc, ())):
+            predecessors = [outputs[p] for p in incoming[dst] if p in outputs]
+            combined = tuple(frozenset().union(*(v[i] for v in predecessors))
+                             for i in range(34))
+            if states.get(dst) != combined:
+                states[dst] = combined
+                if dst not in queued:
+                    queue.append(dst)
+                    queued.add(dst)
     stores = []
     for pc in sorted(states):
         word = struct.unpack_from('<I',image,pc-base)[0]
