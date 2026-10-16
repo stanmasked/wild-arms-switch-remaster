@@ -68,11 +68,16 @@ def analyze(image, base, start=BUILDER, end=RETURN):
         if slot > end:
             unresolved.append({'pc': f'0x{pc:08X}', 'reason': 'delay_slot_out_of_range'})
             continue
+        if kind in ('branch_likely', 'unsupported_regimm'):
+            # The delay slot can be annulled (or the encoding is unsupported).
+            # Do not assert unconditional execution of that slot.
+            unresolved.append({'pc': f'0x{pc:08X}', 'reason': kind + '_requires_semantics'})
+            continue
         edges.append({'from': f'0x{pc:08X}', 'to': f'0x{slot:08X}', 'kind': 'delay_slot'})
         if direct_successors(words[slot], slot)[2]:
             unresolved.append({'pc': f'0x{pc:08X}', 'reason': 'control_in_delay_slot_unsupported'})
             continue
-        if kind in ('indirect', 'branch_likely', 'call', 'unsupported_regimm'):
+        if kind in ('indirect', 'call'):
             unresolved.append({'pc': f'0x{pc:08X}', 'reason': kind + '_requires_semantics'})
             continue
         for target in targets:
