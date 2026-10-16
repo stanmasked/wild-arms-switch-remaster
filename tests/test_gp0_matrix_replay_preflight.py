@@ -330,6 +330,45 @@ class ReplayPreflightTests(unittest.TestCase):
         self.assertFalse(trace['call_boundary']['builder_entry_reached'])
         self.assertEqual(trace['call_boundary']['builder_inputs_unresolved'],[])
 
+    def test_caller_static_sources_extended_window(self):
+        # a0 is derived from incoming a2, eight instructions before the JAL.
+        call=BASE+32
+        target=BASE+48
+        jal=(3<<26)|((target>>2)&0x03ffffff)
+        words=[ins(9,6,4,3),0,0,0,ins(9,29,5,16),0,0,0,
+               jal,0,0,0,(31<<21)|8,0]
+        report=analyze(fixture(words),start=target,end=target+4,
+                       call=call,caller_lookback=8)
+        self.assertTrue(report['caller_linkage']['linkage_confirmed'])
+        result=report['caller_argument_sources']
+        self.assertTrue(result['window_usable'])
+        self.assertFalse(result['runtime_path_confirmed'])
+        byreg={item['gpr']:item for item in result['arguments']}
+        self.assertEqual(byreg[4]['incoming_gprs'],[6])
+        self.assertEqual(byreg[5]['source_kind'],'stack_pointer_derived')
+        self.assertEqual(byreg[5]['incoming_gprs'],[29])
+        self.assertNotIn('constant',str(result))
+
+    def test_caller_default_window_does_not_guess_earlier_a0_setup(self):
+        call=BASE+32
+        target=BASE+48
+        jal=(3<<26)|((target>>2)&0x03ffffff)
+        words=[ins(9,6,4,3),0,0,0,ins(9,29,5,16),0,0,0,
+               jal,0,0,0,(31<<21)|8,0]
+        report=analyze(fixture(words),start=target,end=target+4,call=call)
+        byreg={item['gpr']:item for item in report['caller_argument_sources']['arguments']}
+        self.assertEqual(byreg[4]['source_kind'],'incoming_gpr')
+        self.assertEqual(byreg[4]['incoming_gprs'],[4])
+
+    def test_static_window_rejects_unsupported_control(self):
+        call=BASE+16
+        target=BASE+32
+        jal=(3<<26)|((target>>2)&0x03ffffff)
+        words=[ins(9,29,5,16),ins(4,0,0,1),0,0,jal,0,0,0,0]
+        report=analyze(fixture(words),start=target,end=target,call=call)
+        self.assertFalse(report['caller_argument_sources']['window_usable'])
+        self.assertEqual(report['caller_argument_sources']['arguments'],[])
+
     def test_trace_bounded_loop(self):
         jump_to_self = (2<<26) | ((BASE>>2)&0x03ffffff)
         r = analyze(fixture([jump_to_self,0,0]), start=BASE, end=BASE+8,
