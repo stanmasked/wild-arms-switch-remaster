@@ -61,6 +61,33 @@ class ReplayPreflightTests(unittest.TestCase):
             analyze(blob, start=BASE, end=BASE+4, explore=True,
                     matrix_address=BASE)
 
+    def test_synthetic_stack_prologue_and_matrix_write(self):
+        # ADDIU sp,-16; SW t1,12(sp); LW t2,12(sp); NOP; SH t2,0(a1)
+        words = [ins(9,29,29,-16), ins(43,29,9,12), ins(35,29,10,12),
+                 0, ins(41,5,10,0), 0]
+        r = analyze(fixture(words), start=BASE, end=BASE+20,
+                    explore=True, initial_registers={9:0x12345678})
+        tr = r['exploratory_trace']
+        self.assertTrue(tr['reached_return_site'])
+        self.assertTrue(tr['synthetic_stack_mapped'])
+        self.assertEqual(tr['distinct_matrix_slots_written'], 1)
+        self.assertEqual(tr['matrix_slot_store_count'], 1)
+        self.assertEqual(tr['executed_instruction_families']['aligned_store'], 2)
+        self.assertFalse(tr['return_instruction_executed'])
+        self.assertNotIn('gpr', tr)
+
+    def test_dynamic_halt_family_for_unsupported_cop(self):
+        tr = analyze(fixture([ins(18),0]), start=BASE,
+                     end=BASE+4, explore=True)['exploratory_trace']
+        self.assertEqual(tr['halt_instruction_family'], 'coprocessor')
+        self.assertEqual(tr['halt_category'], 'unsupported_instruction')
+
+    def test_supported_load_can_fail_from_unmapped_memory(self):
+        tr = analyze(fixture([ins(35,8,9,0),0]), start=BASE,
+                     end=BASE+4, explore=True)['exploratory_trace']
+        self.assertEqual(tr['halt_instruction_family'], 'aligned_load')
+        self.assertEqual(tr['halt_category'], 'memory_access_or_alignment')
+
     def test_trace_bounded_loop(self):
         jump_to_self = (2<<26) | ((BASE>>2)&0x03ffffff)
         r = analyze(fixture([jump_to_self,0,0]), start=BASE, end=BASE+8,
