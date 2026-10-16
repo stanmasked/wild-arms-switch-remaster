@@ -778,3 +778,77 @@ synthetic routine does not prove cycle-accurate PS1 hardware
 emulation or a working Nintendo Switch native game. Full remote
 GitHub Actions success, original-game coefficient equality, and
 Switch console execution remain unverified.
+
+## Stage 207 — classify the *executed* matrix arithmetic schedule
+
+The optional exploratory replay now includes
+`exploratory_trace.matrix_operation_schedule`, produced by the
+new host analyzer `tools/mips_matrix_operation_schedule.py`.
+This module interprets **only instructions actually executed** by the
+bounded MIPS runner (plus its verified successful LH/LW and SH/SW/SB
+memory events), constructing private expression shapes for the
+registers and HI/LO values.
+
+For each of the nine fixed 16-bit coefficient slots it reports one
+of five safe labels:
+
+- `single_product_sra12` — a signed `MULT → MFLO → SRA 12 → SH`;
+- `shift_after_three_products` — three signed `MULT → MFLO`
+  products combined with `ADDU` **before** a final `SRA 12`;
+- `shift_each_of_three_products` — each of three signed products
+  separately receives `SRA 12` before a sequence of `ADDU`s;
+- `unclassified` — a final SH executed, but its value is not
+  proven to match any of the three recognized instruction structures;
+- `not_written` — no longer has a valid complete final SH record.
+
+Unlike mathematical formula guessing, this classifies the **observed
+MIPS instruction order**. It explicitly distinguishes `MULT` from
+`MULTU` and nontrapping `ADDU` from overflow-trapping `ADD`:
+those differing opcodes are never silently called the same known
+schedule. It mirrors one-instruction PS1 load delay and preserves
+memory-origin shapes through matched byte-level store/reload events.
+An overlapping `SB` or `SW` clears a previous SH classification,
+and subsequent SH writes replace earlier ones.
+
+The JSON includes aggregate counts, each fixed slot's label and
+number of proven signed-MULT terms, whether the bounded guest
+execution completed, and these explicit limits:
+
+```json
+{
+  "synthetic_inputs_only": true,
+  "original_builder_schedule_identified": false,
+  "bit_exact_ps1_equivalence_proven": false,
+  "private_values_emitted": false
+}
+```
+
+It contains **no opcode words, register values, private addresses,
+input angles, trig-table indices, or output coefficients**.
+Recognition of a synthetic execution path is not a proof that this
+is the original Wild Arms gameplay schedule. A real extracted user
+EXE and validated calling state are still necessary.
+
+Example private diagnostic invocation:
+
+```sh
+python3 -m tools.audit_gp0_matrix_replay_preflight \
+  /private/path/WILDARMS.EXE --caller-replay --max-steps 4096
+```
+
+**Test result:** Seventeen new host analyzer tests cover all three
+nine-slot schedules, correct last-write wins behavior, signed versus
+unsigned multiplication, ADD versus ADDU, partial byte/word
+overwrites, load-delay hazards, corrupted memory events and
+fail-closed unrecognized code. Six more synthetic PS-X EXE
+integration tests verify end-to-end slot classification, exclusive
+`stop_pc` semantics, step-limit uncertainty and privacy-safe
+reports. In the locally reconstructed `/mnt/data/wa207` subset,
+**250/250 unit tests** and Python `compileall` succeeded. The
+three new files were verified to have identical Git blob hashes to
+the local copies used in these tests. The suites have been
+registered in both host CTest and GitHub Actions.
+
+**Unverified:** full repository CI on the remote GitHub runner,
+matrix equivalence with actual `WILDARMS.EXE`, actual PlayStation
+input angles and a playable native Nintendo Switch game.
