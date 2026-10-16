@@ -76,3 +76,16 @@ Synthetic tests assert that a COP2 conditional branch does not emit
 linear or fabricated delay-slot edges. GTE branch predicates and full
 COP instruction semantics are not modelled yet. Commit of tests is not
 a verified successful CI run.
+
+## Stage 181: realistic branch fixtures
+
+Previously several synthetic two-path tests encoded `BEQ $zero,$zero`,
+which is unconditionally taken on MIPS hardware even though the
+conservative CFG explores both edges. Their shared `beq()` fixtures
+now compare `$t0` and `$t1` instead, so both outcomes can genuinely be
+possible without knowing runtime register values.
+
+The context CFG, context provenance, and legacy join test suites now
+share this fixture convention. The current graph still treats branch
+predicates symbolically, and may contain infeasible paths elsewhere.
+This change has been committed but CI success remains unverified.
