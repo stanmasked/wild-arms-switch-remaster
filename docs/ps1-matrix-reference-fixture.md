@@ -265,3 +265,47 @@ never reveals values or guest addresses.
 
 Original PS1 debugger provenance and hardware equivalence
 cannot be independently proven by this synthetic verifier.
+
+## Stage 219 — independent intermediate arithmetic-event reference
+
+The private snapshot may additionally include
+**require_arithmetic_events: true** and a full
+**expected_arithmetic_events** object in the following form:
+
+    {
+      "require_arithmetic_events": true,
+      "expected_arithmetic_events": {
+        "schema": "wild-arms-ps1-arithmetic-events-v1",
+        "events": [
+          {
+            "pc": "0x80010000",
+            "kind": "mult",
+            "result_u32": "0x00200000",
+            "secondary_u32": "0x00000000"
+          }
+        ]
+      }
+    }
+
+This is **only illustrative synthetic data**, not a PS1 capture.
+The exact ordered list must be exported independently from the
+original game's debugger. It includes all successfully executed
+MULT/MULTU, MFHI/MFLO, SRA/SRAV and ADD/ADDU results. For signed
+or unsigned multiplication, result_u32 denotes **LO** and
+secondary_u32 denotes **HI**; for the other instruction kinds
+secondary_u32 must be null. Result values must be valid unsigned
+32-bit words and PCs must be aligned.
+
+When require_arithmetic_events is true, the fixture is rejected
+if expected_arithmetic_events is absent. A malformed optional
+log is also rejected. With the strict option, all arithmetic
+events must match by **executed PC, operation kind, primary value
+and secondary HI value** for matches_complete_reference to
+become true, even if the nine matrix values already match.
+A non-strict optional reference produces diagnostics without
+altering the overall result.
+
+The printed arithmetic_events summary contains counts and
+bounded mismatching **event indices**, never raw values or PCs.
+Only the private owner-restricted snapshot contains complete
+numeric reference data. Capture authenticity is not attested.
