@@ -69,3 +69,19 @@ These safeguards deliberately trade completeness for reduced false paths.
 They do not yet certify the entire MIPS CFG or any original rotation
 coefficient values. Tests are committed, but their execution in CI remains
 unverified.
+
+## Stage 168: annulled delay-slot safeguards
+
+MIPS branch-likely instructions (opcodes 20–23) can annul their delay
+slot on the not-taken path. The old graph unconditionally included an
+edge from the branch to its delay slot, creating false may-dependencies.
+
+The CFG now emits **no executable edge** for unsupported branch-likely
+or unsupported REGIMM forms, and records the corresponding unresolved
+transfer. This is intentionally incomplete: it avoids incorrectly
+asserting unconditional slot execution but does not prove reachability
+for a taken path. Two synthetic regression cases cover these edges.
+
+No original game executable or trigonometric samples are committed.
+The GitHub changes are written, but a successful native CI run is
+not yet verified.
