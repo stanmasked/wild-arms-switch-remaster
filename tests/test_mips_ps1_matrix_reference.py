@@ -27,6 +27,7 @@ def fixture(blob, *, matrix=MATRIX, values=None, source='synthetic'):
     return {'schema':SCHEMA,'source':source,'exe_sha256':hashlib.sha256(blob).hexdigest(),
             'entry_pc':f'0x{BASE:08x}', 'stop_pc':BASE+len(blob)-2048,
             'matrix_address':matrix,'gpr':regs,'hi':0,'lo':0,
+            'pending_load':None,'in_branch_delay_slot':False,
             'expected_matrix_s16': ([4096]*9 if values is None else values),
             'memory_segments':[{'address':matrix,'data_hex':'00'*18}]}
 
