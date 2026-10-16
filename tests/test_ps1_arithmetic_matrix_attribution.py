@@ -1,5 +1,6 @@
 """End-to-end synthetic PS-X EXE reference attribution of mismatched arithmetic."""
 import json
+import struct
 from pathlib import Path
 import tempfile
 import contextlib
@@ -10,8 +11,8 @@ from tools.mips_ps1_matrix_reference import compare
 from tools.audit_ps1_matrix_reference import main as verify_cli
 from tools.mips_ps1_capture_pack import pack
 from tools.audit_ps1_capture_pack import main as pack_cli
-from tests.test_ps1_arithmetic_capture import synthetic_builder, capture_inputs
-from tests.test_mips_ps1_matrix_reference import MATRIX
+from tests.test_ps1_arithmetic_capture import synthetic_builder, capture_inputs, reg
+from tests.test_mips_ps1_matrix_reference import BASE, MATRIX, op, fixture
 
 
 class AttributionIntegrationTests(unittest.TestCase):
@@ -129,6 +130,37 @@ class AttributionIntegrationTests(unittest.TestCase):
             self.assertFalse(report['matches_complete_reference'])
             self.assertNotIn('result_u32',output.getvalue())
             self.assertTrue(files[6].exists())
+
+    def test_pointer_ambiguity_does_not_change_optional_numeric_verdict(self):
+        words=[reg(33,rs=8,rt=9,rd=5)]
+        words += [op(41,5,0,2*i) for i in range(9)]
+        payload=struct.pack('<%dI'%len(words),*words)
+        header=bytearray(2048)
+        header[:8]=b'PS-X EXE'
+        struct.pack_into('<II',header,0x18,BASE,len(payload))
+        blob=bytes(header)+payload
+        reference=fixture(blob,values=[0]*9)
+        reference['gpr'][8]=MATRIX
+        reference['expected_arithmetic_events']={
+            'schema':'wild-arms-ps1-arithmetic-events-v1',
+            'events':[{'pc':BASE,'kind':'addu','result_u32':MATRIX+2,
+                       'secondary_u32':None}]}
+        optional=compare(blob,reference)
+        self.assertTrue(optional['matches_supplied_nine_coefficients'])
+        self.assertTrue(optional['matches_complete_reference'])
+        self.assertFalse(optional['arithmetic_events']['matches_reference'])
+        attribution=optional['arithmetic_matrix_attribution']
+        self.assertFalse(attribution['attribution_performed'])
+        self.assertEqual(attribution['reason_code'],'mismatch_dependent_execution_path')
+        self.assertTrue(attribution['mismatch_dependent_address_observed'])
+        self.assertEqual(attribution['candidate_affected_slot_indices'],[])
+        self.assertFalse(attribution['private_values_emitted'])
+        self.assertNotIn(hex(MATRIX),str(optional))
+        reference['require_arithmetic_events']=True
+        strict=compare(blob,reference)
+        self.assertFalse(strict['matches_complete_reference'])
+        self.assertTrue(strict['matches_supplied_nine_coefficients'])
+        self.assertFalse(strict['arithmetic_matrix_attribution']['attribution_performed'])
 
     def test_conservative_labels_not_hardware_proof(self):
         blob,fixture,events=synthetic_builder()
