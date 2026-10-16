@@ -444,3 +444,30 @@ overwrite before a branch, back-to-back loads, superseded pending loads,
 arithmetic in a branch delay slot, annulled branch-likely arithmetic,
 writes to executable bytes, and same-value code writes. Independent
 original PS1 debugger traces are still required for reference claims.
+
+
+## Stage 224 — RAM-mirrored executable write attribution guard
+
+The stage 223 executable-write guard now recognizes the common PS1
+2 MiB main-RAM physical mirrors inside the first 8 MiB of the
+KUSEG, KSEG0 and KSEG1 RAM address windows. For example, writing at
+the KSEG1 mirror of a KSEG0-loaded code byte is treated as a potential
+write into the executable image, even though the current
+`MappedMemory` test interpreter does **not** implement hardware RAM
+aliasing or refetch updated guest instructions.
+
+`guest_code_write_unmodeled` and
+`executed_code_write_observed: true` are emitted only by the optional
+*arithmetic dependency attribution* report, and its slot conclusions
+remain withheld. The raw virtual/physical addresses, original program
+bytes and arithmetic values are **not** published. The existing
+nine-coefficient numeric comparison and strict reference requirements
+are unchanged, but a numeric match is **not proof** that mirrored
+writes were simulated accurately.
+
+The regression suite adds four synthetic cases for KSEG1 code aliases,
+a 2 MiB RAM mirror within the 8 MiB mapped window, a KUSEG code alias,
+and an unrelated nearby KSEG1 memory store that must **not** suppress
+valid attribution. The guard is deliberately conservative. It does not
+add PS1 DMA, RAM alias coherence, cache behavior, code invalidation,
+hardware-accurate CPU timing, or a Nintendo Switch executable.
