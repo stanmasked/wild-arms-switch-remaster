@@ -40,19 +40,32 @@ def analyze(image, base, start=BUILDER, end=RETURN, lookups=TABLE_LOAD_PCS):
     entry=f'0x{start:08X}'
     empty=tuple(frozenset() for _ in range(34))
     states={entry: empty}
+    outputs={}
     queue=deque([entry])
+    queued={entry}
     while queue:
         node=queue.popleft()
+        queued.discard(node)
         pc=pc_of(node)
         word=struct.unpack_from('<I', image, pc-base)[0]
         next_state=transfer(word, pc, states[node], lookups)
+        if outputs.get(node)==next_state:
+            continue
+        outputs[node]=next_state
         for dst in sorted(outgoing.get(node, ())):
-            previous=states.get(dst)
-            combined=(next_state if previous is None else
-                      tuple(a|b for a,b in zip(previous,next_state)))
-            if combined!=previous:
+            # Recompute from each predecessor's current OUT state. Merely
+            # unioning into the old IN state retains obsolete provenance
+            # when a register write kills a source on a CFG loop.
+            predecessors=[outputs[p] for p in incoming[dst] if p in outputs]
+            combined=tuple(frozenset().union(*(v[i] for v in predecessors))
+                           for i in range(34))
+            if dst==entry:
+                combined=tuple(a|b for a,b in zip(combined,empty))
+            if states.get(dst)!=combined:
                 states[dst]=combined
-                queue.append(dst)
+                if dst not in queued:
+                    queue.append(dst)
+                    queued.add(dst)
     stores=[]
     for node in sorted(states):
         pc=pc_of(node)
