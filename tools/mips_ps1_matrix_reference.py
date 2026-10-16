@@ -19,6 +19,7 @@ try:
     from .mips_final_memory_state import decode as decode_final_ram, compare as compare_final_ram, snapshot as memory_snapshot
     from .mips_store_event_sequence import decode as decode_store_events, compare as compare_store_events
     from .mips_store_value_sequence import decode as decode_store_values, compare as compare_store_values, project_sites as store_value_sites
+    from .mips_arithmetic_event_sequence import decode as decode_arithmetic, compare as compare_arithmetic
 except ImportError:
     from audit_original_nclip_winding import parse_exe
     from mips_control_flow import execute, STORES
@@ -28,6 +29,7 @@ except ImportError:
     from mips_final_memory_state import decode as decode_final_ram, compare as compare_final_ram, snapshot as memory_snapshot
     from mips_store_event_sequence import decode as decode_store_events, compare as compare_store_events
     from mips_store_value_sequence import decode as decode_store_values, compare as compare_store_values, project_sites as store_value_sites
+    from mips_arithmetic_event_sequence import decode as decode_arithmetic, compare as compare_arithmetic
 
 SCHEMA = 'wild-arms-ps1-matrix-reference-v1'
 _MAX_PATCHES = 256
@@ -68,6 +70,13 @@ def _decode_reference(fixture, exe_sha):
                            ('entry_pc', 'stop_pc', 'matrix_address'))
     if start & 3 or stop & 3 or matrix & 1 or matrix > 0xffffffff - 17:
         raise ValueError('unaligned reference entry/stop/matrix pointer')
+    strict_arithmetic = fixture.get('require_arithmetic_events', False)
+    if type(strict_arithmetic) is not bool:
+        raise ValueError('invalid arithmetic event requirement')
+    arithmetic = (decode_arithmetic(fixture['expected_arithmetic_events'])
+                  if 'expected_arithmetic_events' in fixture else None)
+    if strict_arithmetic and arithmetic is None:
+        raise ValueError('required independent arithmetic event reference missing')
     strict_values = fixture.get('require_store_values', False)
     if type(strict_values) is not bool:
         raise ValueError('invalid strict store-value requirement')
@@ -156,7 +165,9 @@ def _decode_reference(fixture, exe_sha):
             'require_store_sequence':strict_stores,
             'expected_store_sequence':store_sequence,
             'require_store_values':strict_values,
-            'expected_store_values':store_values}
+            'expected_store_values':store_values,
+            'require_arithmetic_events':strict_arithmetic,
+            'expected_arithmetic_events':arithmetic}
 
 
 def _prepare_memory(image, base, segments):
@@ -270,6 +281,10 @@ def compare(blob, fixture):
     values_report = (compare_store_values(trace, capture['expected_store_values'],
         guest_stopped_at_expected_pc=bool(at_stop))
         if capture['expected_store_values'] is not None else None)
+    arithmetic_report = (compare_arithmetic(
+        trace, capture['expected_arithmetic_events'],
+        guest_stopped_at_expected_pc=bool(at_stop))
+        if capture['expected_arithmetic_events'] is not None else None)
     eligible = bool(at_stop and all(final_sh) and
                     (not capture['require_completed_jr_ra'] or
                      return_boundary['verified_complete_jr_ra_return']))
@@ -285,6 +300,7 @@ def compare(blob, fixture):
     final_ram_match = bool(final_ram and final_ram['matches_reference'])
     store_match = bool(store_report and store_report['matches_reference'])
     value_match = bool(values_report and values_report['matches_reference'])
+    arithmetic_match = bool(arithmetic_report and arithmetic_report['matches_reference'])
     return {
         'reference_schema': SCHEMA,
         'sha256_match': True,
@@ -297,6 +313,8 @@ def compare(blob, fixture):
         'strict_final_memory_state_required': capture['require_final_memory_state'],
         'strict_store_sequence_required': capture['require_store_sequence'],
         'strict_store_values_required': capture['require_store_values'],
+        'strict_arithmetic_events_required': capture['require_arithmetic_events'],
+        'arithmetic_events': arithmetic_report,
         'store_values': values_report,
         'store_sequence': store_report,
         'final_memory_state': final_ram,
@@ -305,7 +323,8 @@ def compare(blob, fixture):
             (not capture['require_final_cpu_state'] or final_cpu_match) and
             (not capture['require_final_memory_state'] or final_ram_match) and
             (not capture['require_store_sequence'] or store_match) and
-            (not capture['require_store_values'] or value_match)),
+            (not capture['require_store_values'] or value_match) and
+            (not capture['require_arithmetic_events'] or arithmetic_match)),
         'return_boundary': return_boundary,
         'guest_stop_reason': trace['reason'] if trace['reason'] in _SAFE_REASONS else 'other',
         'final_halfword_slots_written_by_sh':sum(final_sh),
