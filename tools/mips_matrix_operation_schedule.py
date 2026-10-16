@@ -168,8 +168,7 @@ def summarize(image, base, trace, matrix_address, *, matrix_slots=9):
                     slots[index] = written if op == 41 and address == slot else None
         else:
             dst, value, hi, lo = _alu(word, regs, hi, lo)
-        if pending is not None and pending[0] != dst and (
-                next_pending is None or pending[0] != next_pending[0]):
+        if pending is not None and pending[0] != dst:
             regs[pending[0]] = pending[1]
         if dst:
             regs[dst] = value
