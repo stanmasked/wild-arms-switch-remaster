@@ -1618,3 +1618,60 @@ No independent authentic `WILDARMS.EXE` store-value capture,
 PS1 console equivalence, or native Nintendo Switch game
 execution is established here. The user-owned captures and
 their store-value traces must remain private.
+
+## Stage 219 — independently attest intermediate MIPS matrix arithmetic
+
+Stage 218 compares the exact values of successful SB/SH/SW operations,
+but an incorrect intermediate multiply or shift could still be
+replaced before reaching an SH. Stage 219 adds a private successful
+**arithmetic_accesses** event stream to the bounded MIPS guest runner.
+For each relevant successfully executed integer instruction it
+records the executed PC, operation kind, exact 32-bit numeric
+result and, for MULT/MULTU, the additional 32-bit HI result.
+The operation classes are MULT, MULTU, MFHI, MFLO, SRA, SRAV,
+ADD and ADDU. The trace retains repetitions and instructions
+executed within return delay slots. A trapping ADD instruction
+that faults does not contribute a successful result event.
+
+The new independent module
+*tools/mips_arithmetic_event_sequence.py* validates an optional
+private **wild-arms-ps1-arithmetic-events-v1** debugger log and
+compares every event to the runtime trace. Missing, misordered,
+wrong-PC/wrong-kind, wrong-primary-result and wrong-HI-result
+events receive distinct privacy-safe mismatch categories. The
+report includes counts by operation class and up to 32 **indices**
+of mismatching events. No guest PC, register value, HI/LO product
+or memory content is returned in public JSON.
+
+The reference JSON now optionally carries
+**expected_arithmetic_events** and
+**require_arithmetic_events: true**; the latter requires the
+log to be supplied independently and to match exactly before
+**matches_complete_reference** can be true. It does not redefine
+the nine-coefficient-only result. The capture packer accepts
+**--arithmetic-events /private/arithmetic.json** and
+**--require-arithmetic-events**, and never derives the
+expectation from the two RAM snapshots or the subset interpreter.
+
+A synthetic nine-coefficient Q12 fixture uses nine independent
+sequences of MULT, MFLO, SRA and ADDU. The 36 expected internal
+results and all nine SH coefficients match an independently
+authored numerical oracle. Altering an expected intermediate
+result or HI half causes the strict arithmetic check to fail,
+even while all nine final coefficients still match. Return
+delay-slot arithmetic, signed/unsigned multiplication, load
+delay, overflow-trapping ADD and privacy-safe failure cases are
+also covered by tests.
+
+**Verification:** In the locally reconstructed source tree
+*/mnt/data/wa219*, **600/600** Python tests passed (564 earlier,
+21 new arithmetic event unit tests, and 15 PS-X EXE/capture/CLI
+integration tests). Python *compileall* passed. New source and
+tests are stored in GitHub, with suites registered in CTest
+and the matrix-audits GitHub Actions workflow.
+
+**Limitations:** the synthetic fixtures do not reproduce or
+authenticate any original Wild Arms gameplay. Genuine original
+WILDARMS.EXE plus a real independently captured PlayStation
+arithmetic trace remain unavailable for comparison. Full remote
+GitHub CI and a playable native Switch remake are unverified.
