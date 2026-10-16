@@ -852,3 +852,82 @@ registered in both host CTest and GitHub Actions.
 **Unverified:** full repository CI on the remote GitHub runner,
 matrix equivalence with actual `WILDARMS.EXE`, actual PlayStation
 input angles and a playable native Nintendo Switch game.
+
+## Stage 208 — original matrix builder opcode evidence, without gameplay-state guesses
+
+The default matrix preflight now includes **static opcode evidence** for
+the known Wild Arms builder interval **`0x800B7118–0x800B739C`**,
+inclusive. This interval contains `(0x800B739C-0x800B7118)/4+1 = 162`
+four-byte instruction words; the **instruction immediately after
+`JR $ra` is inspected separately as its return delay slot**.
+
+The new `tools/mips_builder_opcode_evidence.py` inspects only loaded
+PS-X EXE machine words. Its result is available in
+`builder_opcode_evidence`, including:
+
+- separate static counts for `MULT/MULTU`, `MFLO/MFHI`,
+  `SRA 12` versus other right shifts, `ADD` versus `ADDU`,
+  `SLL 2`, `ANDI 0x0FFF`, `LH/LHU/LW`, `SH/SB/SW`,
+  jumps and other opcodes;
+- syntactic `SH` references to nine possible output halfwords
+  at offsets `0,2,...,16` relative to `$a1`, including repeated
+  write sites and nonmatching `SH` instructions;
+- potential local arithmetic shapes for the three schedules
+  verified with **synthetic** MIPS data in stages 206–207:
+  `single_product_sra12`, `shift_after_three_products`,
+  and `shift_each_of_three_products`;
+- number of known original `LW` lookup instruction sites
+  (`0x800B7140`, `0x800B7168`, `0x800B71A4`,
+  `0x800B71CC`, `0x800B7230`, `0x800B7264`)
+  whose opcode still matches `LW`;
+- whether the chosen end word encodes an exact `JR $ra`,
+  whether the next 4-byte return delay slot is mapped, and
+  whether that delay slot contains a syntactic matrix `SH`.
+
+Potential arithmetic motifs are strictly **straight-line local**
+observations. Conditional branches, jumps, their delay slots, and
+unmodeled instructions (especially `COP2`) invalidate accumulated
+register/HI/LO symbolic evidence. The recognizer respects the
+one-instruction MIPS load delay and does not confuse `MULT`
+with `MULTU`, or `ADDU` with overflow-trapping `ADD`.
+A matrix `SH` in a branch delay slot is counted separately and
+never claimed as a proven local arithmetic schedule.
+
+**Interpretation is intentionally narrow:** a static `SH` word
+need not execute; a static table-site `LW` does not establish that
+it reads from the trig table at runtime; a local motif is not a
+whole-program proof of nine final coefficients. The returned JSON
+explicitly has:
+
+```json
+{
+  "static_words_are_executed": false,
+  "original_builder_schedule_identified": false,
+  "original_gameplay_coefficients_checked": false,
+  "private_values_emitted": false
+}
+```
+
+Run it on a privately owned extracted executable; no `--explore`
+is required for this initial static inventory:
+
+```sh
+python3 -m tools.audit_gp0_matrix_replay_preflight \
+  /private/path/WILDARMS.EXE
+```
+
+Inspect `builder_opcode_evidence` in the emitted JSON. The EXE
+bytes, opcode words, trig words, private register values and matrix
+coefficients are not emitted. Replaying it later is a *separate*
+synthetic MIPS probe and is not implied by this static pass.
+
+**Verification:** 19 host tests for the opcode inventory and
+six synthetic PS-X EXE integration tests were added, bringing
+the relevant locally reconstructed source suite to **275/275
+passing tests** (250 earlier + 25 new). Python `compileall`
+also passed. The three new files have been uploaded to GitHub
+and their Git blob hashes checked against the locally executed
+copies. The two new suites are registered in both CTest and
+`matrix-audits.yml`. A full remote GitHub CI run, original
+`WILDARMS.EXE` results, real coefficient equivalence and
+Switch hardware execution are **not verified**.
