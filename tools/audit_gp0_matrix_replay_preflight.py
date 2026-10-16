@@ -8,6 +8,9 @@ import argparse
 import json
 import struct
 from collections import Counter
+
+STACK_BASE = 0x80120000
+STACK_SIZE = 0x1000
 from pathlib import Path
 try:
     from .audit_original_nclip_winding import parse_exe
@@ -104,22 +107,47 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
         raise ValueError('register indexes must be 0..31')
     memory = MappedMemory().map_region(base, image, writable=False)
     memory.map_region(matrix_address, bytes(MATRIX_SIZE), writable=True)
+    # Synthetic bounded stack: never claim this is the original game SP.
+    memory.map_region(STACK_BASE, bytes(STACK_SIZE), writable=True)
     regs = [0] * 32
     regs[5] = matrix_address
+    regs[29] = STACK_BASE + STACK_SIZE - 0x20
     for reg, value in initial_registers.items():
         if reg:
             regs[reg] = value
     trace = execute(image, base, start, memory, regs,
                     max_steps=max_steps, stop_pc=end)
     matrix_addresses = {matrix_address + off for off in MATRIX_OFFSETS}
+    visited_counts = Counter(instruction_family(struct.unpack_from(
+        '<I', image, pc-base)[0])[0] for pc in trace['visited_pcs'])
+    halt_family = None
+    halt_category = None
+    if not trace['completed'] and trace['reason'] in ('ValueError', 'OverflowError'):
+        halt_pc = trace['pc']
+        if base <= halt_pc < base + len(image) and (halt_pc-base) % 4 == 0:
+            halt_word = struct.unpack_from('<I', image, halt_pc-base)[0]
+            halt_family, halt_supported = instruction_family(halt_word)
+            if not halt_supported:
+                halt_category = 'unsupported_instruction'
+            elif halt_family in ('aligned_load', 'aligned_store'):
+                halt_category = 'memory_access_or_alignment'
+            else:
+                halt_category = 'execution_semantics_or_overflow'
+    unique_matrix_stores = set(trace['store_addresses']) & matrix_addresses
     result['exploratory_trace'] = {
         'initial_registers_are_synthetic': True,
+        'synthetic_stack_mapped': True,
+        'executed_instruction_families': dict(sorted(visited_counts.items())),
+        'halt_instruction_family': halt_family,
+        'halt_category': halt_category,
+        'return_instruction_executed': False,
         'reason': trace['reason'],
         'reached_return_site': trace['completed'] and trace['reason'] == 'stop_pc',
         'executed_instructions': trace['executed'],
         'distinct_executed_pcs': len(set(trace['visited_pcs'])),
         'matrix_slot_store_count': sum(addr in matrix_addresses
                                        for addr in trace['store_addresses']),
+        'distinct_matrix_slots_written': len(unique_matrix_stores),
         'all_matrix_slots_written': matrix_addresses.issubset(
             trace['store_addresses']),
     }
