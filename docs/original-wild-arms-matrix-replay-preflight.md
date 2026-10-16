@@ -452,3 +452,70 @@ copies executed. `compileall` passed. CTest and `matrix-audits.yml`
 were extended to include the new tests. Successful complete GitHub
 Actions CI, a real `WILDARMS.EXE` analysis and Switch device
 execution remain unverified.
+
+## Stage 202 — correlate executed caller paths with CFG alternatives
+
+The bounded caller CFG analyzer now accepts an optional in-memory
+`observed_pcs` sequence from `mips_control_flow.execute`. Every
+statically enumerated path retains its executed instruction order
+including conditional-branch delay slots, the `JAL` and the JAL's
+delay slot. When the observed path exactly matches one or more
+enumerated paths, it reports `synthetic_probe_path_matched: true`
+and only the register-source descriptions for those matched paths.
+The aggregate static `arguments` remain available independently.
+
+No path addresses or instruction words are emitted in JSON. The
+new safe fields are:
+
+- `synthetic_probe_path_supplied`
+- `synthetic_probe_window_covered`
+- `synthetic_probe_path_matched`
+- `synthetic_probe_matching_path_count`
+- `synthetic_probe_argument_sources` (GPR numbers and origin categories)
+
+**Critical distinction:** `runtime_path_confirmed: false` remains
+unchanged. Path matches refer only to the bounded **synthetic** MIPS
+runner, not real PlayStation gameplay, and external CFG entry edges
+are not ruled out.
+
+A four-instruction caller replay (the legacy default) can correlate
+automatically against a four-instruction CFG window when both
+`--caller-replay` and `--caller-cfg` are enabled. If the static
+window is larger than the actually executed caller prefix, the
+probe explicitly reports *no match* rather than inventing coverage.
+
+For a longer static window, an additional **explicit opt-in** permits
+the synthetic runner to start from the same entry as the CFG window:
+
+```sh
+python3 -m tools.audit_gp0_matrix_replay_preflight \
+  /private/path/WILDARMS.EXE \
+  --caller-cfg --caller-replay \
+  --caller-lookback 8 --replay-cfg-window --max-steps 4096
+```
+
+`--replay-cfg-window` requires both caller replay and CFG analysis,
+and a lookback of at least four instructions. An invalid static CFG
+window is rejected before extended replay starts. The opcode
+validation of the original caller JAL and `a1=sp+16` remains in
+place; a longer synthetic window may still fail during bounded
+execution because of unsupported ops, invalid memory or uncertain
+input state.
+
+The integrated synthetic fixture contains a pre-call `BEQ`:
+one path keeps the incoming `a0` value; the other executes an
+`ADDIU` deriving `a0` from `a2`. Both paths are statically
+enumerated, but with different seeded registers the concrete runner
+selects one and reports **only its** safe source categories. Tests
+also cover incomplete windows, delay-slot omission, missing paths,
+static-only behavior, invalid options, unsupported CFG instructions
+and correct command-line forwarding of the new mode.
+
+**Verification:** 15 new local tests (seven path matcher, eight
+end-to-end/CLI) added to the previous 132: **147/147** synthetic
+Python tests pass in the relevant-module local source checkout.
+`python3 -m compileall -q tools tests` also passes. The new
+test files are registered in CTest and GitHub Actions. No complete
+GitHub Actions success, original `WILDARMS.EXE` runtime,
+bit-exact PS1 matrix coefficient comparison or Switch hardware
+execution has been confirmed.
