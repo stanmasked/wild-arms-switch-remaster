@@ -281,3 +281,71 @@ from before/after snapshots alone; this is a **net final-memory**
 check, not a trace of all writes, DMA, GTE, or memory-mapped
 peripheral interactions. The caller-supplied capture is not
 independently authenticated as original PlayStation gameplay.
+
+## Stage 217 — independent debugger store-event trace
+
+**Before/after RAM alone cannot reconstruct the executed store sequence.**
+A same-value store or a write that is later undone is invisible in the final
+snapshot. Stage 217 therefore accepts a **separate, private** ordered log
+exported by the debugger during the same paused-to-paused interval.
+
+Record *every successfully completed* CPU `SB`, `SH` and `SW`,
+including temporary writes, same-value writes and stores executed in
+a return delay slot. The guest virtual **instruction PC**, resolved
+**destination address**, and **width in bytes** (1, 2 or 4) must be exact.
+Do not include attempted stores that fault without writing. Preserve
+execution order: do not sort or deduplicate the log.
+
+Private `stores.json` example (synthetic placeholders, not real game data):
+
+```json
+{
+  "schema": "wild-arms-ps1-store-sequence-v1",
+  "events": [
+    {"pc": "0x80010004", "address": "0x80110000", "width": 2},
+    {"pc": "0x80010008", "address": "0x80110002", "width": 2}
+  ]
+}
+```
+
+Collect the event log **directly from an instruction/store trace in
+the PS1 debugger**, not by differencing the two RAM exports.
+The log currently has a limit of 100,000 successful stores.
+The event schema intentionally does not require contents or source
+register values; the verifier checks the instruction PC, resolved
+address, width and exact event ordering.
+
+To require this check alongside the earlier numeric, CPU and RAM
+checks, add these two CLI arguments:
+
+```sh
+python3 -m tools.audit_ps1_capture_pack \
+  --exe /private/WILDARMS.EXE \
+  --before-registers /private/before-registers.json \
+  --after-registers /private/after-registers.json \
+  --before-ram /private/before-ram.bin \
+  --after-ram /private/after-ram.bin \
+  --ram-base 0x80000000 \
+  --store-events /private/stores.json \
+  --require-store-sequence \
+  --require-jr-return \
+  --require-final-cpu-state \
+  --require-final-memory-state \
+  --output /private/matrix-cpu-ram-writes.json \
+  --compare
+```
+
+**Fail-closed:** If `--require-store-sequence` is present but no separate
+`--store-events` file is provided, packaging fails. It never fabricates
+the log from before/after RAM. An optional log may be supplied without
+requiring its match; when the strict switch is set, mismatch makes
+`matches_complete_reference` false and the CLI returns 1.
+
+Only aggregate counts for `SB/SH/SW` widths and **up to 32 mismatch
+event indices** are emitted in the public `store_sequence` report.
+Raw debugger PCs, write addresses and original RAM values are never
+printed; those remain in the private owner-restricted reference JSON.
+When guest replay fails to reach the expected stop PC, the verifier
+withholds mismatch positions. This audit does not authenticate the
+origin of an alleged PS1 debugger trace, nor model DMA or unhandled
+instructions; all original-game results remain unverified.
