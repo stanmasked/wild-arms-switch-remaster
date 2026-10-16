@@ -62,3 +62,17 @@ context-insensitive CFG intentionally reports likely branches as unresolved.
 The branch predicates are not evaluated; the graph is a conservative
 possibility model. Committed tests do not by themselves confirm successful
 execution or bit-exact PlayStation geometry.
+
+## Stage 178: COP branch decoding safety
+
+Coprocessor branch instructions (COP0–COP3 with `rs=8`, notably
+`BC2F`/`BC2T` on the PlayStation GTE) must not be interpreted as
+ordinary fallthrough instructions. The shared decoder now classifies
+these as `coprocessor_branch` with an unresolved control transfer.
+Both the legacy and context-labelled CFG stop propagation at those
+instructions instead of inventing reachable successors.
+
+Synthetic tests assert that a COP2 conditional branch does not emit
+linear or fabricated delay-slot edges. GTE branch predicates and full
+COP instruction semantics are not modelled yet. Commit of tests is not
+a verified successful CI run.
