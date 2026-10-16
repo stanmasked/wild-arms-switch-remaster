@@ -285,3 +285,8 @@ set_tests_properties(wa_original_gp0_matrix_context_sources PROPERTIES WORKING_D
 add_test(NAME wa_mips_fixed32
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_fixed32.py)
 set_tests_properties(wa_mips_fixed32 PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Concrete subset of PS1 MIPS integer instruction execution.
+add_test(NAME wa_mips_integer_step
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_integer_step.py)
+set_tests_properties(wa_mips_integer_step PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
