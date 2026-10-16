@@ -36,6 +36,9 @@ on:
       - 'tests/test_mips_input_sensitivity.py'
       - 'tools/mips_entry_dependencies.py'
       - 'tests/test_mips_entry_dependencies.py'
+      - 'tools/mips_load_access_profile.py'
+      - 'tests/test_mips_load_access_profile.py'
+      - 'tests/test_gp0_matrix_load_profile.py'
       - 'tools/mips_control_flow.py'
       - 'tests/test_mips_control_flow.py'
       - '.github/workflows/matrix-audits.yml'
@@ -63,6 +66,8 @@ jobs:
           python -m unittest discover -s tests -p 'test_mips_trig_memory.py' -v
           python -m unittest discover -s tests -p 'test_mips_matrix_memory.py' -v
           python -m unittest discover -s tests -p 'test_mips_control_flow.py' -v
+          python -m unittest discover -s tests -p 'test_mips_load_access_profile.py' -v
+          python -m unittest discover -s tests -p 'test_gp0_matrix_load_profile.py' -v
           python -m unittest discover -s tests -p 'test_mips_entry_dependencies.py' -v
           python -m unittest discover -s tests -p 'test_mips_input_sensitivity.py' -v
           python -m unittest discover -s tests -p 'test_mips_call_boundary.py' -v
