@@ -24,6 +24,8 @@ on:
       - 'tests/test_mips_matrix_memory.py'
       - 'tools/audit_gp0_matrix_replay_preflight.py'
       - 'tests/test_gp0_matrix_replay_preflight.py'
+      - 'tools/mips_caller_cfg_sources.py'
+      - 'tests/test_mips_caller_cfg_sources.py'
       - 'tools/mips_caller_sources.py'
       - 'tests/test_mips_caller_sources.py'
       - 'tools/mips_call_boundary.py'
@@ -63,6 +65,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_mips_input_sensitivity.py' -v
           python -m unittest discover -s tests -p 'test_mips_call_boundary.py' -v
           python -m unittest discover -s tests -p 'test_mips_caller_sources.py' -v
+          python -m unittest discover -s tests -p 'test_mips_caller_cfg_sources.py' -v
           python -m unittest discover -s tests -p 'test_gp0_matrix_replay_preflight.py' -v
           python -m unittest discover -s tests -p 'test_gp0_trig_table.py' -v
           python -m unittest discover -s tests -p 'test_gp0_rotation_matrix_builder.py' -v
