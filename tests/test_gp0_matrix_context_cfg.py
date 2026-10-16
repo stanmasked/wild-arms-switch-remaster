@@ -9,7 +9,7 @@ def run(words):
     image=bytes(0x20)+struct.pack('<%dI'%len(words),*words)
     return trace(image,BASE,START,START+4*(len(words)-1))
 def j(addr): return 2<<26 | ((addr>>2)&0x3ffffff)
-def beq(off): return 4<<26 | (off&65535)
+def beq(off): return 4<<26 | 8<<21 | 9<<16 | (off&65535)
 
 class ContextTests(unittest.TestCase):
     def test_delay_context_is_separate(self):
