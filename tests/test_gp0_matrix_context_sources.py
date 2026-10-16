@@ -7,7 +7,7 @@ START=BASE+0x20
 
 def lw(rt): return 35<<26 | 25<<21 | rt<<16
 def sh(rt,off): return 41<<26 | 5<<21 | rt<<16 | off
-def beq(off): return 4<<26 | (off&65535)
+def beq(off): return 4<<26 | 8<<21 | 9<<16 | (off&65535)
 def j(target): return 2<<26 | ((target>>2)&0x3ffffff)
 def mult(rs,rt): return rs<<21 | rt<<16 | 24
 def mflo(rd): return rd<<11 | 18
