@@ -349,3 +349,75 @@ When guest replay fails to reach the expected stop PC, the verifier
 withholds mismatch positions. This audit does not authenticate the
 origin of an alleged PS1 debugger trace, nor model DMA or unhandled
 instructions; all original-game results remain unverified.
+
+## Stage 218 — compare the actual values written by SB, SH and SW
+
+The stage-217 instruction/store log checked **when**, **where** and **how
+many bytes** each successful CPU store wrote. Stage 218 adds an
+**independent value-bearing trace** collected from the debugger while
+the *same* PS1 session executes the bounded builder interval. This
+reveals wrong intermediate values even when later stores restore RAM
+to the exact expected final state.
+
+Save the private log as `store-values.json`, preserving every
+successfully completed `SB`, `SH`, or `SW`, in execution order.
+The four fields are: executing instruction `pc`, resolved virtual
+`address`, `width` in bytes (1/2/4), and `value_u32` containing
+**the exact low 8, 16 or 32 bits actually committed**. Do not export
+a sign-extended 32-bit register as the value for `SB` or `SH`;
+for example, `SH` from `0xDEADBEEF` records `0x0000BEEF`.
+Do not publish the original log.
+
+Synthetic example — these are not observed Wild Arms values:
+
+```json
+{
+  "schema": "wild-arms-ps1-store-values-v1",
+  "events": [
+    {"pc": "0x80010004", "address": "0x80110000", "width": 2, "value_u32": "0x00001000"},
+    {"pc": "0x80010008", "address": "0x80110002", "width": 1, "value_u32": "0x0000007f"}
+  ]
+}
+```
+
+Compare a genuine private capture with:
+
+```sh
+python3 -m tools.audit_ps1_capture_pack \
+  --exe /private/WILDARMS.EXE \
+  --before-registers /private/before-registers.json \
+  --after-registers /private/after-registers.json \
+  --before-ram /private/before-ram.bin \
+  --after-ram /private/after-ram.bin \
+  --ram-base 0x80000000 \
+  --store-value-events /private/store-values.json \
+  --require-store-values \
+  --require-jr-return \
+  --require-final-cpu-state \
+  --require-final-memory-state \
+  --output /private/matrix-cpu-ram-write-values.json \
+  --compare
+```
+
+`--store-value-events` is **separate** from the earlier
+`--store-events` location-only reference. Either can be enabled
+independently, or both can be supplied: if both logs disagree
+on the store PC, address, width or event order, the entire
+reference is rejected as contradictory.
+
+`--require-store-values` prevents a positive
+`matches_complete_reference` unless all events match, regardless
+of numerical coefficient, final CPU or final RAM equality.
+Without this switch, a valid supplied value log is compared
+for diagnostics but does not affect the overall result.
+The tool **never** infers original intermediate values from
+before/after RAM, nor accepts a missing required debugger value log.
+
+The public `store_values` JSON contains only counts, width
+histograms, up to 32 mismatch **event indices**, and separate
+indices for value versus site mismatches. No written values,
+raw PCs, resolved addresses, register values, or secret digests
+are emitted. If guest execution stops early, mismatch indices
+are withheld. A claimed original PS1 log cannot be independently
+authenticated by this workflow. Hardware, DMA, GTE and original
+gameplay remain outside this subset executor's verified coverage.
