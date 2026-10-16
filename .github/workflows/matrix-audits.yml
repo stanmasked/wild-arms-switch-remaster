@@ -37,6 +37,9 @@ on:
       - 'tools/mips_entry_dependencies.py'
       - 'tests/test_mips_entry_dependencies.py'
       - 'tools/mips_return_boundary.py'
+      - 'tools/mips_final_cpu_state.py'
+      - 'tests/test_mips_final_cpu_state.py'
+      - 'tests/test_ps1_final_cpu_capture.py'
       - 'tests/test_mips_return_boundary.py'
       - 'tests/test_ps1_reference_return_boundary.py'
       - 'tests/test_mips_initial_pipeline.py'
@@ -125,6 +128,8 @@ jobs:
           python -m unittest discover -s tests -p 'test_mips_ps1_capture_pack.py' -v
           python -m unittest discover -s tests -p 'test_mips_initial_pipeline.py' -v
           python -m unittest discover -s tests -p 'test_mips_return_boundary.py' -v
+          python -m unittest discover -s tests -p 'test_mips_final_cpu_state.py' -v
+          python -m unittest discover -s tests -p 'test_ps1_final_cpu_capture.py' -v
           python -m unittest discover -s tests -p 'test_ps1_reference_return_boundary.py' -v
           python -m unittest discover -s tests -p 'test_ps1_pipeline_capture.py' -v
           python -m unittest discover -s tests -p 'test_mips_load_pipeline_shadow.py' -v
