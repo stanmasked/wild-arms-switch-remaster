@@ -25,7 +25,7 @@ def direct_successors(word, pc):
     op = word >> 26
     rt = (word >> 16) & 31
     fn = word & 63
-    if op in (4, 5, 6, 7) or (op == 1 and rt in (0, 1, 16, 17)):
+    if op in (4, 5, 6, 7) or (op == 1 and rt in (0, 1)):
         target = (pc + 4 + (signed16(word & 65535) << 2)) & 0xffffffff
         return 'conditional', (target, pc + 8), True
     if op == 1:
@@ -34,7 +34,10 @@ def direct_successors(word, pc):
         target = ((pc + 4) & 0xf0000000) | ((word & 0x03ffffff) << 2)
         return ('call' if op == 3 else 'jump'), (target,), True
     if op == 0 and fn in (8, 9):
-        return 'indirect', (), True
+        rs, rd, sa = (word >> 21) & 31, (word >> 11) & 31, (word >> 6) & 31
+        if rt == 0 and sa == 0 and (fn == 9 or rd == 0):
+            return 'indirect', (), True
+        return 'unrecognized_special', (), False
     if op in (20, 21, 22, 23):
         return 'branch_likely', (), True
     return 'linear', (pc + 4,), False
@@ -51,6 +54,12 @@ def analyze(image, base, start=BUILDER, end=RETURN):
                    if direct_successors(word, pc)[2] and pc+4 <= end}
     for pc, word in words.items():
         kind, targets, delayed = direct_successors(word, pc)
+        if pc in delay_slots and delayed:
+            unresolved.append({'pc': f'0x{pc:08X}', 'reason': 'control_in_delay_slot_unsupported'})
+            continue
+        if kind == 'unrecognized_special':
+            unresolved.append({'pc': f'0x{pc:08X}', 'reason': 'malformed_jump_encoding'})
+            continue
         if kind == 'linear':
             if pc not in delay_slots and pc + 4 <= end:
                 edges.append({'from': f'0x{pc:08X}', 'to': f'0x{pc+4:08X}', 'kind': kind})
