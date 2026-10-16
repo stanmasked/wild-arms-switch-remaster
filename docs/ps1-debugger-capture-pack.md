@@ -122,3 +122,49 @@ or value.
 These rules apply to the host verifier, not the full Nintendo
 Switch game; authentic PS1 gameplay captures and Switch hardware
 behavior have not been verified.
+
+## Stage 214 — require an actual completed JR $ra return (recommended)
+
+The stage-211 numerical verifier can now optionally reject a nine-of-nine
+coefficient match when the synthetic MIPS replay did **not** actually
+complete its final return to the captured stop PC through `JR $ra`.
+To enable the stricter, safer capture flow, add `--require-jr-return`
+to `tools.audit_ps1_capture_pack`:
+
+```sh
+python3 -m tools.audit_ps1_capture_pack \
+  --exe /private/WILDARMS.EXE \
+  --before-registers /private/before-registers.json \
+  --after-registers /private/after-registers.json \
+  --before-ram /private/before-ram.bin \
+  --after-ram /private/after-ram.bin \
+  --ram-base 0x80000000 \
+  --output /private/ps1-matrix-capture.json \
+  --require-jr-return --compare
+```
+
+The packer records `"require_completed_jr_ra": true` in the private
+reference JSON. This makes an otherwise matching matrix **ineligible**
+unless all the following are verified from executed instruction and
+completed-control-transfer evidence:
+
+- The guest stops at the supplied `stop_pc` with reason `stop_pc`.
+- The **last** completed guest transfer is a genuine `JR $ra` and
+  its destination is exactly that `stop_pc`.
+- The return's delay-slot instruction is the **last successfully
+  executed instruction**, immediately following the `JR $ra`.
+- No pending delayed load remains when the replay reaches the stop.
+- Nine final matrix halfwords still have complete successful `SH`
+  writes, with no later overlapping stores.
+
+A syntactic `JR $ra`, an earlier return that subsequently executes
+more instructions, an unrelated branch, or a stop before the delay
+slot do not satisfy this gate. The privacy-safe output includes only
+boolean fields under `return_boundary`, plus
+`strict_jr_ra_return_required`. It does **not** publish guest PCs,
+register contents, matrix values or any memory data.
+
+For older synthetic fixtures, `require_completed_jr_ra` defaults to
+false so previously tested artificial straight-line programs still
+work. This explicit switch does not prove authentic PS1 hardware,
+and the original Wild Arms return path still needs a genuine capture.
