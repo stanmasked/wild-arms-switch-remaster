@@ -22,6 +22,8 @@ on:
       - 'tests/test_mips_trig_memory.py'
       - 'tools/mips_matrix_memory.py'
       - 'tests/test_mips_matrix_memory.py'
+      - 'tools/audit_gp0_matrix_replay_preflight.py'
+      - 'tests/test_gp0_matrix_replay_preflight.py'
       - 'tools/mips_control_flow.py'
       - 'tests/test_mips_control_flow.py'
       - '.github/workflows/matrix-audits.yml'
@@ -49,6 +51,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_mips_trig_memory.py' -v
           python -m unittest discover -s tests -p 'test_mips_matrix_memory.py' -v
           python -m unittest discover -s tests -p 'test_mips_control_flow.py' -v
+          python -m unittest discover -s tests -p 'test_gp0_matrix_replay_preflight.py' -v
           python -m unittest discover -s tests -p 'test_gp0_trig_table.py' -v
           python -m unittest discover -s tests -p 'test_gp0_rotation_matrix_builder.py' -v
 
