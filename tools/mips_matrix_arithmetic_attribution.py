@@ -88,6 +88,7 @@ def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
         'mismatch_dependent_address_observed': False,
         'mismatch_dependent_control_observed': False,
         'executed_code_write_observed': False,
+        'ram_alias_access_observed': False,
         'synthetic_dynamic_dependency_only': True,
         'proven_numeric_causation': False,
         'original_gameplay_equivalence_proven': False,
@@ -122,6 +123,33 @@ def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
     mismatch_dependent_address = False
     mismatch_dependent_control = False
     executed_code_write = False
+    ram_alias_access = False
+    # The concrete MappedMemory model uses disjoint virtual regions, not PS1
+    # physical RAM. Do not turn observed virtual writes into fabricated alias
+    # values: withhold lineage whenever separate virtual bytes alias RAM.
+    physical_virtual_accesses = {}
+    matrix_physical_bytes = {
+        physical for offset in range(matrix_slots * 2)
+        if (physical := _ps1_ram_offset(matrix_address + offset)) is not None
+    }
+
+    def observe_ram_access(address, width, *, store=False):
+        nonlocal ram_alias_access
+        for offset in range(width):
+            virtual = address + offset
+            physical = _ps1_ram_offset(virtual)
+            if physical is None:
+                continue
+            previous = physical_virtual_accesses.get(physical)
+            if previous is not None and previous != virtual:
+                ram_alias_access = True
+            else:
+                physical_virtual_accesses[physical] = virtual
+            # An SH to a virtual mirror of the output buffer is invisible
+            # to the current exact-virtual final-slot tracker.
+            if (store and physical in matrix_physical_bytes and
+                    not matrix_address <= virtual < matrix_address + matrix_slots*2):
+                ram_alias_access = True
 
     def union(*origins):
         nonlocal budget_exceeded
@@ -167,6 +195,7 @@ def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
             if (type(address) is not int or address < 0 or
                     address % width):
                 raise ValueError('invalid executed load address')
+            observe_ram_access(address, width)
             data = union(*(ram_shadow.get(address+j, empty) for j in range(width)))
             next_pending = (rt, data) if rt else None
         elif op in STORES:
@@ -176,6 +205,7 @@ def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
             store_cursor += 1
             if store_pc != pc or width != STORES[op]:
                 raise ValueError('inconsistent executed store instruction')
+            observe_ram_access(addr, width, store=True)
             # A CPU write into the replayed executable invalidates later
             # static-image instruction decoding: execute() intentionally does
             # not fetch modified code. Even a same-value write is conservatively
@@ -255,6 +285,12 @@ def analyze(image, base, trace, matrix_address, expected, *, matrix_slots=9,
     if executed_code_write:
         output['reason_code'] = 'guest_code_write_unmodeled'
         output['executed_code_write_observed'] = True
+        return output
+    if ram_alias_access:
+        # No physical alias coherence in the concrete runner or byte lineage.
+        # Affected/unlinked slot candidates could otherwise be misleading.
+        output['reason_code'] = 'ram_alias_access_unmodeled'
+        output['ram_alias_access_observed'] = True
         return output
     if mismatch_dependent_address or mismatch_dependent_control:
         # An observed execution path is insufficient to rule out stores made
