@@ -270,3 +270,8 @@ set_tests_properties(wa_original_gp0_matrix_cfg PROPERTIES WORKING_DIRECTORY ${C
 add_test(NAME wa_original_gp0_matrix_cfg_join
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_cfg_join.py)
 set_tests_properties(wa_original_gp0_matrix_cfg_join PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Restricted context-sensitive MIPS delay-slot CFG contract.
+add_test(NAME wa_original_gp0_matrix_context_cfg
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_context_cfg.py)
+set_tests_properties(wa_original_gp0_matrix_context_cfg PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
