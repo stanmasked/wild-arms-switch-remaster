@@ -330,3 +330,8 @@ set_tests_properties(wa_mips_entry_dependencies PROPERTIES WORKING_DIRECTORY ${C
 add_test(NAME wa_mips_input_sensitivity
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_input_sensitivity.py)
 set_tests_properties(wa_mips_input_sensitivity PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Caller/callee register readiness across JAL and its load-delay slot.
+add_test(NAME wa_mips_call_boundary
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_call_boundary.py)
+set_tests_properties(wa_mips_call_boundary PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
