@@ -16,12 +16,14 @@ try:
     from .mips_matrix_memory import MappedMemory, matrix_coefficients
     from .mips_return_boundary import verify as verify_return_boundary
     from .mips_final_cpu_state import decode_expected, compare as compare_cpu_state
+    from .mips_final_memory_state import decode as decode_final_ram, compare as compare_final_ram, snapshot as memory_snapshot
 except ImportError:
     from audit_original_nclip_winding import parse_exe
     from mips_control_flow import execute, STORES
     from mips_matrix_memory import MappedMemory, matrix_coefficients
     from mips_return_boundary import verify as verify_return_boundary
     from mips_final_cpu_state import decode_expected, compare as compare_cpu_state
+    from mips_final_memory_state import decode as decode_final_ram, compare as compare_final_ram, snapshot as memory_snapshot
 
 SCHEMA = 'wild-arms-ps1-matrix-reference-v1'
 _MAX_PATCHES = 256
@@ -62,6 +64,13 @@ def _decode_reference(fixture, exe_sha):
                            ('entry_pc', 'stop_pc', 'matrix_address'))
     if start & 3 or stop & 3 or matrix & 1 or matrix > 0xffffffff - 17:
         raise ValueError('unaligned reference entry/stop/matrix pointer')
+    strict_memory = fixture.get('require_final_memory_state', False)
+    if type(strict_memory) is not bool:
+        raise ValueError('invalid final RAM comparison requirement')
+    final_memory = (decode_final_ram(fixture['expected_final_memory_state'], matrix)
+                    if 'expected_final_memory_state' in fixture else None)
+    if strict_memory and final_memory is None:
+        raise ValueError('strict final RAM comparison needs complete memory reference')
     strict_cpu = fixture.get('require_final_cpu_state', False)
     if type(strict_cpu) is not bool:
         raise ValueError('invalid strict final CPU requirement')
@@ -120,7 +129,9 @@ def _decode_reference(fixture, exe_sha):
             'hi':hi,'lo':lo,'max_steps':max_steps,'segments':parsed,
             'pending_load':load,'pipeline_state_explicit':explicit_pipeline,
             'require_completed_jr_ra':strict_return,
-            'require_final_cpu_state':strict_cpu,'expected_final_cpu_state':final_cpu}
+            'require_final_cpu_state':strict_cpu,'expected_final_cpu_state':final_cpu,
+            'require_final_memory_state':strict_memory,
+            'expected_final_memory_state':final_memory}
 
 
 def _prepare_memory(image, base, segments):
@@ -208,6 +219,10 @@ def compare(blob, fixture):
             memory.read(capture['matrix_address'] + 2*i, 2)
     except ValueError:
         raise ValueError('snapshot must map all nine matrix halfwords') from None
+    memory_before = (memory_snapshot(memory,
+                     capture['expected_final_memory_state']['address'],
+                     capture['expected_final_memory_state']['size'])
+                     if capture['expected_final_memory_state'] is not None else None)
     trace = execute(code, base, capture['entry_pc'], memory, capture['gpr'],
                     hi=capture['hi'], lo=capture['lo'],
                     stop_pc=capture['stop_pc'],max_steps=capture['max_steps'],
@@ -218,6 +233,11 @@ def compare(blob, fixture):
     cpu_state = (compare_cpu_state(trace, capture['expected_final_cpu_state'],
                                    guest_stopped_at_expected_pc=bool(at_stop))
                  if capture['expected_final_cpu_state'] is not None else None)
+    final_ram = (compare_final_ram(
+        memory, capture['expected_final_memory_state'], memory_before,
+        guest_stopped_at_expected_pc=bool(at_stop),
+        matrix_address=capture['matrix_address'])
+        if capture['expected_final_memory_state'] is not None else None)
     eligible = bool(at_stop and all(final_sh) and
                     (not capture['require_completed_jr_ra'] or
                      return_boundary['verified_complete_jr_ra_return']))
@@ -230,6 +250,7 @@ def compare(blob, fixture):
         match_count = 9 - len(mismatch_indices)
     numeric_match = bool(eligible and not mismatch_indices)
     final_cpu_match = bool(cpu_state and cpu_state['final_cpu_state_matches_reference'])
+    final_ram_match = bool(final_ram and final_ram['matches_reference'])
     return {
         'reference_schema': SCHEMA,
         'sha256_match': True,
@@ -239,9 +260,12 @@ def compare(blob, fixture):
         'guest_completed_at_expected_stop': bool(at_stop),
         'strict_jr_ra_return_required': capture['require_completed_jr_ra'],
         'strict_final_cpu_state_required': capture['require_final_cpu_state'],
+        'strict_final_memory_state_required': capture['require_final_memory_state'],
+        'final_memory_state': final_ram,
         'final_cpu_state': cpu_state,
         'matches_complete_reference': bool(numeric_match and
-            (not capture['require_final_cpu_state'] or final_cpu_match)),
+            (not capture['require_final_cpu_state'] or final_cpu_match) and
+            (not capture['require_final_memory_state'] or final_ram_match)),
         'return_boundary': return_boundary,
         'guest_stop_reason': trace['reason'] if trace['reason'] in _SAFE_REASONS else 'other',
         'final_halfword_slots_written_by_sh':sum(final_sh),
