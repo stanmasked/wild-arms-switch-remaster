@@ -310,3 +310,8 @@ set_tests_properties(wa_mips_trig_memory PROPERTIES WORKING_DIRECTORY ${CMAKE_SO
 add_test(NAME wa_mips_matrix_memory
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_matrix_memory.py)
 set_tests_properties(wa_mips_matrix_memory PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Executable, bounded MIPS branches and delay-slot behavior (synthetic input).
+add_test(NAME wa_mips_control_flow
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_control_flow.py)
+set_tests_properties(wa_mips_control_flow PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
