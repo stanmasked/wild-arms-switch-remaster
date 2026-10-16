@@ -20,7 +20,9 @@ The register export format is intentionally emulator-agnostic. Convert your debu
   "gpr": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   "hi": 0,
-  "lo": 0
+  "lo": 0,
+  "pending_load": null,
+  "in_branch_delay_slot": false
 }
 ```
 
@@ -71,3 +73,52 @@ Exit status: 0 for package success and, when requested, all nine comparable coef
 - A successful 9/9 result compares against the **user-supplied** after-RAM matrix. It does **not** independently prove the original game's PS1 mathematics or a native Nintendo Switch port.
 
 The new packaging module, CLI and synthetic tests are registered in the host test suite. No real game EXE or debugger exports have been included in this repository.
+
+## Stage 213 — MIPS pipeline status is now mandatory for debugger captures
+
+Starting with stage 213, every **external** PS1 reference and every newly
+packed before-registers export must declare both `pending_load` and
+`in_branch_delay_slot` explicitly. Existing synthetic-only legacy
+references can omit them and default to no pending load. External captures
+with either field missing are intentionally rejected.
+
+At a normal instruction boundary with no unresolved load, use:
+
+```json
+"pending_load": null,
+"in_branch_delay_slot": false
+```
+
+If the debugger paused immediately after an `LW`, `LH`, `LB`,
+`LHU` or `LBU`, the next instruction still reads the **old** GPR
+value. The initial GPR array must contain that old value, and the
+separately pending result must be supplied, for example:
+
+```json
+"pending_load": {"gpr": 8, "value_u32": "0x00001000"},
+"in_branch_delay_slot": false
+```
+
+The `gpr` target is 1–31, and `value_u32` is an unsigned 32-bit
+value. Do not guess it from the old register: obtain it from the
+debugger's pipeline state or choose a safe, later capture boundary
+after the load has retired. Never assume a pending value of zero.
+If you cannot establish whether a pending load exists, do not
+mark `pending_load` null and claim verification.
+
+A capture inside a branch or jump's **delay slot** requires the
+unresolved control-transfer target. That state is not modeled in
+this snapshot format. Set `in_branch_delay_slot: true` only to
+explicitly trigger rejection, then recapture at a supported boundary.
+Non-boolean delay-slot declarations are rejected as well.
+
+Two successive loads to the same destination are handled using the
+PS1 one-instruction load delay: the earlier load retires after the
+second instruction while the second result remains pending. The
+numerical comparator emits only booleans about whether pipeline
+state was explicit/applied; it never prints the pending register
+or value.
+
+These rules apply to the host verifier, not the full Nintendo
+Switch game; authentic PS1 gameplay captures and Switch hardware
+behavior have not been verified.
