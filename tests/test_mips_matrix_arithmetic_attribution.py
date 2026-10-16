@@ -73,6 +73,26 @@ class AttributionTests(unittest.TestCase):
         self.assertEqual(result['matrix_slots'][0]['candidate_hi_mismatch_indices'],[0])
         self.assertEqual(result['matrix_slots'][0]['candidate_primary_mismatch_indices'],[])
 
+    def test_simultaneous_lo_hi_mismatch_reaches_distinct_final_sh_slots(self):
+        regs=[0]*32;regs[8]=0xffffffff;regs[9]=2
+        words=[reg(25,8,9),reg(18,rd=11),reg(16,rd=12),
+               op(41,5,11,0),op(41,5,12,2)]
+        words += [op(41,5,0,2*i) for i in range(2,9)]
+        image,trace,expected=custom(words,regs)
+        changed=list(expected)
+        pc,kind,lo,hi=changed[0]
+        changed[0]=(pc,kind,(lo+1)&0xffffffff,(hi+1)&0xffffffff)
+        result=analyze(image,BASE,trace,MATRIX,tuple(changed),
+                       guest_stopped_at_expected_pc=True)
+        self.assertTrue(result['attribution_performed'])
+        self.assertEqual(result['candidate_affected_slot_indices'],[0,1])
+        self.assertEqual(result['matrix_slots'][0]['candidate_primary_mismatch_indices'],[0])
+        self.assertEqual(result['matrix_slots'][0]['candidate_hi_mismatch_indices'],[])
+        self.assertEqual(result['matrix_slots'][1]['candidate_primary_mismatch_indices'],[])
+        self.assertEqual(result['matrix_slots'][1]['candidate_hi_mismatch_indices'],[0])
+        self.assertEqual(result['mismatching_events_without_final_matrix_dependency'],[])
+        self.assertFalse(result['proven_numeric_causation'])
+
     def test_lo_mismatch_cannot_reach_mfhi_only_path(self):
         regs=[0]*32;regs[8]=0xffffffff;regs[9]=2
         words=[reg(25,8,9),reg(16,rd=11)]+[op(41,5,11,2*i) for i in range(9)]
