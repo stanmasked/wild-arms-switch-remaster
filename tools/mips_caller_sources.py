@@ -101,7 +101,10 @@ def _step(word, regs, pending, hi, lo, at_call=False):
         elif fn in (24, 25) and rd == 0 and sa == 0:
             hi = lo = merged(a,b)
         elif fn in (16, 18) and rs == 0 and rt == 0 and sa == 0:
-            write, new_value = rd, hi if fn == 16 else lo
+            source = hi if fn == 16 else lo
+            if source is None:
+                raise ValueError('HI/LO value not established in this window')
+            write, new_value = rd, source
         elif fn in (17, 19) and rt == 0 and rd == 0 and sa == 0:
             if fn == 17: hi = a
             else: lo = a
@@ -177,7 +180,7 @@ def inspect(image, base, call, lookback_words=4, arguments=(4,5,6,7)):
         return {'window_usable':False,'reason':'window_outside_image',
                 'runtime_path_confirmed':False,'arguments':[]}
     regs=initial_gprs()
-    hi=lo=Origin()
+    hi=lo=None
     pending=None
     for pc in range(first,call+8,4):
         word,=struct.unpack_from('<I',image,pc-base)
