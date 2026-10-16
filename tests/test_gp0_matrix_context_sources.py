@@ -45,6 +45,22 @@ class ContextSourcesTests(unittest.TestCase):
         self.assertEqual(r['candidate_stores'][0]['candidate_lookup_sources'],
                          [f'0x{START+8:08X}',f'0x{START+20:08X}'])
 
+    def test_branch_likely_annuls_lookup_in_slot(self):
+        # Not-taken path skips index 1. Taken path executes the load and
+        # jumps to index 3, so the joined source is possible, not definite.
+        likely=(20<<26)|2
+        r=fixture([likely,lw(8),0,sh(8,0)],(1,))
+        self.assertEqual(r['candidate_stores'][0]['candidate_lookup_sources'],
+                         [f'0x{START+4:08X}'])
+        self.assertTrue(r['candidate_stores'][0]['merged_predecessors'])
+
+    def test_regimm_likely_annuls_lookup_in_slot(self):
+        likely=(1<<26)|(2<<16)|2
+        r=fixture([likely,lw(8),0,sh(8,0)],(1,))
+        self.assertEqual(r['candidate_stores'][0]['candidate_lookup_sources'],
+                         [f'0x{START+4:08X}'])
+        self.assertTrue(r['candidate_stores'][0]['merged_predecessors'])
+
     def test_invalid_range(self):
         self.assertFalse(analyze(b'',BASE,START,START)['valid_range'])
 
