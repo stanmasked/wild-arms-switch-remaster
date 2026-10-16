@@ -96,6 +96,13 @@ class CallerSourceTests(unittest.TestCase):
     def test_shift_incoming_a0(self):
         r=audit([reg(0,rt=4,rd=6,sa=2)])
         self.assertEqual(r['arguments'][2]['incoming_gprs'],[4])
+    def test_unestablished_hi_lo_rejected(self):
+        r=audit([reg(18,rd=4)])
+        self.assertFalse(r['window_usable'])
+        self.assertEqual(r['arguments'],[])
+    def test_mtlo_then_mflo_keeps_input_root(self):
+        r=audit([reg(19,rs=6),reg(18,rd=4)])
+        self.assertEqual(r['arguments'][0]['incoming_gprs'],[6])
     def test_synthetic_mult_mflo(self):
         r=audit([reg(24,rs=4,rt=6),reg(18,rd=7)])
         self.assertEqual(r['arguments'][3]['incoming_gprs'],[4,6])
