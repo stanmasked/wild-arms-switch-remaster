@@ -39,3 +39,17 @@ verified in this stage.
 Next: add explicit predecessor merges, branch-sensitive provenance
 and delay-slot-aware register semantics; verify candidate lookup-to-SH
 chains against the user-owned executable.
+
+## Stage 166: unsupported REGIMM safety
+
+A previously unrecognized REGIMM branch variant (opcode 1 with an rt
+subopcode outside the explicitly supported set) could accidentally be
+classified as linear, introducing an unsound fallthrough path.
+
+Such opcodes now produce an unresolved transfer, without speculative
+post-delay-slot outgoing edges. A synthetic BLTZL test checks that the
+post-slot fallthrough is not inferred. This does **not** implement
+branch-likely delay-slot annulment and does not establish a complete CFG.
+
+The analysis remains conservative and incomplete until edge-sensitive
+delay-slot execution and actual MIPS branch predicates are modelled.
