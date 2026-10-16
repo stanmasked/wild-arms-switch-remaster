@@ -1226,3 +1226,73 @@ against their GitHub blob checksums. Both new test suites are
 registered in CTest and `matrix-audits.yml`. A full successful
 remote GitHub Actions run, any authentic original-game reference,
 and a playable native Switch build have **not** been confirmed.
+
+## Stage 213 — capture MIPS load-delay state at the exact debugger boundary
+
+The bounded interpreter now accepts an optional private
+`initial_pending_load=(destination_gpr, loaded_u32)`. This preserves
+the **R3000A one-instruction delayed load** when a capture is taken
+immediately after an `LB/LH/LW/LBU/LHU` instruction. The captured GPR
+must still represent the **old** visible value. On executing the first
+new instruction, that instruction observes the old value; afterward
+the pending result retires unless the instruction immediately
+overwrites that destination. Two successive loads of the same GPR
+are now handled consistently: the first retires after the second
+instruction, while the second is still pending.
+
+The stage-211 private JSON reference and stage-212
+`before-registers.json` must now explicitly declare:
+
+```json
+{
+  "pending_load": null,
+  "in_branch_delay_slot": false
+}
+```
+
+If an actual load remains in flight, replace `null` with the
+**real** destination and unsigned 32-bit result:
+
+```json
+{
+  "pending_load": {"gpr": 8, "value_u32": "0x00001000"},
+  "in_branch_delay_slot": false
+}
+```
+
+The chosen destination must be GPR 1–31. This is not a suggestion
+to guess the pending result: obtain it from debugger pipeline data,
+or pause at a proven boundary after the load has retired. The full
+reference includes all existing 32 GPRs, HI/LO, EXE SHA, RAM and
+nine expected signed matrix values as before.
+
+For `external_ps1_capture_claim`, both pipeline fields are **mandatory**:
+legacy external capture JSON without them will be rejected, not
+silently treated as an empty load pipeline. Old synthetic-only
+test fixtures remain backward compatible and may omit the fields.
+When the initial PC lies inside an outstanding branch/jump delay
+slot, `in_branch_delay_slot: true` explicitly refuses replay,
+because the branch's already-determined target is not included
+in the current capture format. A non-boolean branch-slot flag or
+malformed pending destination/value also fails closed.
+
+The numerical comparison emits only two new non-sensitive flags,
+`initial_load_pipeline_state_explicit` and
+`initial_pending_load_applied`, never the pending value or GPR.
+Dependency-shadow analyzers for table indices, matrix writes and
+caller arguments were also updated to use the same consecutive-load
+retirement rule as the concrete runner, preventing false Q12
+coefficient attribution.
+
+See `docs/ps1-debugger-capture-pack.md` and
+`docs/ps1-matrix-reference-fixture.md` for the updated private
+capture fields.
+
+**Verification:** The local reconstructed `/mnt/data/wa213`
+module suite passed **413/413** unit tests (386 earlier plus
+12 new MIPS pipeline, 11 capture, and four shadow consistency
+tests), as well as `python3 -m compileall -q tools tests`.
+All three new test suites are registered in CTest and
+`matrix-audits.yml`. Original-game PS1 captures, real matrix
+values, full remote CI success and Switch hardware execution
+remain **unverified**.
