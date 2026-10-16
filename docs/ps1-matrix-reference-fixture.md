@@ -309,3 +309,33 @@ The printed arithmetic_events summary contains counts and
 bounded mismatching **event indices**, never raw values or PCs.
 Only the private owner-restricted snapshot contains complete
 numeric reference data. Capture authenticity is not attested.
+
+## Stage 220 — candidate arithmetic mismatch-to-matrix slot map
+
+A validated independent *expected_arithmetic_events* section
+automatically enables an **additional diagnostic field** named
+*arithmetic_matrix_attribution*. It does not alter existing
+reference input fields or the strict arithmetic-event option.
+
+For each of nine matrix slot indices 0–8, the result lists at
+most 32 **candidate** mismatching arithmetic event indices
+whose observed dataflow reaches that final successful SH.
+Primary 32-bit mismatches are kept separate from multiplication
+HI-half mismatches. Additional safe fields list candidate
+affected slots and mismatch events without a dependency on
+any final matrix slot.
+
+Attribution is withheld when the arithmetic reference and
+the executed event stream have different numbers or orders
+of PC/operation-kind pairs, when the guest replay is incomplete,
+or when the bounded dataflow cannot retain all dependencies.
+No guest PC, original numerical coefficient, arithmetic
+result, HI/LO value, register or RAM byte is returned.
+
+This is **conservative structural dependency**, not proof
+that an incorrect intermediate event numerically caused
+a wrong matrix coefficient. Algebraic cancellation and
+unmodeled external inputs remain possible. The report always
+identifies this boundary with
+*proven_numeric_causation: false*. Without an independently
+recorded original PS1 event trace the field is null.
