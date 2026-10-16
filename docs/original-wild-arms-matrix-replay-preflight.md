@@ -344,3 +344,59 @@ call-boundary regressions and 2 preflight integration tests).
 subset checkout: a full GitHub Actions run and a test with the
 user-owned original `WILDARMS.EXE` are not verified. Both CTest
 and the CI workflow have been updated to run the nine new tests.
+
+## Stage 200 — trace the source of a0–a3 before the JAL
+
+The host module `tools/mips_caller_sources.py` now inspects a **bounded,
+straight-line instruction window ending with the caller's JAL delay
+slot**. Its `caller_argument_sources` output is included in both static
+and exploratory preflight JSON; no private game bytes or numeric values
+are emitted. The default inspection window is four instructions before
+the JAL. It can be extended manually:
+
+```sh
+python3 -m tools.audit_gp0_matrix_replay_preflight \
+  /private/path/WILDARMS.EXE --caller-lookback 12
+```
+
+Each argument register (GPR 4–7) is classified as an incoming GPR,
+stack-pointer-derived value, literal-derived value, computed value,
+or memory-derived value. Memory loads are further classified as
+stack-relative, constant-address or indirect. The report includes
+only upstream GPR numbers, category labels, and an explicit indicator
+for loads *still pending* at the call boundary. It never includes
+constant immediates, addresses, raw opcode words, initial register
+contents, packed sine/cosine data, or output matrix coefficients.
+
+The analysis recognizes a conservative subset of ALU operations,
+LUI/ORI constant construction, GPR moves/shifts, HI/LO transfers,
+and aligned memory loads. It models the single-instruction MIPS
+load delay, including writes in the JAL delay slot. If the window
+contains a branch, coprocessor opcode, or other unsupported
+instruction, it reports `window_usable: false` and refuses to
+invent argument origins.
+
+**Critical limitation:** the report always has
+`runtime_path_confirmed: false`. It describes *what the decoded
+straight-line bytes would do if reached sequentially*. A wider
+lookback can cross a real control-flow entry or a preceding delay
+slot; such cases require separate dynamic/CFG validation. An
+`incoming_gpr` means only that the register's origin is outside
+the scanned window, not that it has no meaningful game value.
+
+A 4-instruction window sees the established `a1=sp+16` operation
+when present. A wider synthetic window correctly identifies an
+earlier preparation of `a0` from `a2`. Unsupported branches
+deliberately invalidate the inference rather than yielding
+misleading sources.
+
+**Verification:** The local source test environment in
+`/mnt/data/wa200` ran **110/110 synthetic unit tests** including
+21 new source-provenance cases and 3 new preflight integration
+cases, alongside the prior 86 tests. Python compile-check completed
+without errors. The source module and standalone 21-test suite
+were additionally verified against the GitHub file blob hashes.
+CTest and the matrix-audits GitHub Actions workflow now include
+the new tests. A successful full CI run, private original
+`WILDARMS.EXE` evaluation, exact nine-coefficient comparison,
+and Nintendo Switch hardware execution are **not confirmed**.
