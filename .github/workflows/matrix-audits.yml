@@ -36,6 +36,16 @@ on:
       - 'tests/test_mips_input_sensitivity.py'
       - 'tools/mips_entry_dependencies.py'
       - 'tests/test_mips_entry_dependencies.py'
+      - 'tests/test_mips_initial_pipeline.py'
+      - 'tests/test_ps1_pipeline_capture.py'
+      - 'tests/test_mips_load_pipeline_shadow.py'
+      - 'tools/mips_control_flow.py'
+      - 'tools/mips_caller_sources.py'
+      - 'tools/mips_call_boundary.py'
+      - 'tools/mips_entry_dependencies.py'
+      - 'tools/mips_trig_index_provenance.py'
+      - 'tools/mips_matrix_value_lineage.py'
+      - 'tools/mips_matrix_operation_schedule.py'
       - 'tools/mips_ps1_capture_pack.py'
       - 'tools/audit_ps1_capture_pack.py'
       - 'tests/test_mips_ps1_capture_pack.py'
@@ -110,6 +120,9 @@ jobs:
           python -m unittest discover -s tests -p 'test_mips_builder_integrity_gate.py' -v
           python -m unittest discover -s tests -p 'test_mips_ps1_matrix_reference.py' -v
           python -m unittest discover -s tests -p 'test_mips_ps1_capture_pack.py' -v
+          python -m unittest discover -s tests -p 'test_mips_initial_pipeline.py' -v
+          python -m unittest discover -s tests -p 'test_ps1_pipeline_capture.py' -v
+          python -m unittest discover -s tests -p 'test_mips_load_pipeline_shadow.py' -v
           python -m unittest discover -s tests -p 'test_audit_ps1_capture_pack.py' -v
           python -m unittest discover -s tests -p 'test_audit_ps1_matrix_reference.py' -v
           python -m unittest discover -s tests -p 'test_gp0_builder_integrity_gate.py' -v
