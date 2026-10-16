@@ -60,6 +60,22 @@ class ContextTests(unittest.TestCase):
         self.assertTrue(any(x['reason']=='coprocessor_branch_requires_semantics'
                             for x in report['unresolved']))
 
+    def test_beq_same_register_is_always_taken(self):
+        branch=(4<<26)|(8<<21)|(8<<16)|2
+        report=run([branch,0,0,0])
+        edges={(e['from'],e['to']) for e in report['edges']}
+        self.assertIn((f'0x{START+4:08X}@delay_of_0x{START:08X}',
+                       f'0x{START+12:08X}'),edges)
+        self.assertNotIn((f'0x{START+4:08X}@delay_of_0x{START:08X}',
+                          f'0x{START+8:08X}'),edges)
+
+    def test_bnel_same_register_annuls_slot(self):
+        branch=(21<<26)|(8<<21)|(8<<16)|2
+        report=run([branch,0,0,0])
+        self.assertEqual(report['edges'][0],
+                         {'from':f'0x{START:08X}','to':f'0x{START+8:08X}'})
+        self.assertFalse(any('@delay_of_' in e['to'] for e in report['edges']))
+
     def test_invalid(self):
         self.assertFalse(trace(b'',BASE,START,START)['valid_range'])
 
