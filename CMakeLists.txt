@@ -300,3 +300,8 @@ set_tests_properties(wa_mips_integer_sequence PROPERTIES WORKING_DIRECTORY ${CMA
 add_test(NAME wa_mips_memory_sequence
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_memory_sequence.py)
 set_tests_properties(wa_mips_memory_sequence PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Caller-owned Q12 trig-table mapping and integer reconstruction.
+add_test(NAME wa_mips_trig_memory
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_trig_memory.py)
+set_tests_properties(wa_mips_trig_memory PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
