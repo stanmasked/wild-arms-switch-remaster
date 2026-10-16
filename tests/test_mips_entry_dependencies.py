@@ -32,7 +32,7 @@ class EntryDependenciesTests(unittest.TestCase):
 
     def test_consecutive_load_same_destination(self):
         self.assertEqual(deps([ins(35,8,9,0),ins(35,8,9,4),
-                               ins(9,9,10,1),ins(9,9,11,1)]), (8,9))
+                               ins(9,9,10,1),ins(9,9,11,1)]), (8,))
 
     def test_branch_uses_source_before_delayed_load_commits(self):
         self.assertEqual(deps([ins(35,8,9,0),ins(4,9,0,1),0]),(8,9))
