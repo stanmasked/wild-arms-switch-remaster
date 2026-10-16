@@ -1560,3 +1560,61 @@ subset emulator**, not GTE writes, GPU activity, DMA traffic,
 peripheral effects or full PlayStation hardware behavior. A
 matching synthetic trace does not establish the native Switch
 remake as playable.
+
+## Stage 218 — exact values for each successful SB/SH/SW event
+
+The stage-217 recorder established **where and when** CPU stores
+succeeded, but it could not detect a wrong intermediate value
+that a later instruction overwrote. Stage 218 adds the private
+`store_value_accesses` trace to `tools/mips_control_flow.py`.
+For each successful `SB`, `SH` or `SW`, the bounded guest
+interpreter records, in execution order:
+`(instruction_pc, resolved_address, byte_width, source_rt, stored_low_bits)`.
+Stored bits come from the source GPR **before** a pending load
+retires, then are truncated to the effective 8/16/32-bit write width.
+Failed stores produce no event; previous `store_addresses` and
+`store_accesses` remain intact.
+
+The new independent `tools/mips_store_value_sequence.py` uses
+schema `wild-arms-ps1-store-values-v1` with required private
+`pc`, `address`, `width`, and `value_u32` for each event.
+The reference must come directly from the separate debugger trace
+of the same original-game session; the tool never derives the
+events from final RAM, never guesses written values, and rejects
+out-of-width values. A private reference may set
+`require_store_values: true` to make complete agreement mandatory,
+using `--store-value-events` and `--require-store-values` in
+`tools.audit_ps1_capture_pack`.
+
+The new verifier rejects two simultaneous user-provided
+location-only/value-bearing logs if their event sites differ.
+It cross-checks the interpreter's private value records against
+its successful legacy store stream and produces distinct safe
+indices for **wrong store sites** and **wrong stored values**.
+The public `store_values` output contains only aggregate counts,
+width histogram, at most 32 mismatching event indices and a
+truncation flag. No register contents, actual store values,
+instruction PCs, resolved addresses, or hash strings are emitted.
+
+The full strict reference can now separately demand:
+nine matrix coefficients, completed `JR $ra` return,
+32-GPR/HI/LO/pipeline state, complete after-RAM, ordered
+store sites, and each store's **actual written value**.
+All existing criteria retain their independent diagnostic
+fields, while `matches_complete_reference` additionally
+fails on any required value mismatch even if final RAM and
+matrix coefficients are identical.
+
+**Local verification:** the relevant reconstructed source tree
+`/mnt/data/wa218` passed **564/564** Python tests, including
+19 new MIPS value/oracle tests and 15 private PS-X EXE/CLI
+integration tests. Python `compileall -q tools tests` also
+succeeded. The two test suites were registered in host CTest
+and `matrix-audits.yml`. A successful full remote GitHub
+Actions run has not been verified.
+
+This remains a **synthetic subset-MIPS verification tool**.
+No independent authentic `WILDARMS.EXE` store-value capture,
+PS1 console equivalence, or native Nintendo Switch game
+execution is established here. The user-owned captures and
+their store-value traces must remain private.
