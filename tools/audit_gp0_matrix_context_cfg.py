@@ -48,6 +48,17 @@ def trace(image, base, start=BUILDER, end=RETURN):
                 imm=imm-65536 if imm&32768 else imm
                 next_nodes=[((controller+4+(imm<<2))&0xffffffff,None)]
             else:
+                if parent_kind == 'conditional':
+                    parent_word=words[controller]
+                    op=parent_word>>26
+                    rs=(parent_word>>21)&31
+                    rt=(parent_word>>16)&31
+                    # BEQ r,r is always taken; BNE r,r is never taken.
+                    # This identity needs no concrete register values.
+                    if rs == rt and op == 4:
+                        parent_targets=parent_targets[:1]
+                    elif rs == rt and op == 5:
+                        parent_targets=parent_targets[1:]
                 next_nodes=[(target,None) for target in parent_targets] if parent_kind in ('conditional','jump') else []
         elif delayed:
             if kind in ('branch_likely','regimm_likely'):
