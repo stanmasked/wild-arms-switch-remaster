@@ -89,3 +89,15 @@ The context CFG, context provenance, and legacy join test suites now
 share this fixture convention. The current graph still treats branch
 predicates symbolically, and may contain infeasible paths elsewhere.
 This change has been committed but CI success remains unverified.
+
+## Stage 182: proven equal-register branch identities
+
+The context CFG now resolves `BEQ rs,rs` and `BEQL rs,rs` as
+unconditionally taken, and `BNE rs,rs` and `BNEL rs,rs` as
+unconditionally not taken. The BNEL case annuls its delay slot.
+Unproven predicates continue to explore both possible paths.
+
+Tests using formerly tautological BEQL instructions were corrected
+to compare distinct registers, and two new deterministic tests were
+added. This does not model general register values or complete GTE
+semantics. CI execution remains unverified.
