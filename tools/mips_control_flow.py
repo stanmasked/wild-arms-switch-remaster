@@ -63,7 +63,7 @@ def _gpr_destination(word):
 
 
 def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
-            max_steps=4096, stop_pc=None):
+            max_steps=4096, stop_pc=None, initial_pending_load=None):
     """Run a bounded image slice; report state, PC trace, and exact halt cause.
 
     State is returned for host-side tests only; callers should not publish
@@ -78,8 +78,17 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
         raise ValueError('expected 32 MIPS GPRs')
     regs = tuple([0] + [u32(v) for v in gpr[1:]])
     hi, lo = u32(hi), u32(lo)
+    if initial_pending_load is not None:
+        if (not isinstance(initial_pending_load, (tuple, list)) or
+                len(initial_pending_load) != 2 or
+                type(initial_pending_load[0]) is not int or
+                not 1 <= initial_pending_load[0] <= 31 or
+                type(initial_pending_load[1]) is not int or
+                not 0 <= initial_pending_load[1] <= 0xffffffff):
+            raise ValueError('invalid captured pending MIPS load state')
+        initial_pending_load = tuple(initial_pending_load)
     pc = start
-    pending_load = None
+    pending_load = initial_pending_load
     delayed_target = None
     visited = []
     writes = []
@@ -159,7 +168,10 @@ def execute(image, base, start, memory, gpr=None, hi=0, lo=0,
             updated = list(updated)
             if pending_load is not None:
                 old_dest, old_value = pending_load
-                if old_dest != destination:
+                # An *immediate* ALU write supersedes an older load, but
+                # another LW/LH to the same GPR remains pending for a later
+                # instruction. The older load must retire at this boundary.
+                if old_dest != destination or op in LOADS:
                     updated[old_dest] = old_value
             regs = tuple([0] + updated[1:])
             hi, lo = next_hi, next_lo
