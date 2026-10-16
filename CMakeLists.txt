@@ -440,3 +440,13 @@ set_tests_properties(wa_mips_builder_integrity_gate PROPERTIES WORKING_DIRECTORY
 add_test(NAME wa_gp0_builder_integrity_gate
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_builder_integrity_gate.py)
 set_tests_properties(wa_gp0_builder_integrity_gate PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 211: compare privately supplied PS1 reference coefficients to a bounded MIPS replay.
+add_test(NAME wa_mips_ps1_matrix_reference
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_ps1_matrix_reference.py)
+set_tests_properties(wa_mips_ps1_matrix_reference PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 211: reference verifier command-line validation and safe failure codes.
+add_test(NAME wa_audit_ps1_matrix_reference
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_audit_ps1_matrix_reference.py)
+set_tests_properties(wa_audit_ps1_matrix_reference PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
