@@ -1154,3 +1154,75 @@ published to GitHub, and the two new test suites were added to
 CTest and `matrix-audits.yml`. Full remote CI, original
 hardware-derived coefficient capture and native Switch execution
 remain unverified.
+
+## Stage 212 — offline PS1 debugger capture packaging for stage-211 numeric comparisons
+
+The new `tools/mips_ps1_capture_pack.py` and
+`tools/audit_ps1_capture_pack.py` prepare a compatible **private**
+`wild-arms-ps1-matrix-reference-v1` snapshot from simple debugger
+exports without manually composing a 4-MiB hexadecimal RAM field.
+
+Required local inputs are:
+
+- User-owned PS-X EXE (SHA-256 recorded automatically).
+- A *before-execution* JSON containing all 32 GPRs, HI/LO and PC.
+- A matching raw **before** RAM binary at that same instruction boundary.
+- An *after-execution* JSON containing the next PC after the final SH and
+  JR return delay slot.
+- A raw **after** RAM binary, from the same continuous game session and
+  the same guest-address range.
+
+The packer takes the matrix pointer from captured `$a1` (GPR 5),
+unless the user explicitly supplies a verified `--matrix-address`.
+It decodes **nine little-endian signed halfwords** from the *after*
+RAM snapshot; the complete *before* RAM bytes are mapped as the
+input memory for the independent stage-211 numerical verifier.
+Both raw RAM exports must have the same size (18 bytes to 4 MiB)
+and the same explicitly selected guest virtual address base.
+Full 2-MiB physical PS1 RAM exports can be mapped into KSEG0 with
+`--ram-base 0x80000000`; physical/virtual aliases are **not**
+automatically inferred.
+
+The CLI can optionally invoke the existing stage-211 numerical
+comparator immediately with `--compare`. It prints a sanitized
+JSON summary with counts, boolean completion statuses and (when
+comparison was requested) mismatch **slot indices** only.
+It never prints raw guest registers, RAM, input angles, nine
+coefficient values, original EXE bytes or private filenames.
+The resulting private JSON is created locally with owner-only
+permissions (`0600` on POSIX). An existing capture is never
+silently overwritten. Invalid inputs yield a generic failure
+rather than echoing private exception data.
+
+Instructions, example debugger-register JSON and a complete
+command line are in **`docs/ps1-debugger-capture-pack.md`**:
+
+```sh
+python3 -m tools.audit_ps1_capture_pack \
+  --exe /private/WILDARMS.EXE \
+  --before-registers /private/before-registers.json \
+  --after-registers /private/after-registers.json \
+  --before-ram /private/before-ram.bin \
+  --after-ram /private/after-ram.bin \
+  --ram-base 0x80000000 \
+  --output /private/ps1-matrix-capture.json \
+  --compare
+```
+
+A packaged snapshot's declared `external_ps1_capture_claim` remains
+**unauthenticated**. The tool cannot verify that two emulator exports
+actually came from the same gameplay session or that a real
+PlayStation ran the code. Pending load-delay state at the initial
+PC, GTE, runtime self-modifying code, RAM aliases and interrupt
+behavior remain outside this simplified capture/replay contract.
+Even a nine-of-nine match is only agreement with the *supplied*
+after-RAM data, not hardware equivalence.
+
+**Verification:** In the local reconstructed source tree
+`/mnt/data/wa212`, **386/386** Python tests passed (359 earlier plus
+18 packing and 9 CLI cases). Python `compileall -q tools tests`
+passed. Five new source/test/doc files were byte-for-byte verified
+against their GitHub blob checksums. Both new test suites are
+registered in CTest and `matrix-audits.yml`. A full successful
+remote GitHub Actions run, any authentic original-game reference,
+and a playable native Switch build have **not** been confirmed.
