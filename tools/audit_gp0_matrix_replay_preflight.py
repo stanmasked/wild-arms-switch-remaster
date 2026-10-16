@@ -28,6 +28,7 @@ try:
     from .mips_trig_index_provenance import summarize as summarize_trig_index
     from .mips_matrix_value_lineage import summarize as summarize_matrix_lineage
     from .mips_matrix_operation_schedule import summarize as summarize_operation_schedule
+    from .mips_builder_opcode_evidence import inspect as inspect_builder_opcode_evidence
 except ImportError:
     from audit_original_nclip_winding import parse_exe
     from audit_gp0_rotation_matrix_builder import BUILDER, RETURN, CALL, jal_target
@@ -43,6 +44,7 @@ except ImportError:
     from mips_trig_index_provenance import summarize as summarize_trig_index
     from mips_matrix_value_lineage import summarize as summarize_matrix_lineage
     from mips_matrix_operation_schedule import summarize as summarize_operation_schedule
+    from mips_builder_opcode_evidence import inspect as inspect_builder_opcode_evidence
 
 
 def instruction_family(word):
@@ -133,6 +135,8 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
         'builder_end_inclusive': f'0x{end:08X}',
         'instruction_count': (end - start) // 4 + 1,
         'instruction_families': dict(sorted(counts.items())),
+        'builder_opcode_evidence': inspect_builder_opcode_evidence(
+            image, base, start, end),
         'unsupported_families': dict(sorted(unsupported.items())),
         'static_supported_count': sum(counts.values()) - sum(unsupported.values()),
         'trig_table_mapped_in_image': table_present,
