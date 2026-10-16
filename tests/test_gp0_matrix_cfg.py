@@ -62,6 +62,20 @@ class CFGTests(unittest.TestCase):
         self.assertTrue(any(x['reason']=='malformed_jump_encoding'
                             for x in report['unresolved']))
 
+    def test_branch_likely_delay_slot_not_assumed_executed(self):
+        report = check([20<<26 | 1, 0, 0])
+        self.assertFalse(any(e['from']==f'0x{START:08X}' and
+                             e['to']==f'0x{START+4:08X}'
+                             for e in report['edges']))
+        self.assertTrue(any(x['reason']=='branch_likely_requires_semantics'
+                            for x in report['unresolved']))
+
+    def test_unknown_regimm_slot_not_assumed_executed(self):
+        report = check([(1<<26)|(2<<16), 0, 0])
+        self.assertFalse(any(e['from']==f'0x{START:08X}' and
+                             e['kind']=='delay_slot'
+                             for e in report['edges']))
+
     def test_out_of_range(self):
         self.assertFalse(analyze(b'', BASE, START, START)['valid_range'])
 
