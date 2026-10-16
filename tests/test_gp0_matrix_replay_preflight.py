@@ -88,6 +88,68 @@ class ReplayPreflightTests(unittest.TestCase):
         self.assertEqual(tr['halt_instruction_family'], 'aligned_load')
         self.assertEqual(tr['halt_category'], 'memory_access_or_alignment')
 
+    def test_synthetic_caller_linkage_is_verified_from_instructions(self):
+        # ADDIU a1,sp,16 at call-16 followed by JAL to the constructor.
+        caller = BASE + 16
+        target = BASE
+        jal = (3<<26) | ((target>>2)&0x3ffffff)
+        words = [ins(9,29,5,16),0,0,0,jal,0]
+        report = analyze(fixture(words), start=BASE, end=BASE+20,
+                         call=caller)
+        self.assertTrue(report['caller_linkage']['linkage_confirmed'])
+        self.assertTrue(report['caller_linkage']['jal_targets_builder'])
+        self.assertTrue(report['caller_linkage']['a1_is_sp_plus_16'])
+
+    def test_wrong_caller_linkage_is_not_confirmed(self):
+        caller = BASE + 16
+        jal_elsewhere = (3<<26) | (((BASE+4)>>2)&0x3ffffff)
+        words = [ins(9,29,5,12),0,0,0,jal_elsewhere,0]
+        report = analyze(fixture(words), start=BASE, end=BASE+20,
+                         call=caller)
+        self.assertFalse(report['caller_linkage']['linkage_confirmed'])
+        self.assertFalse(report['caller_linkage']['jal_targets_builder'])
+        self.assertFalse(report['caller_linkage']['a1_is_sp_plus_16'])
+
+    def test_caller_absent_from_short_image(self):
+        report = analyze(fixture([0,0]), start=BASE, end=BASE+4)
+        self.assertFalse(report['caller_linkage']['callsite_in_image'])
+
+    def test_frame_layout_all_nine_matrix_halfwords(self):
+        # All SH writes use a1=sp+16, inside mapped scratch stack.
+        program = [ins(9,0,9,4096)]
+        program.extend(ins(41,5,9,off) for off in range(0,18,2))
+        program.append(0)
+        report = analyze(fixture(program), start=BASE,
+                         end=BASE+4*(len(program)-1),
+                         explore=True,frame_layout=True)
+        trace = report['exploratory_trace']
+        self.assertTrue(trace['reached_return_site'])
+        self.assertEqual(trace['frame_layout'],'a1_sp_plus_16')
+        self.assertEqual(trace['distinct_matrix_slots_written'],9)
+        self.assertTrue(trace['all_matrix_slots_written'])
+        self.assertNotIn('gpr',trace)
+        self.assertNotIn('matrix_address',trace)
+
+    def test_frame_layout_sp_relative_address_matches_a1(self):
+        # Alternate pointer computation ADDIU t0,sp,16 writes same buffer.
+        program = [ins(9,0,9,4096),ins(9,29,8,16),ins(41,8,9,0),0]
+        report = analyze(fixture(program), start=BASE, end=BASE+12,
+                         explore=True,frame_layout=True)
+        self.assertEqual(report['exploratory_trace']['distinct_matrix_slots_written'],1)
+
+    def test_frame_layout_rejects_conflicting_initial_registers(self):
+        blob=fixture([0,0])
+        for register in (5,29):
+            with self.assertRaises(ValueError):
+                analyze(blob,start=BASE,end=BASE+4,explore=True,
+                        frame_layout=True,initial_registers={register:123})
+
+    def test_separate_matrix_layout_is_unchanged(self):
+        report=analyze(fixture([ins(9,0,9,4096),ins(41,5,9,0),0]),
+                       start=BASE,end=BASE+8,explore=True)
+        self.assertEqual(report['exploratory_trace']['frame_layout'],'separate_matrix')
+        self.assertEqual(report['exploratory_trace']['distinct_matrix_slots_written'],1)
+
     def test_trace_bounded_loop(self):
         jump_to_self = (2<<26) | ((BASE>>2)&0x03ffffff)
         r = analyze(fixture([jump_to_self,0,0]), start=BASE, end=BASE+8,
