@@ -117,6 +117,46 @@ class ArithmeticTraceTests(unittest.TestCase):
         result=compare(tr,ref((BASE,'multu',0xfffffffe,2)),guest_stopped_at_expected_pc=True)
         self.assertEqual(result['secondary_result_mismatch_indices'],[0])
 
+    def test_both_multiply_halves_mismatch_in_one_event(self):
+        regs=[0]*32;regs[8]=0xffffffff;regs[9]=2
+        tr,_=replay([r(25,8,9)],regs=regs)
+        result=compare(tr,ref((BASE,'multu',0xfffffffd,2)),
+                       guest_stopped_at_expected_pc=True)
+        self.assertFalse(result['matches_reference'])
+        self.assertEqual(result['result_value_mismatch_indices'],[0])
+        self.assertEqual(result['secondary_result_mismatch_indices'],[0])
+        self.assertEqual(result['mismatching_event_indices'],[0])
+        self.assertEqual(result['matching_event_count'],0)
+        self.assertFalse(result['mismatch_indices_truncated'])
+        self.assertNotIn(hex(BASE),str(result))
+        self.assertNotIn('fffffffd',str(result))
+
+    def test_dual_mismatches_do_not_double_count_or_undercount_matching(self):
+        regs=[0]*32;regs[8]=0xffffffff;regs[9]=2
+        count=40
+        tr,_=replay([r(25,8,9)]*count,regs=regs)
+        expected=ref(*((BASE+4*j,'multu',0xfffffffd,2)
+                       for j in range(count)))
+        result=compare(tr,expected,guest_stopped_at_expected_pc=True)
+        self.assertEqual(result['matching_event_count'],0)
+        self.assertEqual(result['mismatching_event_indices'],
+                         list(range(MAX_MISMATCH_INDICES)))
+        self.assertEqual(result['result_value_mismatch_indices'],
+                         list(range(MAX_MISMATCH_INDICES)))
+        self.assertEqual(result['secondary_result_mismatch_indices'],
+                         list(range(MAX_MISMATCH_INDICES)))
+        self.assertTrue(result['mismatch_indices_truncated'])
+
+    def test_wrong_site_does_not_assign_numeric_mismatch_categories(self):
+        regs=[0]*32;regs[8]=0xffffffff;regs[9]=2
+        tr,_=replay([r(25,8,9)],regs=regs)
+        result=compare(tr,ref((BASE+4,'multu',0xfffffffd,2)),
+                       guest_stopped_at_expected_pc=True)
+        self.assertEqual(result['opcode_or_pc_mismatch_indices'],[0])
+        self.assertEqual(result['result_value_mismatch_indices'],[])
+        self.assertEqual(result['secondary_result_mismatch_indices'],[])
+        self.assertEqual(result['matching_event_count'],0)
+
     def test_same_value_intermediate_is_not_deduplicated(self):
         regs=[0]*32;regs[8]=4;regs[9]=7
         tr,_=replay([r(33,rs=8,rt=9,rd=10),r(33,rs=8,rt=9,rd=10)],regs=regs)
