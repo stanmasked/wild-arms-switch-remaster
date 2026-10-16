@@ -45,7 +45,7 @@ def _branch(word, pc, regs):
 
 
 def inspect(image, base, call, lookback_words=8, arguments=(4, 5, 6, 7),
-            max_states=512, max_paths=64):
+            max_states=512, max_paths=64, observed_pcs=None):
     """Join provenance across *all* bounded feasible control paths to call.
 
     An incoming unknown register makes a branch condition conservative; both
@@ -68,7 +68,14 @@ def inspect(image, base, call, lookback_words=8, arguments=(4, 5, 6, 7),
             raise ValueError('branch target leaves caller window')
         return struct.unpack_from('<I', image, pc - base)[0]
 
-    queue = deque([(first, initial_gprs(), None, None, None, frozenset())])
+    # Optional executed caller-prefix instruction trace from the bounded
+    # interpreter. It must contain every instruction in this window, from
+    # the first word through JAL's executed delay slot, with no extras.
+    observed = None if observed_pcs is None else tuple(observed_pcs)
+    if observed is not None and any(not isinstance(pc, int) for pc in observed):
+        raise ValueError('invalid observed MIPS PCs')
+    queue = deque([(first, initial_gprs(), None, None, None,
+                    frozenset(), tuple())])
     outputs = []
     states = 0
     branches = 0
@@ -77,7 +84,7 @@ def inspect(image, base, call, lookback_words=8, arguments=(4, 5, 6, 7),
             states += 1
             if states > max_states:
                 raise ValueError('state_limit')
-            pc, regs, pending, hi, lo, seen = queue.popleft()
+            pc, regs, pending, hi, lo, seen, path = queue.popleft()
             if pc in seen or pc < first or pc > call:
                 raise ValueError('loop_or_window_exit')
             seen = seen | {pc}
@@ -93,7 +100,7 @@ def inspect(image, base, call, lookback_words=8, arguments=(4, 5, 6, 7),
                 after_jal, hi, lo = _step(word, new_regs, pending, hi, lo,
                                           at_call=True)
                 final_pending, hi, lo = _step(slot, new_regs, after_jal, hi, lo)
-                outputs.append((new_regs, final_pending))
+                outputs.append((new_regs, final_pending, path + (call, call + 4)))
                 if len(outputs) > max_paths:
                     raise ValueError('path_limit')
                 continue
@@ -103,7 +110,7 @@ def inspect(image, base, call, lookback_words=8, arguments=(4, 5, 6, 7),
                     raise ValueError('unsupported jump before JAL')
                 regs = regs.copy()
                 pending, hi, lo = _step(word, regs, pending, hi, lo)
-                queue.append((pc + 4, regs, pending, hi, lo, seen))
+                queue.append((pc + 4, regs, pending, hi, lo, seen, path + (pc,)))
                 continue
             # All supported conditional branches execute exactly one slot.
             if pc + 4 >= call:
@@ -128,7 +135,8 @@ def inspect(image, base, call, lookback_words=8, arguments=(4, 5, 6, 7),
                 if target == pc + 4:
                     raise ValueError('branch target enters delay slot')
                 queue.append((target, branch_regs.copy(), pending_after_slot,
-                              hi_after_slot, lo_after_slot, seen | {pc + 4}))
+                              hi_after_slot, lo_after_slot, seen | {pc + 4},
+                              path + (pc, pc + 4)))
     except ValueError as exc:
         return {'window_usable': False, 'reason': str(exc),
                 'runtime_path_confirmed': False, 'arguments': []}
@@ -138,7 +146,7 @@ def inspect(image, base, call, lookback_words=8, arguments=(4, 5, 6, 7),
                 'runtime_path_confirmed': False, 'arguments': []}
     desc = []
     for reg in arguments:
-        versions = [regs[reg] for regs, pending in outputs]
+        versions = [regs[reg] for regs, pending, path in outputs]
         variations = [_describe(reg, value) for value in versions]
         desc.append({
             'gpr': reg,
@@ -149,8 +157,32 @@ def inspect(image, base, call, lookback_words=8, arguments=(4, 5, 6, 7),
             'load_pending_on_any_path': any(pending is not None and pending[0] == reg
                                             for regs, pending in outputs),
         })
+    # Never claim observation if the interpreter was started partway through
+    # a longer static window, or if the actual path exited/failed before JAL.
+    matching = [item for item in outputs if item[2] == observed] if observed is not None else []
+    probe_sources = []
+    for reg in arguments if matching else ():
+        versions = [regs[reg] for regs, pending, path in matching]
+        kinds = [_describe(reg, origin) for origin in versions]
+        probe_sources.append({
+            'gpr': reg,
+            'source_kinds': sorted({value['source_kind'] for value in kinds}),
+            'incoming_gprs': sorted(set().union(*(set(v['incoming_gprs']) for v in kinds))),
+            'memory_kinds': sorted(set().union(*(set(v['memory_kinds']) for v in kinds))),
+            'same_origin_across_matched_paths': len(set(versions)) == 1,
+            'load_pending_on_matched_path': any(
+                pending is not None and pending[0] == reg
+                for regs, pending, path in matching),
+        })
     return {'window_usable': True, 'reason': None,
             'runtime_path_confirmed': False,
+            'synthetic_probe_path_supplied': observed is not None,
+            'synthetic_probe_window_covered': bool(observed is not None and
+                                                    observed and observed[0] == first and
+                                                    observed[-2:] == (call, call + 4)),
+            'synthetic_probe_path_matched': bool(matching),
+            'synthetic_probe_matching_path_count': len(matching),
+            'synthetic_probe_argument_sources': probe_sources,
             'paths_to_call': len(outputs),
             'conditional_branches_explored': branches,
             'all_explored_paths_reach_call': True,
