@@ -168,3 +168,68 @@ For older synthetic fixtures, `require_completed_jr_ra` defaults to
 false so previously tested artificial straight-line programs still
 work. This explicit switch does not prove authentic PS1 hardware,
 and the original Wild Arms return path still needs a genuine capture.
+
+## Stage 215 — compare the complete CPU state after the builder
+
+The optional `--require-final-cpu-state` switch (recommended once
+the debugger exposes all registers at return) adds a second independent
+gate to the nine coefficient and optional completed-JR checks:
+
+```sh
+python3 -m tools.audit_ps1_capture_pack \
+  --exe /private/WILDARMS.EXE \
+  --before-registers /private/before-registers.json \
+  --after-registers /private/after-registers.json \
+  --before-ram /private/before-ram.bin \
+  --after-ram /private/after-ram.bin \
+  --ram-base 0x80000000 \
+  --output /private/matrix-plus-cpu.json \
+  --require-jr-return --require-final-cpu-state --compare
+```
+
+With this switch, the **after-registers** JSON must contain a
+genuine snapshot of the same session at the supplied **after PC**,
+not merely the PC itself. For example (illustrative placeholders,
+**not** a real captured state):
+
+```json
+{
+  "schema": "wild-arms-ps1-debugger-registers-v1",
+  "pc": "0x80077988",
+  "gpr": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  "hi": "0x00000000",
+  "lo": "0x00000000",
+  "pending_load": null,
+  "in_branch_delay_slot": false
+}
+```
+
+The parser requires all 32 unsigned GPR words, unsigned HI/LO,
+an explicit pending-load state and a false branch-delay-slot
+flag. An incomplete after-register file (e.g. only `gpr`) fails
+closed. A PC-only after export remains supported **unless** this
+strict mode is requested.
+
+The packed private reference includes
+`"require_final_cpu_state": true` and an
+`"expected_final_cpu_state"` object with those five state fields
+(excluding `pc`, which remains the existing `stop_pc` field).
+The bounded interpreter's final CPU state is compared **only** if it
+actually reached that stop PC. The separate `final_cpu_state`
+summary contains aggregate GPR matches and *indices* of mismatched
+GPRs, plus booleans for HI, LO and pending-load equality.
+No post-return register words, pending values or RAM bytes appear
+in public output.
+
+A new `matches_complete_reference` boolean is the overall result:
+it requires all nine comparable coefficients to match, **and**
+the final CPU state to match if the strict option was selected.
+`matches_supplied_nine_coefficients` keeps its original,
+strictly *numerical* meaning. The CLI returns exit status 1 when
+the matrix matches but a required final CPU register, HI/LO or
+pipeline value does not match.
+
+These checks do **not** independently authenticate the source
+of either debugger export, emulate missing GTE/interrupt behavior,
+or prove full original-game equivalence or a working Switch port.
