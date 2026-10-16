@@ -284,6 +284,139 @@ class AttributionTests(unittest.TestCase):
         self.assertFalse(result['mismatch_dependent_control_observed'])
         self.assertEqual(result['mismatching_events_without_final_matrix_dependency'],[0])
 
+    def test_spill_reload_then_branch_uses_delayed_mismatch(self):
+        regs=[0]*32;regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),
+               op(43,5,10,40),op(35,5,11,40),0,op(4,11,0,1),0]
+        words += [op(41,5,0,2*i) for i in range(9)]
+        image,trace,expected=custom(words,regs,snapshots=[(MATRIX+40,bytes(4))])
+        changed=list(expected)
+        pc,kind,value,aux=changed[0]
+        changed[0]=(pc,kind,12,aux)
+        outcome=analyze(image,BASE,trace,MATRIX,tuple(changed),
+                        guest_stopped_at_expected_pc=True)
+        self.assertFalse(outcome['attribution_performed'])
+        self.assertTrue(outcome['mismatch_dependent_control_observed'])
+        self.assertFalse(outcome['mismatch_dependent_address_observed'])
+        self.assertEqual(outcome['reason_code'],'mismatch_dependent_execution_path')
+
+    def test_overwritten_spill_breaks_dependency_before_branch(self):
+        regs=[0]*32;regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),op(43,5,10,40),
+               op(43,5,0,40),op(35,5,11,40),0,op(4,11,0,1),0]
+        words += [op(41,5,0,2*i) for i in range(9)]
+        image,trace,expected=custom(words,regs,snapshots=[(MATRIX+40,bytes(4))])
+        changed=list(expected)
+        pc,kind,value,aux=changed[0]
+        changed[0]=(pc,kind,12,aux)
+        outcome=analyze(image,BASE,trace,MATRIX,tuple(changed),
+                        guest_stopped_at_expected_pc=True)
+        self.assertTrue(outcome['attribution_performed'])
+        self.assertFalse(outcome['mismatch_dependent_control_observed'])
+        self.assertEqual(outcome['candidate_affected_slot_indices'],[])
+        self.assertEqual(outcome['mismatching_events_without_final_matrix_dependency'],[0])
+
+    def test_back_to_back_loads_keep_old_token_until_second_load_retires(self):
+        regs=[0]*32;regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),op(43,5,10,40),
+               op(43,5,0,44),op(35,5,11,40),op(35,5,11,44),
+               op(41,5,11,0),op(41,5,11,2)]
+        words += [op(41,5,0,2*i) for i in range(2,9)]
+        image,trace,expected=custom(words,regs,snapshots=[(MATRIX+40,bytes(8))])
+        changed=list(expected)
+        pc,kind,value,aux=changed[0]
+        changed[0]=(pc,kind,12,aux)
+        outcome=analyze(image,BASE,trace,MATRIX,tuple(changed),
+                        guest_stopped_at_expected_pc=True)
+        self.assertTrue(outcome['attribution_performed'])
+        self.assertEqual(outcome['candidate_affected_slot_indices'],[0])
+        self.assertEqual(outcome['matrix_slots'][0]['candidate_mismatch_event_indices'],[0])
+        self.assertEqual(outcome['matrix_slots'][1]['candidate_mismatch_event_indices'],[])
+
+    def test_immediate_alu_write_supersedes_old_pending_load_lineage(self):
+        regs=[0]*32;regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),op(43,5,10,40),
+               op(35,5,11,40),reg(33,rs=0,rt=0,rd=11)]
+        words += [op(41,5,11,2*i) for i in range(9)]
+        image,trace,expected=custom(words,regs,snapshots=[(MATRIX+40,bytes(4))])
+        changed=list(expected)
+        pc,kind,value,aux=changed[0]
+        changed[0]=(pc,kind,12,aux)
+        outcome=analyze(image,BASE,trace,MATRIX,tuple(changed),
+                        guest_stopped_at_expected_pc=True)
+        self.assertTrue(outcome['attribution_performed'])
+        self.assertEqual(outcome['candidate_affected_slot_indices'],[])
+        self.assertEqual(outcome['mismatching_events_without_final_matrix_dependency'],[0])
+
+    def test_arithmetic_inside_branch_delay_slot_cannot_change_taken_target(self):
+        regs=[0]*32;regs[8]=4;regs[9]=7
+        words=[op(4,0,0,1),reg(33,rs=8,rt=9,rd=10)]
+        words += [op(41,5,10,2*i) for i in range(9)]
+        image,trace,expected=custom(words,regs)
+        changed=list(expected)
+        pc,kind,value,aux=changed[0]
+        changed[0]=(pc,kind,12,aux)
+        outcome=analyze(image,BASE,trace,MATRIX,tuple(changed),
+                        guest_stopped_at_expected_pc=True)
+        self.assertTrue(outcome['attribution_performed'])
+        self.assertFalse(outcome['mismatch_dependent_control_observed'])
+        self.assertEqual(outcome['candidate_affected_slot_indices'],list(range(9)))
+
+    def test_branch_likely_annulled_slot_does_not_emit_arithmetic_event(self):
+        regs=[0]*32;regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),op(20,10,0,1),
+               reg(33,rs=8,rt=9,rd=11)]
+        words += [op(41,5,0,2*i) for i in range(9)]
+        image,trace,expected=custom(words,regs)
+        self.assertNotIn(BASE+8,trace['visited_pcs'])
+        self.assertEqual(len(expected),1)
+        changed=list(expected)
+        pc,kind,value,aux=changed[0]
+        changed[0]=(pc,kind,12,aux)
+        outcome=analyze(image,BASE,trace,MATRIX,tuple(changed),
+                        guest_stopped_at_expected_pc=True)
+        self.assertFalse(outcome['attribution_performed'])
+        self.assertTrue(outcome['mismatch_dependent_control_observed'])
+        self.assertEqual(outcome['reason_code'],'mismatch_dependent_execution_path')
+
+    def test_guest_write_to_executable_image_withholds_all_attribution(self):
+        regs=[0]*32;regs[5]=MATRIX;regs[6]=BASE
+        regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),op(43,6,0,0)]
+        words += [op(41,5,10,2*i) for i in range(9)]
+        image=struct.pack('<%dI'%len(words),*words)
+        memory=MappedMemory().map_region(BASE,image,writable=True)
+        memory.map_region(MATRIX,bytes(18),writable=True)
+        trace=execute(image,BASE,BASE,memory,regs)
+        self.assertTrue(trace['completed'])
+        mismatch=((BASE,'addu',12,None),)
+        outcome=analyze(image,BASE,trace,MATRIX,mismatch,
+                        guest_stopped_at_expected_pc=True)
+        self.assertFalse(outcome['attribution_performed'])
+        self.assertEqual(outcome['reason_code'],'guest_code_write_unmodeled')
+        self.assertTrue(outcome['executed_code_write_observed'])
+        self.assertEqual(outcome['candidate_affected_slot_indices'],[])
+        self.assertEqual(outcome['mismatching_events_without_final_matrix_dependency'],[])
+        self.assertFalse(outcome['proven_numeric_causation'])
+        self.assertNotIn(hex(BASE),str(outcome))
+
+    def test_same_value_guest_code_store_still_withholds_attribution(self):
+        regs=[0]*32;regs[6]=BASE;regs[8]=4;regs[9]=7
+        first=reg(33,rs=8,rt=9,rd=10)
+        regs[11]=first
+        words=[first,op(43,6,11,0)]
+        words += [op(41,5,10,2*i) for i in range(9)]
+        image=struct.pack('<%dI'%len(words),*words)
+        memory=MappedMemory().map_region(BASE,image,writable=True)
+        memory.map_region(MATRIX,bytes(18),writable=True)
+        regs[5]=MATRIX
+        trace=execute(image,BASE,BASE,memory,regs)
+        self.assertTrue(trace['completed'])
+        outcome=analyze(image,BASE,trace,MATRIX,((BASE,'addu',12,None),),
+                        guest_stopped_at_expected_pc=True)
+        self.assertEqual(outcome['reason_code'],'guest_code_write_unmodeled')
+        self.assertTrue(outcome['executed_code_write_observed'])
+
     def test_wrong_store_trace_fails_closed(self):
         regs=[0]*32;regs[8]=4;regs[9]=7
         image,trace,expected=custom([reg(33,rs=8,rt=9,rd=10),op(41,5,10,0)],regs)
