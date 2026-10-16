@@ -275,3 +275,8 @@ set_tests_properties(wa_original_gp0_matrix_cfg_join PROPERTIES WORKING_DIRECTOR
 add_test(NAME wa_original_gp0_matrix_context_cfg
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_context_cfg.py)
 set_tests_properties(wa_original_gp0_matrix_context_cfg PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Context-labelled MIPS CFG with conservative GPR and HI/LO provenance.
+add_test(NAME wa_original_gp0_matrix_context_sources
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_context_sources.py)
+set_tests_properties(wa_original_gp0_matrix_context_sources PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
