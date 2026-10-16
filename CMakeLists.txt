@@ -525,3 +525,13 @@ set_tests_properties(wa_mips_store_value_sequence PROPERTIES WORKING_DIRECTORY $
 add_test(NAME wa_ps1_store_value_capture
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_store_value_capture.py)
 set_tests_properties(wa_ps1_store_value_capture PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 219: verify intermediate MULT/MULTU HI/LO arithmetic and Q12 shifts.
+add_test(NAME wa_mips_arithmetic_event_sequence
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_arithmetic_event_sequence.py)
+set_tests_properties(wa_mips_arithmetic_event_sequence PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 219: private independent debugger arithmetic trace and nine matrix SH values.
+add_test(NAME wa_ps1_arithmetic_capture
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_arithmetic_capture.py)
+set_tests_properties(wa_ps1_arithmetic_capture PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
