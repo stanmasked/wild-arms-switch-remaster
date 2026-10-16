@@ -1296,3 +1296,58 @@ All three new test suites are registered in CTest and
 `matrix-audits.yml`. Original-game PS1 captures, real matrix
 values, full remote CI success and Switch hardware execution
 remain **unverified**.
+
+## Stage 214 — attest completed JR $ra return before claiming a matrix match
+
+The stage-211 private numerical verifier now offers an explicit
+`require_completed_jr_ra` reference option. The stage-212 offline
+capture CLI exposes it as `--require-jr-return`. This strengthens
+the previous check, which required only nine final SH values and a
+guest replay stopping at the supplied `stop_pc`: an arbitrary
+fall-through PC or earlier stop could otherwise satisfy the numeric
+criteria without proving the caller return occurred.
+
+New module `tools/mips_return_boundary.py` consumes the concrete
+interpreter's **completed** control-transfer events and exact executed
+PC sequence, and checks all of these conditions: successful stop at
+the expected PC, last completed transfer is `JR $ra` targeting that
+stop, the JR's delay-slot instruction was the very last executed
+instruction, and the guest has no pending delayed load at the stop.
+These events are recorded by the interpreter only after successful
+delay-slot execution. A static `JR` opcode alone is insufficient.
+
+The private JSON now supports
+`"require_completed_jr_ra": true` (default false for backwards
+compatible synthetic test programs). In strict mode, no coefficient
+comparison is performed if the completed return evidence fails,
+even if nine halfword values otherwise match. The emitted
+`return_boundary` dictionary reports sanitized boolean evidence
+only, with no guest addresses or register/memory values.
+
+A useful new workflow for original debugging captures is:
+
+```sh
+python3 -m tools.audit_ps1_capture_pack \
+  --exe /private/WILDARMS.EXE \
+  --before-registers /private/before-registers.json \
+  --after-registers /private/after-registers.json \
+  --before-ram /private/before-ram.bin \
+  --after-ram /private/after-ram.bin \
+  --ram-base 0x80000000 \
+  --output /private/ps1-matrix-capture.json \
+  --require-jr-return --compare
+```
+
+**Verification:** The local relevant-module source tree
+`/mnt/data/wa214` passed **439/439** Python regression tests
+(413 previously plus 13 MIPS return-boundary tests and 13 private
+numeric-reference/capture tests). `python3 -m compileall -q tools
+tests` also passed. New source/test files, as well as changes to
+the existing numerical comparator and capture packer/CLI, are
+published in GitHub; the new tests are registered in both CTest
+and `matrix-audits.yml`.
+
+These assertions apply to **synthetic guest execution**, not to
+authenticated original gameplay or cycle-exact PlayStation hardware.
+No original `WILDARMS.EXE` snapshot, confirmed full remote CI, or
+native Nintendo Switch execution is established by this stage.
