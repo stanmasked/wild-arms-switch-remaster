@@ -92,6 +92,30 @@ class MIPSControlFlowTests(unittest.TestCase):
         self.assertEqual(result['reason'], 'ValueError')
         self.assertEqual(result['executed'], 1)
 
+    def test_completed_control_transfer_is_recorded_after_delay_slot(self):
+        regs = [0] * 32
+        regs[31] = CODE + 0x100
+        result = run([jump(CODE + 16), 0, 0, 0,
+                      reg(8, rs=31), 0], regs, stop_pc=CODE + 0x100)
+        self.assertTrue(result['completed'])
+        self.assertEqual(result['control_transfers'],
+                         ((CODE, 'j', CODE + 16),
+                          (CODE + 16, 'jr_ra', CODE + 0x100)))
+
+    def test_failed_delay_slot_does_not_complete_transfer(self):
+        regs = [0] * 32
+        regs[31] = CODE + 0x100
+        result = run([reg(8, rs=31), 18 << 26], regs)
+        self.assertFalse(result['completed'])
+        self.assertEqual(result['executed'], 1)
+        self.assertEqual(result['control_transfers'], ())
+
+    def test_malformed_blez_rt_is_rejected(self):
+        result = run([imm(6, 8, 1, 1), 0])
+        self.assertFalse(result['completed'])
+        self.assertEqual(result['executed'], 0)
+        self.assertEqual(result['reason'], 'ValueError')
+
     def test_bounded_loop(self):
         result = run([jump(CODE), 0], max_steps=7)
         self.assertFalse(result['completed'])
