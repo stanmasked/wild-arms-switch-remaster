@@ -410,3 +410,13 @@ set_tests_properties(wa_mips_matrix_operation_schedule PROPERTIES WORKING_DIRECT
 add_test(NAME wa_gp0_matrix_operation_schedule
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_operation_schedule.py)
 set_tests_properties(wa_gp0_matrix_operation_schedule PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 208: static original builder opcode and local arithmetic motif evidence.
+add_test(NAME wa_mips_builder_opcode_evidence
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_builder_opcode_evidence.py)
+set_tests_properties(wa_mips_builder_opcode_evidence PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 208: synthetic EXE integration, including known Wild Arms code addresses.
+add_test(NAME wa_gp0_builder_opcode_evidence
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_builder_opcode_evidence.py)
+set_tests_properties(wa_gp0_builder_opcode_evidence PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
