@@ -236,6 +236,24 @@ class ReplayPreflightTests(unittest.TestCase):
         self.assertEqual(instruction_family(ins(7, 8, 1, 1)), ('branch', False))
         self.assertEqual(instruction_family(ins(6, 8, 0, 1)), ('branch', True))
 
+    def test_caller_probe_reports_external_stack_and_angle_input(self):
+        # Synthetic caller sets a1 from sp. Builder reads a0 once, which
+        # this shortened code path does not initialize.
+        blob, call, builder, ret = self._caller_program([
+            ins(9,4,8,1), (31 << 21) | 8, 0])
+        report = analyze(blob,start=builder,end=ret,call=call,
+                         caller_replay=True)
+        trace = report['exploratory_trace']
+        self.assertEqual(trace['read_before_first_write_gprs'],[4,29])
+        self.assertTrue(trace['returned_to_caller'])
+
+    def test_preflight_only_reports_register_ids_not_values(self):
+        program = [ins(9,8,9,7), 0]
+        report=analyze(fixture(program),start=BASE,end=BASE+4,
+                       explore=True,initial_registers={8:0x12345678})
+        self.assertEqual(report['exploratory_trace']['read_before_first_write_gprs'],[8])
+        self.assertNotIn('register_values',str(report))
+
     def test_trace_bounded_loop(self):
         jump_to_self = (2<<26) | ((BASE>>2)&0x03ffffff)
         r = analyze(fixture([jump_to_self,0,0]), start=BASE, end=BASE+8,
