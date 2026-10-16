@@ -73,6 +73,13 @@ class CFGJoinTests(unittest.TestCase):
             self.assertEqual(result['candidate_stores'][0]['candidate_lookup_sources'],
                              [f'0x{START:08X}'])
 
+    def test_loop_overwrite_does_not_preserve_stale_lookup(self):
+        # Every route to the store passes through the second LW.
+        result=check([lw(8),beq(1),0,lw(8),sh(8,0),
+                      beq(-4),0,0],(0,3))
+        self.assertEqual(result['candidate_stores'][0]['candidate_lookup_sources'],
+                         [f'0x{START+12:08X}'])
+
     def test_invalid_range(self):
         self.assertFalse(analyze(b'',BASE,START,START)['valid_range'])
 
