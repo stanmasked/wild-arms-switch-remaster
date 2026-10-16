@@ -7,7 +7,7 @@ START=BASE+0x20
 
 def lw(rt): return 35<<26|25<<21|rt<<16
 def sh(rt,off): return 41<<26|5<<21|rt<<16|off
-def beq(off): return 4<<26|(off&65535)
+def beq(off): return 4<<26|8<<21|9<<16|(off&65535)
 def j(pc): return 2<<26|((pc>>2)&0x3ffffff)
 def addiu(rt,rs=0): return 9<<26|rs<<21|rt<<16
 
