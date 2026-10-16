@@ -39,6 +39,29 @@ class CFGTests(unittest.TestCase):
         self.assertFalse(any(e['from']==f'0x{START+4:08X}' and
                              e['to']==f'0x{START+8:08X}'
                              for e in report['edges']))
+    def test_regimm_link_branch_requires_semantics(self):
+        # BGEZAL writes $ra depending on branch semantics.
+        report = check([(1<<26)|(17<<16), 0, 0])
+        self.assertTrue(any(x['reason']=='unsupported_regimm_requires_semantics'
+                            for x in report['unresolved']))
+        self.assertFalse(any(e['from']==f'0x{START+4:08X}' and
+                             e['to']==f'0x{START+8:08X}'
+                             for e in report['edges']))
+
+    def test_control_transfer_in_delay_slot_is_unresolved(self):
+        report = check([4<<26|2, 2<<26|((START+16)>>2&0x3ffffff), 0, 0, 0])
+        self.assertTrue(any(x['reason']=='control_in_delay_slot_unsupported'
+                            for x in report['unresolved']))
+        self.assertFalse(any(e['from']==f'0x{START+4:08X}' and
+                             e['kind']=='delay_slot'
+                             for e in report['edges']))
+
+    def test_malformed_jr_not_treated_as_real_jump(self):
+        malformed = (31<<21)|(1<<16)|8
+        report = check([malformed,0,0])
+        self.assertTrue(any(x['reason']=='malformed_jump_encoding'
+                            for x in report['unresolved']))
+
     def test_out_of_range(self):
         self.assertFalse(analyze(b'', BASE, START, START)['valid_range'])
 
