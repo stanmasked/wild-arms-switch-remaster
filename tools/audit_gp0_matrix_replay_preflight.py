@@ -93,7 +93,8 @@ def inspect_caller(image, base, call=CALL, builder=BUILDER):
 
 def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
             matrix_address=0x80110000, explore=False, max_steps=512,
-            initial_registers=None, frame_layout=False, call=CALL):
+            initial_registers=None, frame_layout=False, call=CALL,
+            caller_replay=False):
     base, image = parse_exe(blob)
     if (start < base or end < start or end + 4 > base + len(image)
             or (start - base) % 4 or (end - base) % 4):
@@ -121,6 +122,12 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
         'original_game_state_known': False,
         'bit_exact_original_coefficients_proven': False,
     }
+    if caller_replay:
+        # Only run verified ADDIU a1,sp,16 + JAL builder callsites.
+        if not result['caller_linkage']['linkage_confirmed']:
+            raise ValueError('caller instructions do not match expected linkage')
+        explore = True
+        frame_layout = True
     if not explore:
         return result
     if max_steps < 1:
@@ -144,13 +151,15 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
         memory.map_region(matrix_address, bytes(MATRIX_SIZE), writable=True)
         memory.map_region(STACK_BASE, bytes(STACK_SIZE), writable=True)
     regs = [0] * 32
-    regs[5] = matrix_address
+    regs[5] = 0 if caller_replay else matrix_address
     regs[29] = stack_pointer
     for reg, value in initial_registers.items():
         if reg:
             regs[reg] = value
-    trace = execute(image, base, start, memory, regs,
-                    max_steps=max_steps, stop_pc=end)
+    replay_entry = call - 16 if caller_replay else start
+    expected_stop = call + 8 if caller_replay else end
+    trace = execute(image, base, replay_entry, memory, regs,
+                    max_steps=max_steps, stop_pc=expected_stop)
     matrix_addresses = {matrix_address + off for off in MATRIX_OFFSETS}
     visited_counts = Counter(instruction_family(struct.unpack_from(
         '<I', image, pc-base)[0])[0] for pc in trace['visited_pcs'])
@@ -168,16 +177,41 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
             else:
                 halt_category = 'execution_semantics_or_overflow'
     unique_matrix_stores = set(trace['store_addresses']) & matrix_addresses
+    visited = trace['visited_pcs']
+    # Merely arriving at the caller's continuation is not proof of a return:
+    # its preceding executed control instruction must be JR $ra.
+    has_return_jr = False
+    if caller_replay and len(visited) >= 2:
+        last_control = visited[-2]
+        if base <= last_control and last_control + 4 <= base + len(image):
+            insn, = struct.unpack_from('<I', image, last_control - base)
+            has_return_jr = insn == ((31 << 21) | 8)
+    end_is_jr_ra = False
+    if caller_replay and base <= end and end + 4 <= base + len(image):
+        end_word, = struct.unpack_from('<I', image, end - base)
+        end_is_jr_ra = end_word == ((31 << 21) | 8)
+    return_instruction_executed = bool(caller_replay and end_is_jr_ra
+                                        and end in visited)
+    returned = (caller_replay and trace['completed']
+                and trace['reason'] == 'stop_pc'
+                and call in visited and call + 4 in visited
+                and start in visited and has_return_jr)
     result['exploratory_trace'] = {
         'initial_registers_are_synthetic': True,
         'synthetic_stack_mapped': True,
         'frame_layout': 'a1_sp_plus_16' if frame_layout else 'separate_matrix',
+        'replay_origin': 'caller_before_jal' if caller_replay else 'builder_entry',
+        'caller_jal_executed': bool(caller_replay and call in visited),
+        'builder_entry_reached': start in visited or (
+            caller_replay and call in visited and trace['pc'] == start),
+        'returned_to_caller': bool(returned),
         'executed_instruction_families': dict(sorted(visited_counts.items())),
         'halt_instruction_family': halt_family,
         'halt_category': halt_category,
-        'return_instruction_executed': False,
+        'return_instruction_executed': return_instruction_executed,
         'reason': trace['reason'],
-        'reached_return_site': trace['completed'] and trace['reason'] == 'stop_pc',
+        'reached_return_site': (return_instruction_executed if caller_replay else
+                                trace['completed'] and trace['reason'] == 'stop_pc'),
         'executed_instructions': trace['executed'],
         'distinct_executed_pcs': len(set(trace['visited_pcs'])),
         'matrix_slot_store_count': sum(addr in matrix_addresses
@@ -197,10 +231,13 @@ def main():
     p.add_argument('--max-steps', type=int, default=512)
     p.add_argument('--frame-layout', action='store_true',
                    help='probe synthetic a1=sp+16 stack-resident matrix')
+    p.add_argument('--caller-replay', action='store_true',
+                   help='execute JAL from caller; implies --explore and --frame-layout')
     args = p.parse_args()
     print(json.dumps(analyze(args.exe.read_bytes(), explore=args.explore,
                              max_steps=args.max_steps,
-                             frame_layout=args.frame_layout), indent=2))
+                             frame_layout=args.frame_layout,
+                             caller_replay=args.caller_replay), indent=2))
 
 
 if __name__ == '__main__':
