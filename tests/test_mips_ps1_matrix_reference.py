@@ -157,6 +157,7 @@ class ReferenceComparisonTests(unittest.TestCase):
         result=compare(blob,ref)
         self.assertTrue(result['matches_supplied_nine_coefficients'])
 
+
     def test_bad_hex_and_memory_limits_rejected(self):
         blob=synthetic_program()
         for data in ('zz','0', '', 'xyyz'):
