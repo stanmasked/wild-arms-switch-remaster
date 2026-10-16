@@ -101,3 +101,19 @@ Tests using formerly tautological BEQL instructions were corrected
 to compare distinct registers, and two new deterministic tests were
 added. This does not model general register values or complete GTE
 semantics. CI execution remains unverified.
+
+## Stage 183: MIPS zero-register predicate identities
+
+On MIPS, `$zero` is always zero. The context-sensitive CFG can
+therefore resolve BLEZ/BLEZL with `rs=$zero` as taken, BGTZ/BGTZL
+as not taken, BLTZ/BLTZL as not taken, and BGEZ/BGEZL as taken.
+For likely instructions, the not-taken path annuls the delay slot.
+
+Three synthetic test methods cover BLEZ, BGTZL and both likely
+REGIMM outcomes. Previous REGIMM likely fixtures were updated to
+compare a nonzero-numbered source register, retaining both symbolic
+paths when the actual runtime value is unknown.
+
+No general numerical register interpreter is asserted. The test
+sources are committed; successful CI or execution against the
+original private WILDARMS.EXE remains unverified.
