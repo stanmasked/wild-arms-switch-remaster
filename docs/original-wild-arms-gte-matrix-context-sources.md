@@ -25,3 +25,16 @@ matrix coefficients, behavior of unsupported instructions, or complete
 runtime reachability. The CFG model is intentionally incomplete. The
 changes are committed and registered in CTest, but successful CI execution
 and testing against the private original EXE remain unconfirmed.
+
+## Stage 176: annulled-slot source propagation tests
+
+Two additional synthetic provenance regressions cover branch-likely and
+REGIMM-likely control flow. Both test a lookup load in the delay slot,
+where only the taken path executes the load; the not-taken path annuls
+it. The merge at the destination must retain the lookup as a **possible**
+source, never assert that it is certain.
+
+These tests protect the integration between the stage-175 CFG and the
+context-sensitive symbolic register dataflow. They do not infer branch
+predicates or recover concrete GTE matrix values. The private original
+WILDARMS.EXE is not stored in the repository.
