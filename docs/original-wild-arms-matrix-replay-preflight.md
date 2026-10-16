@@ -1675,3 +1675,69 @@ authenticate any original Wild Arms gameplay. Genuine original
 WILDARMS.EXE plus a real independently captured PlayStation
 arithmetic trace remain unavailable for comparison. Full remote
 GitHub CI and a playable native Switch remake are unverified.
+
+## Stage 220 — arithmetic mismatch provenance for each final matrix SH
+
+Stages 206–219 identified synthetic Q12 multiplication/sum schedules
+and compared independent intermediate arithmetic reference events
+against bounded MIPS replay. Stage 220 introduces the additional
+privacy-safe diagnostic
+*tools/mips_matrix_arithmetic_attribution.py*, integrated into
+*tools/mips_ps1_matrix_reference.py* and its private capture CLI.
+
+The analyzer takes the complete runtime arithmetic event stream and
+the *independently supplied* event sequence. If every event's PC
+and opcode category matches in order and number, it propagates
+immutable arithmetic event-index dependencies through:
+- signed and unsigned multiplication **separate LO and HI** outputs;
+- MFLO/MFHI, arithmetic shifts, ADD/ADDU and other supported GPR ALU;
+- exact one-instruction load delays and consecutive loads;
+- intermediate stores and later loads using byte-wise RAM shadows;
+- overwritten registers and overlapping stores invalidating old SH;
+- final successful SH of all nine signed halfword matrix positions.
+
+A mismatch in multiplication's **HI** half is therefore not
+automatically ascribed to a coefficient built exclusively from MFLO.
+Conversely a mismatch on an MFHI path is linked to relevant output
+slots. A wrong arithmetic result overwritten before a final SH
+is reported as an event **without a final matrix dependency**.
+Only successful stores and exact executed instruction sites count.
+
+The sanitized *arithmetic_matrix_attribution* report has exactly
+nine fixed *matrix_slots* entries and contains only:
+- whether attribution was performed and the safe reason code;
+- whether every PC/operation class in the reference aligned;
+- candidate affected matrix **slot indices**;
+- candidate arithmetic event **indices** for each slot, separately
+  for primary results and MULT/MULTU HI results;
+- mismatch event indices not connected to final SH results; and
+- bounded output/truncation and conservative-proof flags.
+
+Every event list is capped to 32 entries and the internal
+dataflow token budget is bounded. Missing original reference,
+interrupted execution, divergent event sites or an exceeded
+dependency budget **withhold attribution**. Numeric values,
+code bytes, private addresses, register contents, and game RAM
+are never included in the public report.
+
+**Crucial limitation:** dynamic dataflow is a conservative
+*potential impact* relationship, not mathematical proof of
+numeric causation. An error may cancel algebraically, be
+compensated by later operations, or originate from an external
+input outside the executed event set. The output therefore
+always says *proven_numeric_causation: false*, and cannot
+establish original PlayStation gameplay equivalence without an
+independent authentic capture and complete CPU semantics.
+
+**Verification:** In the relevant local reconstructed tree
+*/mnt/data/wa220*, **628/628** Python unit and integration tests
+passed (600 existing plus 19 new dependency tests and 9
+private PS-X EXE/CLI tests). Python *compileall -q tools tests*
+passed. All five new/modified source and test files matched
+their stored GitHub blob hashes. Both new suites are registered
+in CTest and the GitHub Actions *matrix-audits.yml* workflow.
+
+No original *WILDARMS.EXE* gameplay arithmetic reference or
+successful remote Actions CI has been validated. This module
+is a host-side reverse engineering audit, not a playable
+Nintendo Switch-native Wild Arms remake.
