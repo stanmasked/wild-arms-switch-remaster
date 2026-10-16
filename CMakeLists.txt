@@ -355,3 +355,13 @@ set_tests_properties(wa_mips_cfg_probe_path PROPERTIES WORKING_DIRECTORY ${CMAKE
 add_test(NAME wa_gp0_cfg_runtime_correlation
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_cfg_runtime_correlation.py)
 set_tests_properties(wa_gp0_cfg_runtime_correlation PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Actual successful MIPS loads and privacy-safe trig/stack read profiles.
+add_test(NAME wa_mips_load_access_profile
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_load_access_profile.py)
+set_tests_properties(wa_mips_load_access_profile PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Synthetic PS-X EXE Q12 lookup preflight integration.
+add_test(NAME wa_gp0_matrix_load_profile
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_load_profile.py)
+set_tests_properties(wa_gp0_matrix_load_profile PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
