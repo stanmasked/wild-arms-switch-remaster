@@ -24,7 +24,11 @@ def _branch(word, pc, regs):
         raise ValueError('reserved rt field in BLEZ/BGTZ')
     a, b = regs[rs].constant, regs[rt].constant
     known = None
-    if op == 4 and a is not None and b is not None:
+    if op in (4, 5) and rs == rt:
+        # BEQ r,r is always taken; BNE r,r is never taken, even if r
+        # is an unknown input. Both operands are the very same register.
+        known = op == 4
+    elif op == 4 and a is not None and b is not None:
         known = a == b
     elif op == 5 and a is not None and b is not None:
         known = a != b
