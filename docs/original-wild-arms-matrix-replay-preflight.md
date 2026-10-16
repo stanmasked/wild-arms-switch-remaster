@@ -49,3 +49,34 @@ were not available. The tests are now connected to CTest and
 
 The user's original `WILDARMS.EXE` was not available in this turn.
 No game binaries or copyrighted table data were committed.
+
+## Stage 193 — bounded synthetic stack and actionable halt categories
+
+The optional `--explore` mode now maps a separate writable 4 KiB
+**synthetic** stack at `0x80120000`, seeding `$sp` near its upper
+end. This allows ordinary stack-frame `SW/LW` operations in a
+controlled replay. It does **not** imply that these stack addresses,
+initial register contents or observed execution paths match gameplay.
+Memory-region overlap and bounds remain enforced.
+
+To help prioritize missing interpreter features without disclosing
+code, the exploratory JSON also reports:
+
+- `executed_instruction_families`: aggregate counts on the visited path;
+- `halt_instruction_family`: the generic family at the stopping PC;
+- `halt_category`: distinguishes unsupported instructions from mapped
+  memory/alignment errors and other execution failures;
+- `distinct_matrix_slots_written`: number of different matrix SH slots
+  reached, separately from the number of repeated stores;
+- `return_instruction_executed: false`: the preflight stops **before**
+  the specified return-site PC; reaching the site is not a real function
+  return.
+
+No executable opcode values, guest addresses from the dynamic trace,
+registers, trig-table samples or coefficient values are exposed.
+
+**Validation:** 10/10 preflight tests (three new: stack prologue,
+COP2 blocker and unmapped load) and 25/25 related MIPS/matrix/trig tests
+passed locally in the previously reconstructed source tree. Syntax was
+also compile-checked locally. A complete private repository checkout,
+GitHub CI run and original `WILDARMS.EXE` comparison remain unverified.
