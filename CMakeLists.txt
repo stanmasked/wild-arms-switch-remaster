@@ -290,3 +290,8 @@ set_tests_properties(wa_mips_fixed32 PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE
 add_test(NAME wa_mips_integer_step
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_integer_step.py)
 set_tests_properties(wa_mips_integer_step PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Bounded concrete integer instruction sequences (host-only).
+add_test(NAME wa_mips_integer_sequence
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_integer_sequence.py)
+set_tests_properties(wa_mips_integer_sequence PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
