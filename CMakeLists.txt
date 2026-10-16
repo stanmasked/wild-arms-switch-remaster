@@ -375,3 +375,13 @@ set_tests_properties(wa_mips_trig_index_provenance PROPERTIES WORKING_DIRECTORY 
 add_test(NAME wa_gp0_trig_index_provenance
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_trig_index_provenance.py)
 set_tests_properties(wa_gp0_trig_index_provenance PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Synthetic Q12 data-dependence through MIPS ALU/HI/LO to final matrix SH slots.
+add_test(NAME wa_mips_matrix_value_lineage
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_matrix_value_lineage.py)
+set_tests_properties(wa_mips_matrix_value_lineage PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Private EXE preflight integration with artificial Q12 matrices.
+add_test(NAME wa_gp0_matrix_value_lineage
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_gp0_matrix_value_lineage.py)
+set_tests_properties(wa_gp0_matrix_value_lineage PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
