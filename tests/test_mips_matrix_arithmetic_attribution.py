@@ -192,6 +192,98 @@ class AttributionTests(unittest.TestCase):
         result=analyze(image,BASE,trace,MATRIX,((BASE,'addu',1,None),),guest_stopped_at_expected_pc=True)
         self.assertEqual(result['candidate_affected_slot_indices'],[])
 
+    def test_mismatch_derived_matrix_store_pointer_withholds_all_slots(self):
+        regs=[0]*32;regs[8]=MATRIX;regs[9]=0
+        words=[reg(33,rs=8,rt=9,rd=5)]
+        words += [op(41,5,0,2*i) for i in range(9)]
+        image,trace,expected=custom(words,regs)
+        wrong=list(expected)
+        pc,kind,value,aux=wrong[0]
+        wrong[0]=(pc,kind,(value+2)&0xffffffff,aux)
+        result=analyze(image,BASE,trace,MATRIX,tuple(wrong),
+                       guest_stopped_at_expected_pc=True)
+        self.assertTrue(result['reference_event_alignment_confirmed'])
+        self.assertFalse(result['attribution_performed'])
+        self.assertEqual(result['reason_code'],'mismatch_dependent_execution_path')
+        self.assertTrue(result['mismatch_dependent_address_observed'])
+        self.assertFalse(result['mismatch_dependent_control_observed'])
+        self.assertEqual(result['candidate_affected_slot_indices'],[])
+        self.assertEqual(result['mismatching_events_without_final_matrix_dependency'],[])
+        self.assertFalse(any(slot['final_sh_observed'] for slot in result['matrix_slots']))
+        self.assertNotIn(hex(MATRIX),str(result))
+
+    def test_mismatch_derived_load_pointer_withholds_attribution(self):
+        regs=[0]*32;regs[8]=MATRIX+40;regs[9]=0
+        words=[reg(33,rs=8,rt=9,rd=6),
+               op(35,6,11,0),0,op(41,5,11,0)]
+        words += [op(41,5,0,2*i) for i in range(1,9)]
+        image,trace,expected=custom(words,regs,
+                                    snapshots=[(MATRIX+40,bytes(4))])
+        wrong=list(expected)
+        pc,kind,value,aux=wrong[0]
+        wrong[0]=(pc,kind,(value+4)&0xffffffff,aux)
+        result=analyze(image,BASE,trace,MATRIX,tuple(wrong),
+                       guest_stopped_at_expected_pc=True)
+        self.assertFalse(result['attribution_performed'])
+        self.assertTrue(result['mismatch_dependent_address_observed'])
+        self.assertFalse(result['mismatch_dependent_control_observed'])
+
+    def test_mismatch_derived_beq_condition_withholds_attribution(self):
+        regs=[0]*32;regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),op(4,10,0,1),0]
+        words += [op(41,5,0,2*i) for i in range(9)]
+        image,trace,expected=custom(words,regs)
+        wrong=list(expected)
+        pc,kind,value,aux=wrong[0]
+        wrong[0]=(pc,kind,12,aux)
+        result=analyze(image,BASE,trace,MATRIX,tuple(wrong),
+                       guest_stopped_at_expected_pc=True)
+        self.assertFalse(result['attribution_performed'])
+        self.assertFalse(result['mismatch_dependent_address_observed'])
+        self.assertTrue(result['mismatch_dependent_control_observed'])
+        self.assertEqual(result['reason_code'],'mismatch_dependent_execution_path')
+
+    def test_mismatch_derived_jr_target_withholds_attribution(self):
+        regs=[0]*32;regs[8]=BASE+12;regs[9]=0
+        words=[reg(33,rs=8,rt=9,rd=10),reg(8,rs=10),0]
+        words += [op(41,5,0,2*i) for i in range(9)]
+        image,trace,expected=custom(words,regs)
+        wrong=list(expected)
+        pc,kind,value,aux=wrong[0]
+        wrong[0]=(pc,kind,(value+4)&0xffffffff,aux)
+        result=analyze(image,BASE,trace,MATRIX,tuple(wrong),
+                       guest_stopped_at_expected_pc=True)
+        self.assertFalse(result['attribution_performed'])
+        self.assertTrue(result['mismatch_dependent_control_observed'])
+        self.assertFalse(result['mismatch_dependent_address_observed'])
+
+    def test_matching_arithmetic_in_memory_pointer_is_not_ambiguous(self):
+        regs=[0]*32;regs[8]=MATRIX;regs[9]=0
+        words=[reg(33,rs=8,rt=9,rd=5)]
+        words += [op(41,5,0,2*i) for i in range(9)]
+        image,trace,expected=custom(words,regs)
+        result=analyze(image,BASE,trace,MATRIX,expected,
+                       guest_stopped_at_expected_pc=True)
+        self.assertTrue(result['attribution_performed'])
+        self.assertFalse(result['mismatch_dependent_address_observed'])
+        self.assertFalse(result['mismatch_dependent_control_observed'])
+        self.assertTrue(all(slot['final_sh_observed'] for slot in result['matrix_slots']))
+
+    def test_overwritten_mismatch_does_not_taint_later_branch(self):
+        regs=[0]*32;regs[8]=4;regs[9]=7
+        words=[reg(33,rs=8,rt=9,rd=10),
+               reg(33,rs=0,rt=0,rd=10),op(4,10,0,1),0]
+        words += [op(41,5,0,2*i) for i in range(9)]
+        image,trace,expected=custom(words,regs)
+        wrong=list(expected)
+        pc,kind,value,aux=wrong[0]
+        wrong[0]=(pc,kind,12,aux)
+        result=analyze(image,BASE,trace,MATRIX,tuple(wrong),
+                       guest_stopped_at_expected_pc=True)
+        self.assertTrue(result['attribution_performed'])
+        self.assertFalse(result['mismatch_dependent_control_observed'])
+        self.assertEqual(result['mismatching_events_without_final_matrix_dependency'],[0])
+
     def test_wrong_store_trace_fails_closed(self):
         regs=[0]*32;regs[8]=4;regs[9]=7
         image,trace,expected=custom([reg(33,rs=8,rt=9,rd=10),op(41,5,10,0)],regs)
