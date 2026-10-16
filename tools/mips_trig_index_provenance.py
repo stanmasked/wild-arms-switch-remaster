@@ -144,7 +144,7 @@ def summarize(image, base, visited_pcs, successful_loads, *,
             immediate_write, new_value, hi, lo = _advance(word, regs, hi, lo)
         if pending is not None:
             dest, origin = pending
-            if dest != immediate_write and (next_pending is None or dest != next_pending[0]):
+            if dest != immediate_write:
                 regs[dest] = origin
         if immediate_write:
             regs[immediate_write] = new_value
