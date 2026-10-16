@@ -1351,3 +1351,70 @@ These assertions apply to **synthetic guest execution**, not to
 authenticated original gameplay or cycle-exact PlayStation hardware.
 No original `WILDARMS.EXE` snapshot, confirmed full remote CI, or
 native Nintendo Switch execution is established by this stage.
+
+## Stage 215 — verify post-return CPU state, not only nine matrix values
+
+Numerical equivalence of nine halfwords alone is not enough to
+validate a PS1 MIPS builder's side effects. Stage 215 adds
+`tools/mips_final_cpu_state.py`, which checks the **complete**
+debugger-observed CPU state at the supplied stop PC: all 32 GPR
+words, HI, LO, and the one-instruction pending-load pipeline
+state. A captured post-return `in_branch_delay_slot: true`
+is rejected, as the existing snapshot format lacks the unresolved
+transfer state needed to replay it.
+
+The numeric reference fixture optionally accepts an
+`expected_final_cpu_state` object with exactly `gpr`, `hi`,
+`lo`, `pending_load`, and `in_branch_delay_slot`.
+The `require_final_cpu_state` flag (default false for
+backward-compatible synthetic fixtures) refuses a missing
+complete state if enabled. The same option is exposed as
+`--require-final-cpu-state` by
+`tools.audit_ps1_capture_pack` and requires the full
+**after-registers** export, rather than the previously sufficient
+after PC alone. After-state comparison never substitutes initial
+values for missing final registers.
+
+The two assertions remain distinct: `matches_supplied_nine_coefficients`
+reports agreement of the nine numeric matrix outputs;
+`matches_complete_reference` requires that agreement **plus**
+a matching final CPU state when the strict option is enabled.
+Both the numerical CLI and the capture packer return exit code
+1 when a required CPU field differs even if all nine coefficient
+values match.
+
+Only mismatch **register indices**, a 0–32 matching count,
+and boolean HI/LO/pending-load flags are reported under
+`final_cpu_state`. If the bounded guest did not reach its
+expected `stop_pc`, the final CPU comparison is withheld.
+No original register values, HI/LO contents, pending load values,
+RAM bytes or executable data are emitted to public JSON.
+
+For genuine *privately retained* capture files, use:
+
+```sh
+python3 -m tools.audit_ps1_capture_pack \
+  --exe /private/WILDARMS.EXE \
+  --before-registers /private/before-registers.json \
+  --after-registers /private/after-registers.json \
+  --before-ram /private/before-ram.bin \
+  --after-ram /private/after-ram.bin \
+  --ram-base 0x80000000 \
+  --output /private/ps1-matrix-and-cpu.json \
+  --require-jr-return --require-final-cpu-state --compare
+```
+
+**Verification:** the locally reconstructed `/mnt/data/wa215`
+source tree passed **471/471** Python unit/integration tests
+(439 previously plus 15 new final CPU module tests and 17
+capture/comparison/CLI integration tests).
+`python3 -m compileall -q tools tests` passed. All seven
+new or modified source/test files were checked against GitHub
+blob checksums. The two new suites are registered in CTest
+and `matrix-audits.yml`.
+
+These tests use generated synthetic PS-X executable and
+debugger states; they do **not** independently verify an
+authentic original `WILDARMS.EXE`, original PlayStation
+hardware behavior, a successful full GitHub Actions CI run,
+or a playable Nintendo Switch build.
