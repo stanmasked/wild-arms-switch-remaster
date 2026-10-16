@@ -24,10 +24,14 @@ def direct_successors(word, pc):
     """Return (kind, targets after delay slot, has_delay_slot)."""
     op = word >> 26
     rt = (word >> 16) & 31
+    rs = (word >> 21) & 31
     fn = word & 63
     if op in (4, 5, 6, 7) or (op == 1 and rt in (0, 1)):
         target = (pc + 4 + (signed16(word & 65535) << 2)) & 0xffffffff
         return 'conditional', (target, pc + 8), True
+    if op in (16, 17, 18, 19) and rs == 8:
+        # BC0/BC1/BC2/BC3: coprocessor predicate is unknown here.
+        return 'coprocessor_branch', (), True
     if op == 1 and rt in (2,3):
         target = (pc + 4 + (signed16(word & 65535) << 2)) & 0xffffffff
         return 'regimm_likely', (target, pc+8), True
@@ -71,7 +75,7 @@ def analyze(image, base, start=BUILDER, end=RETURN):
         if slot > end:
             unresolved.append({'pc': f'0x{pc:08X}', 'reason': 'delay_slot_out_of_range'})
             continue
-        if kind in ('branch_likely', 'regimm_likely', 'unsupported_regimm'):
+        if kind in ('branch_likely', 'regimm_likely', 'unsupported_regimm', 'coprocessor_branch'):
             # The delay slot can be annulled (or the encoding is unsupported).
             # Do not assert unconditional execution of that slot.
             unresolved.append({'pc': f'0x{pc:08X}', 'reason': kind + '_requires_semantics'})
