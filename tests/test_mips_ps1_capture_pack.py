@@ -27,7 +27,8 @@ def dumps(*, coefficient=4096, size=512, ram_base=BASE, program=None):
     regs = [0]*32
     regs[5] = MATRIX
     before_regs = {'schema':REGISTERS_SCHEMA,'pc':BASE,'gpr':regs,
-                   'hi':0,'lo':0}
+                   'hi':0,'lo':0,'pending_load':None,
+                   'in_branch_delay_slot':False}
     after_regs = {'schema':REGISTERS_SCHEMA,'pc':BASE+len(image)}
     return exe, before_regs, after_regs, bytes(before), bytes(after)
 
