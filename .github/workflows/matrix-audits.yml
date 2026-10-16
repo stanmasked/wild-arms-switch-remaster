@@ -37,6 +37,9 @@ on:
       - 'tools/mips_entry_dependencies.py'
       - 'tests/test_mips_entry_dependencies.py'
       - 'tools/mips_return_boundary.py'
+      - 'tools/mips_arithmetic_event_sequence.py'
+      - 'tests/test_mips_arithmetic_event_sequence.py'
+      - 'tests/test_ps1_arithmetic_capture.py'
       - 'tools/mips_store_value_sequence.py'
       - 'tests/test_mips_store_value_sequence.py'
       - 'tests/test_ps1_store_value_capture.py'
@@ -145,6 +148,8 @@ jobs:
           python -m unittest discover -s tests -p 'test_mips_final_memory_state.py' -v
           python -m unittest discover -s tests -p 'test_mips_store_event_sequence.py' -v
           python -m unittest discover -s tests -p 'test_mips_store_value_sequence.py' -v
+          python -m unittest discover -s tests -p 'test_mips_arithmetic_event_sequence.py' -v
+          python -m unittest discover -s tests -p 'test_ps1_arithmetic_capture.py' -v
           python -m unittest discover -s tests -p 'test_ps1_store_value_capture.py' -v
           python -m unittest discover -s tests -p 'test_ps1_store_sequence_capture.py' -v
           python -m unittest discover -s tests -p 'test_ps1_final_memory_capture.py' -v
