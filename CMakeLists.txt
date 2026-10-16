@@ -515,3 +515,13 @@ set_tests_properties(wa_mips_store_event_sequence PROPERTIES WORKING_DIRECTORY $
 add_test(NAME wa_ps1_store_sequence_capture
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_store_sequence_capture.py)
 set_tests_properties(wa_ps1_store_sequence_capture PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 218: verify exact values written by every successful SB/SH/SW.
+add_test(NAME wa_mips_store_value_sequence
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_mips_store_value_sequence.py)
+set_tests_properties(wa_mips_store_value_sequence PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 218: independent private PS1 debugger store-value events and CLI.
+add_test(NAME wa_ps1_store_value_capture
+         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_store_value_capture.py)
+set_tests_properties(wa_ps1_store_value_capture PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
