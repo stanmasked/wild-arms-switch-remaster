@@ -105,7 +105,7 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
             matrix_address=0x80110000, explore=False, max_steps=512,
             initial_registers=None, frame_layout=False, call=CALL,
             caller_replay=False, input_sensitivity=False, sensitivity_delta=1,
-            caller_lookback=4, caller_cfg=False):
+            caller_lookback=4, caller_cfg=False, replay_cfg_window=False):
     base, image = parse_exe(blob)
     if (start < base or end < start or end + 4 > base + len(image)
             or (start - base) % 4 or (end - base) % 4):
@@ -138,6 +138,10 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
         'original_game_state_known': False,
         'bit_exact_original_coefficients_proven': False,
     }
+    if replay_cfg_window and not (caller_replay and caller_cfg):
+        raise ValueError('replay_cfg_window requires caller_replay and caller_cfg')
+    if replay_cfg_window and caller_lookback < 4:
+        raise ValueError('replay_cfg_window requires at least four pre-JAL instructions')
     if input_sensitivity and not caller_replay:
         raise ValueError('input sensitivity requires verified caller replay')
     if caller_replay:
@@ -174,10 +178,22 @@ def analyze(blob, start=BUILDER, end=RETURN, *, table=TABLE,
     for reg, value in initial_registers.items():
         if reg:
             regs[reg] = value
-    replay_entry = call - 16 if caller_replay else start
+    if replay_cfg_window and not result['caller_argument_cfg']['window_usable']:
+        raise ValueError('cannot replay an invalid caller CFG window')
+    replay_entry = (call - 4 * caller_lookback if replay_cfg_window else
+                    call - 16 if caller_replay else start)
     expected_stop = call + 8 if caller_replay else end
     trace = execute(image, base, replay_entry, memory, regs,
                     max_steps=max_steps, stop_pc=expected_stop)
+    if caller_cfg and caller_replay:
+        # No register or guest address values are published. The caller
+        # prefix ends before the first builder instruction actually executes.
+        path = trace['visited_pcs']
+        if start in path:
+            path = path[:path.index(start)]
+        result['caller_argument_cfg'] = inspect_caller_cfg_sources(
+            image, base, call, lookback_words=caller_lookback,
+            observed_pcs=path)
     matrix_addresses = {matrix_address + off for off in MATRIX_OFFSETS}
     visited_counts = Counter(instruction_family(struct.unpack_from(
         '<I', image, pc-base)[0])[0] for pc in trace['visited_pcs'])
@@ -271,6 +287,8 @@ def main():
     p.add_argument('--explore', action='store_true',
                    help='probe with synthetic zero-filled GPRs')
     p.add_argument('--max-steps', type=int, default=512)
+    p.add_argument('--replay-cfg-window', action='store_true',
+                   help='execute complete bounded caller CFG window (requires both replay and CFG)')
     p.add_argument('--caller-cfg', action='store_true',
                    help='enumerate bounded conditional paths before JAL')
     p.add_argument('--caller-lookback', type=int, default=4,
@@ -291,7 +309,8 @@ def main():
                              input_sensitivity=args.input_sensitivity,
                              sensitivity_delta=args.sensitivity_delta,
                      caller_lookback=args.caller_lookback,
-                     caller_cfg=args.caller_cfg), indent=2))
+                     caller_cfg=args.caller_cfg,
+                     replay_cfg_window=args.replay_cfg_window), indent=2))
 
 
 if __name__ == '__main__':
