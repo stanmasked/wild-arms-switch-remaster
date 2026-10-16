@@ -403,3 +403,52 @@ CTest and the matrix-audits GitHub Actions workflow now include
 the new tests. A successful full CI run, private original
 `WILDARMS.EXE` evaluation, exact nine-coefficient comparison,
 and Nintendo Switch hardware execution are **not confirmed**.
+
+## Stage 201 — bounded path-sensitive MIPS caller CFG
+
+The new module `tools/mips_caller_cfg_sources.py` can conservatively
+enumerate alternative conditional paths through a caller's pre-JAL
+instruction window. Unlike the old straight-line analysis, it handles
+supported `BEQ`, `BNE`, `BLEZ`, `BGTZ`, `BLTZ`, and `BGEZ` paths,
+executes their delay slots, tracks the one-instruction load delay, and
+evaluates branches with provably known constants or equal-register
+predicates. Unknown conditions explore both paths.
+
+It is available as an explicitly opt-in preflight mode:
+
+```sh
+python3 -m tools.audit_gp0_matrix_replay_preflight \
+  /private/path/WILDARMS.EXE --caller-cfg --caller-lookback 12
+```
+
+The `caller_argument_cfg` field reports counts of complete paths to
+the call and safe aggregate sources for `a0`–`a3`. If different
+paths establish different argument origins, both are retained:
+`source_kinds`, `incoming_gprs`, and `memory_kinds` are sorted
+unions, while `same_origin_across_paths` is false. A pending load
+in any path is marked `load_pending_on_any_path`.
+
+The analysis deliberately refuses to make claims when branches leave
+the inspected window, loops or branch-in-delay-slot patterns are found,
+unsupported instructions occur, or the state/path bounds are exceeded.
+It does not silently discard a problematic path. The default static
+`caller_argument_sources` output remains present; the CFG variant is
+absent (`null`) unless requested.
+
+**Important limitations:** This is a bounded static path exploration,
+not recorded game execution. `runtime_path_confirmed` and
+`external_entry_edges_ruled_out` are always false. An unknown
+indirect jump or an entry from outside the window can change which
+instructions are actually reached. The tool does not print original
+machine words, numeric arguments, addresses discovered during tracing,
+trigonometric entries, or matrix values. MIPS branch-likely and jump
+instructions before JAL are not modeled; those paths fail closed.
+
+**Verification:** 17 standalone CFG unit tests plus three preflight
+integration tests were added to the previously passing 112-test
+local source subset, for **132/132 passing Python tests**. Byte-for-byte
+Git blob hashes for the new module and its test suite match the local
+copies executed. `compileall` passed. CTest and `matrix-audits.yml`
+were extended to include the new tests. Successful complete GitHub
+Actions CI, a real `WILDARMS.EXE` analysis and Switch device
+execution remain unverified.
