@@ -12,6 +12,8 @@ on:
       - 'CMakeLists.txt'
       - 'tools/mips_fixed32.py'
       - 'tests/test_mips_fixed32.py'
+      - 'tools/mips_integer_step.py'
+      - 'tests/test_mips_integer_step.py'
       - '.github/workflows/matrix-audits.yml'
   pull_request:
   workflow_dispatch:
@@ -31,6 +33,7 @@ jobs:
         run: |
           python -m unittest discover -s tests -p 'test_gp0_matrix_*.py' -v
           python -m unittest discover -s tests -p 'test_mips_fixed32.py' -v
+          python -m unittest discover -s tests -p 'test_mips_integer_step.py' -v
           python -m unittest discover -s tests -p 'test_gp0_trig_table.py' -v
           python -m unittest discover -s tests -p 'test_gp0_rotation_matrix_builder.py' -v
 
