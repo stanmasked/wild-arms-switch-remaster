@@ -12,6 +12,7 @@ from .mips_ps1_matrix_reference import SCHEMA, _decode_reference, _u32
 from .mips_final_cpu_state import decode_expected
 from .mips_final_memory_state import pack as pack_final_ram
 from .mips_store_event_sequence import decode as decode_store_events
+from .mips_store_value_sequence import decode as decode_store_values, project_sites as value_sites
 
 RAM_LIMIT = 4 * 1024 * 1024
 REGISTERS_SCHEMA = 'wild-arms-ps1-debugger-registers-v1'
@@ -55,7 +56,8 @@ def pack(exe_blob, before_registers, after_registers, before_ram, after_ram,
          source='external_ps1_capture_claim', max_steps=4096,
          require_completed_jr_ra=False, require_final_cpu_state=False,
          require_final_memory_state=False, store_sequence=None,
-         require_store_sequence=False):
+         require_store_sequence=False, store_values=None,
+         require_store_values=False):
     """Return a stage-211 reference fixture, never log or print it.
 
     `before_ram` is the guest's memory AT the before_registers PC (before
@@ -88,12 +90,19 @@ def pack(exe_blob, before_registers, after_registers, before_ram, after_ram,
         raise ValueError('all matrix halfwords must fit the RAM capture')
     if source not in ('synthetic', 'external_ps1_capture_claim'):
         raise ValueError('unrecognized provenance claim')
+    if type(require_store_values) is not bool:
+        raise ValueError('invalid strict store-value requirement')
+    if require_store_values and store_values is None:
+        raise ValueError('missing independent store-value event log')
+    parsed_values = decode_store_values(store_values) if store_values is not None else None
     if type(require_store_sequence) is not bool:
         raise ValueError('invalid store sequence requirement')
     if require_store_sequence and store_sequence is None:
         raise ValueError('missing debugger store-event sequence')
     if store_sequence is not None:
-        decode_store_events(store_sequence)
+        parsed_sites = decode_store_events(store_sequence)
+        if parsed_values is not None and value_sites(parsed_values) != parsed_sites:
+            raise ValueError('conflicting private store and store-value logs')
     if type(require_final_memory_state) is not bool:
         raise ValueError('invalid full final RAM requirement')
     if type(require_final_cpu_state) is not bool:
@@ -124,11 +133,14 @@ def pack(exe_blob, before_registers, after_registers, before_ram, after_ram,
         'require_final_cpu_state': require_final_cpu_state,
         'require_final_memory_state': require_final_memory_state,
         'require_store_sequence': require_store_sequence,
+        'require_store_values':require_store_values,
         'memory_segments': [{'address': base, 'data_hex': before_ram.hex()}],
         'expected_matrix_s16': expected,
     }
     if store_sequence is not None:
         fixture['expected_store_sequence'] = store_sequence
+    if store_values is not None:
+        fixture['expected_store_values'] = store_values
     if require_final_memory_state:
         fixture['expected_final_memory_state'] = pack_final_ram(
             before_ram, after_ram, base, matrix)
