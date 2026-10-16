@@ -45,3 +45,20 @@ The instruction-specific branch predicates remain symbolic (both paths
 are considered possible), and REGIMM likely/link forms are still unresolved.
 This is an analysis improvement, not confirmation of exact game execution.
 The update was committed without an independently confirmed CI result.
+
+## Stage 175: repaired likely edges and REGIMM likely subset
+
+The stage-174 conditional branch-likely implementation contained a
+fallthrough assignment that overwrote the two newly constructed successor
+contexts. Stage 175 fixes that defect and adds a regression checking both
+successors exist simultaneously.
+
+The shared decoder now recognizes REGIMM `rt=2` BLTZL and `rt=3`
+BGEZL as `regimm_likely`. The context-labelled CFG explores taken
+execution via its delay slot and not-taken execution via annulment.
+Other REGIMM link and unsupported forms remain unresolved; the legacy,
+context-insensitive CFG intentionally reports likely branches as unresolved.
+
+The branch predicates are not evaluated; the graph is a conservative
+possibility model. Committed tests do not by themselves confirm successful
+execution or bit-exact PlayStation geometry.
