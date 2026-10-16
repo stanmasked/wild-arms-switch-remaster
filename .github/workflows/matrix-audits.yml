@@ -1,0 +1,27 @@
+name: Matrix reverse-engineering audits
+
+on:
+  push:
+    paths:
+      - 'tools/audit_gp0_matrix_*.py'
+      - 'tools/audit_gp0_trig_table.py'
+      - 'tools/audit_gp0_rotation_matrix_builder.py'
+      - 'tests/test_gp0_matrix_*.py'
+      - 'tests/test_gp0_trig_table.py'
+      - '.github/workflows/matrix-audits.yml'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  python-audits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run matrix and trig audit unit tests (synthetic assets only)
+        run: |
+          python -m unittest discover -s tests -p 'test_gp0_matrix_*.py' -v
+          python -m unittest discover -s tests -p 'test_gp0_trig_table.py' -v
+          python -m unittest discover -s tests -p 'test_gp0_rotation_matrix_builder.py' -v
