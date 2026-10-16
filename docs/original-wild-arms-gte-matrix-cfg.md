@@ -53,3 +53,19 @@ branch-likely delay-slot annulment and does not establish a complete CFG.
 
 The analysis remains conservative and incomplete until edge-sensitive
 delay-slot execution and actual MIPS branch predicates are modelled.
+
+## Stage 167: branch-link and delay-slot guardrails
+
+The CFG decoder now refuses to treat REGIMM link forms (BLTZAL/BGEZAL)
+as ordinary branches. Their link-register semantics are not modelled in
+the symbolic register analysis, so the auditor reports them as unresolved.
+
+A control transfer syntactically located in the delay slot of another
+control transfer is reported as unsupported, rather than generating nested
+jump edges. Malformed JR/JALR encodings with reserved fields are not treated
+as valid indirect jumps. Three synthetic tests were added.
+
+These safeguards deliberately trade completeness for reduced false paths.
+They do not yet certify the entire MIPS CFG or any original rotation
+coefficient values. Tests are committed, but their execution in CI remains
+unverified.
