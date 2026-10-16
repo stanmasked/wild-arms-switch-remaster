@@ -204,3 +204,52 @@ Run on a checkout:
 python3 -m unittest discover -s tests -p test_mips_control_flow.py -v
 python3 -m unittest discover -s tests -p test_gp0_matrix_replay_preflight.py -v
 ```
+
+## Stage 197 — infer missing entry register inputs from executed MIPS paths
+
+`tools/mips_entry_dependencies.py` adds deterministic *read-before-write*
+analysis over the instruction addresses returned by the concrete MIPS replay.
+The result is a sorted list of **register numbers only**: a register is
+reported when an executed instruction reads its value before any earlier
+executed instruction established a new value.
+
+The analysis handles source/destination registers of supported integer
+ALU, shifts, branches, jumps, stores, and loads. It explicitly honors the
+R3000A **one-instruction load delay**: an instruction immediately following
+`LW/LH/LB` reads the previous destination-register value and may therefore
+introduce a new input dependency. It also honors the result of a load
+being superseded by a following write to the same register. JAL/JALR
+register-link writes are included in the sequence.
+
+When `--explore` or `--caller-replay` runs, the safe JSON summary
+now includes `exploratory_trace.read_before_first_write_gprs`, for example
+`[4, 29]` on a **synthetic** caller that consumes an uninitialized
+`$a0` and bases `$a1` on `$sp`. The list does not contain register
+**values**, original game machine words, trigonometric entries, or
+output matrix coefficients.
+
+This is *path-dependent* and *conservative*: it does not analyze
+unvisited branches, memory aliasing or HI/LO initial values, and
+does not prove that a listed initial register influences a specific
+coefficient. Some registers, such as `$sp`, are deliberately seeded
+with synthetic values. A future private-original-EXE run should use
+the results to prioritize obtaining concrete calling-state samples,
+not to assume zero-seeded input values are authoritative.
+
+**Local verification:** The 10 new unit tests cover immediate and
+delayed register writes, `LW` followed by ALU or branch, consecutive
+loads, stores, jumps, negative/out-of-image cases and skipped paths.
+Two additional integration tests exercise the safe preflight JSON and
+the caller's `$a1 = $sp + 16` relationship. All **64/64** tests
+in the locally available 17 Python files passed, and
+`python3 -m compileall -q tools tests` completed successfully.
+This is a relevant-module checkout, not a complete GitHub Actions
+or Nintendo Switch verification. The original user-owned game
+executable was not available for numerical comparisons.
+
+To rerun:
+
+```sh
+python3 -m unittest discover -s tests -p test_mips_entry_dependencies.py -v
+python3 -m unittest discover -s tests -p test_gp0_matrix_replay_preflight.py -v
+```
