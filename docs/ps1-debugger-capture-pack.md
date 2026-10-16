@@ -491,3 +491,53 @@ independently.
 
 The source and authenticity of external PS1 captures remain
 unverified, as do real Wild Arms matrix parity and Switch execution.
+
+## Stage 220 — link intermediate arithmetic discrepancies to final matrix slots
+
+The stage-219 independent debugger arithmetic log now also enables
+**conservative dynamic dependency analysis**. If the debugger reference
+and executed guest arithmetic events agree on their **PC, operation kind,
+order and count**, the stage-220 analyzer traces arithmetic result
+dependencies through MIPS GPRs, separate HI/LO halves, shifts and
+additions, one-instruction LW/LH load delays, and byte-granular
+temporary RAM stores back to the **last successful SH** in each of
+the nine matrix halfwords.
+
+No extra command-line argument or additional original-game data is
+required beyond the independent, private arithmetic-events JSON:
+
+    --arithmetic-events /private/arithmetic.json \
+    --require-arithmetic-events --compare
+
+The printed output now contains the safe
+*arithmetic_matrix_attribution* section. Each fixed matrix slot
+(0–8) reports up to 32 **candidate mismatch event indices** for
+the traced primary result and separately for the multiplication
+HI result. It also reports which slots have any candidate and
+which mismatching arithmetic events **have no observed dependency
+on the final SH values**. This is useful when the nine final
+coefficient values match but an intermediate result does not.
+
+**Important interpretation:** these are *structural potential
+downstream dependencies*, not a guarantee that a mismatch
+numerically caused an incorrect coefficient. Mathematical
+cancellation, later operations, unmodeled inputs and snapshots
+may change the actual numeric effect. The output explicitly
+keeps *proven_numeric_causation: false* and
+*original_gameplay_equivalence_proven: false*.
+
+If the reference has missing/extra events or any event PC/kind
+differs from the executed event at that position, the tool
+returns *arithmetic_event_alignment_failed* and withholds all
+slot attribution instead of guessing. If the guest does not
+reach its stop PC, it returns *incomplete_guest_execution*.
+If internal dependency tracking exceeds its safety budget,
+it also withholds attribution. Missing independently recorded
+arithmetic logs still yield **no attribution**; the engine never
+reconstructs a supposed external reference from its own results.
+
+The public report contains only operation-event indices, fixed
+matrix-slot indices, counts and booleans. No guest code
+addresses, numeric results, GPR values, RAM bytes or private
+reference data are returned. The same stage-219 private
+reference capture workflow remains in effect.
