@@ -421,3 +421,73 @@ are emitted. If guest execution stops early, mismatch indices
 are withheld. A claimed original PS1 log cannot be independently
 authenticated by this workflow. Hardware, DMA, GTE and original
 gameplay remain outside this subset executor's verified coverage.
+
+## Stage 219 — independent PS1 arithmetic-result capture
+
+This stage checks intermediate results of successfully completed MIPS
+**MULT, MULTU, MFLO, MFHI, SRA, SRAV, ADD, ADDU** instructions before
+their results are overwritten or written into the nine matrix coefficients.
+A debugger reference **must be recorded independently during the same
+original-game session**; neither before/after RAM snapshots nor the
+synthetic interpreter can create independent expected values.
+
+Save an ordered private file named *arithmetic.json* with this schema
+and one event per completed relevant MIPS instruction:
+
+    {
+      "schema": "wild-arms-ps1-arithmetic-events-v1",
+      "events": [
+        {"pc":"0x80010000", "kind":"mult",
+         "result_u32":"0x00200000", "secondary_u32":"0x00000000"},
+        {"pc":"0x80010004", "kind":"mflo",
+         "result_u32":"0x00200000", "secondary_u32":null},
+        {"pc":"0x80010008", "kind":"sra",
+         "result_u32":"0x00000200", "secondary_u32":null},
+        {"pc":"0x8001000c", "kind":"addu",
+         "result_u32":"0x00000207", "secondary_u32":null}
+      ]
+    }
+
+These are **synthetic placeholder** values, not Wild Arms code or
+PlayStation-observed numbers.
+
+For MULT/MULTU, *result_u32* is the 32-bit **LO** product and
+*secondary_u32* the 32-bit **HI** product. For all other supported
+kinds, *result_u32* is the destination GPR's unsigned 32-bit bit
+pattern and *secondary_u32* must be null. Records include arithmetic
+executed in branch/return delay slots; repeated executions must not
+be discarded. Failed, overflowing ADD operations produce no
+successful result event. Capture original debugger PCs and results,
+not computed guesses.
+
+Use the packer with:
+
+    python3 -m tools.audit_ps1_capture_pack \
+      --exe /private/WILDARMS.EXE \
+      --before-registers /private/before-registers.json \
+      --after-registers /private/after-registers.json \
+      --before-ram /private/before-ram.bin \
+      --after-ram /private/after-ram.bin \
+      --ram-base 0x80000000 \
+      --arithmetic-events /private/arithmetic.json \
+      --require-arithmetic-events \
+      --output /private/matrix-arithmetic.json --compare
+
+The CLI never derives a reference from the EXE or RAM dumps.
+Without a separately provided event log, the strict flag fails
+closed. Other optional strict flags from stages 214–218 can be
+combined with this one.
+
+Private logs contain guest PCs and numeric HI/LO/GPR values and
+must stay outside GitHub. The publicly printed report gives only
+operation-class counts, matching-event counts, and up to **32 event
+indices** for location/opcode, primary-result and secondary
+HI-result mismatches; no numeric results, guest addresses or raw
+reference events are emitted. On incomplete guest execution,
+mismatch indices are withheld. The result
+*matches_complete_reference* requires an arithmetic match only
+if the strict flag is enabled; nine coefficients are checked
+independently.
+
+The source and authenticity of external PS1 captures remain
+unverified, as do real Wild Arms matrix parity and Switch execution.
