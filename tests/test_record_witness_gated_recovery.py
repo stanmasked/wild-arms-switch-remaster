@@ -83,6 +83,9 @@ class WitnessGatedRecoveryTests(unittest.TestCase):
             self.assertIsNone(reservation_row(con))
 
     def test_missing_initialized_witness_blocks_first_recovery(self):
+        # Supply a syntactically bounded receipt, but no independent
+        # witness database/initialization exists to authenticate it.
+        self.signed = b'{}'
         with self.assertRaises((ValueError, RecoveryConflict)):
             self.guarded()
         self.assertEqual(self.journal(), [])
