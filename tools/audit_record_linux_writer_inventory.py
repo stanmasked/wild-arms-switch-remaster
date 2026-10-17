@@ -117,17 +117,19 @@ def _target_inodes(db_path, db_dev, db_ino):
     if (type(db_dev) is not int or db_dev < 0
             or type(db_ino) is not int or db_ino <= 0):
         raise ValueError('invalid enrolled custody DB dev/inode')
-    db = path.stat()
+    # lstat refuses symlinked/repointed enrollment paths; the audit
+    # cannot trust a convenient path alias to the pinned SQLite inode.
+    db = path.lstat()
     if not stat.S_ISREG(db.st_mode) or (db.st_dev, db.st_ino) != (db_dev, db_ino):
         raise InventoryConflict('custody DB changed since enrollment')
-    parent = path.parent.stat()
+    parent = path.parent.lstat()
     if not stat.S_ISDIR(parent.st_mode):
         raise InventoryConflict('custody directory identity invalid')
     targets = {(db.st_dev, db.st_ino), (parent.st_dev, parent.st_ino)}
     for ext in ('-wal','-shm','-journal'):
         side = Path(str(path)+ext)
         try:
-            f = side.stat()
+            f = side.lstat()
         except FileNotFoundError:
             continue
         if not stat.S_ISREG(f.st_mode):
