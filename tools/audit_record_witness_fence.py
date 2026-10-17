@@ -86,6 +86,11 @@ def claim(db, token, request_digest, expected_count, expected_chain):
     with closing(_connect(db)) as con:
         con.execute('BEGIN IMMEDIATE')
         try:
+            try:
+                from .audit_record_witness_fence_reconciliation import _audit
+            except ImportError:
+                from audit_record_witness_fence_reconciliation import _audit
+            _audit(con)
             rows = _witness_rows(con)
             count = len(rows)
             chain = rows[-1][4] if rows else GENESIS
@@ -117,6 +122,11 @@ def release(db, token, request_digest):
     with closing(_connect(db)) as con:
         con.execute('BEGIN IMMEDIATE')
         try:
+            try:
+                from .audit_record_witness_fence_reconciliation import _audit
+            except ImportError:
+                from audit_record_witness_fence_reconciliation import _audit
+            _audit(con)
             _witness_rows(con)
             current = _fence_row(con)
             if current is None:
