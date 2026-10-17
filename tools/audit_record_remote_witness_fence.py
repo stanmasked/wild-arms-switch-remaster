@@ -137,8 +137,12 @@ def _verify(response, request, tag, public_key, pem_pin):
         raise ValueError('invalid independently signed witness fence')
     # Reuse the stage-260 exact event and witness-chain validation, with
     # the stage-261 signatures already verified separately above.
-    from .audit_record_recovery_witness import _validate_events, WITNESS_DOMAIN
-    from .audit_record_anchor_handoff import GENESIS
+    try:
+        from .audit_record_recovery_witness import _validate_events, WITNESS_DOMAIN
+        from .audit_record_anchor_handoff import GENESIS
+    except ImportError:
+        from audit_record_recovery_witness import _validate_events, WITNESS_DOMAIN
+        from audit_record_anchor_handoff import GENESIS
     events = response['recovery_events']
     _validate_events(events, require_nonempty=False)
     chain = GENESIS
