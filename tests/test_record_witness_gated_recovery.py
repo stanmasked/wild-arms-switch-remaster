@@ -32,6 +32,7 @@ class WitnessGatedRecoveryTests(unittest.TestCase):
     setUp = RecoveryWitnessTests.setUp
     reserve = RecoveryWitnessTests.reserve
     recover_once = RecoveryWitnessTests.recover_once
+    produce = RecoveryWitnessTests.produce
     record_current = RecoveryWitnessTests.record_current
     sign = RecoveryWitnessTests.sign
 
