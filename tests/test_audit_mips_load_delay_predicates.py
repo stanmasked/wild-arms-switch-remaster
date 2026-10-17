@@ -60,6 +60,23 @@ class LoadDelayPredicatesTests(unittest.TestCase):
         self.assertEqual(r['claimed_beq_bne_predicates_checked'], 1)
         self.assertEqual(r['claimed_instructions_checked'], 5)
 
+    def test_independent_sll_between_load_and_branch_retires_lw(self):
+        data = fixture(old=0, loaded=1, gap=True, taken=False)
+        # SLL v0,v0,2 is an independent instruction, like the last
+        # step in the indexed pointer's checked-in opcode prefix.
+        data['steps'][1]['word_u32'] = '0x00021080'
+        data['initial_gprs_u32']['2'] = '0x00000003'
+        r = analyze(data)
+        self.assertEqual(r['branches_comparing_pre_retirement_loaded_register'], 0)
+        self.assertEqual(r['mandatory_nop_delay_slots_checked'], 1)
+
+    def test_unrelated_addu_gap_retires_load_before_branch(self):
+        data = fixture(old=0, loaded=1, gap=True, taken=False)
+        data['steps'][1]['word_u32'] = '0x00401021'  # addu v0,v0,zero
+        data['initial_gprs_u32']['2'] = '0x00000003'
+        r = analyze(data)
+        self.assertEqual(r['branches_comparing_pre_retirement_loaded_register'], 0)
+
     def test_old_register_cannot_be_replaced_early(self):
         with self.assertRaisesRegex(ValueError, 'pre-retirement'):
             analyze(fixture(old=0, loaded=1, taken=False))
@@ -159,7 +176,8 @@ class LoadDelayPredicatesTests(unittest.TestCase):
     def test_no_branch_or_no_load_does_not_certify_pipeline(self):
         data = fixture()
         data['steps'][1] = step(1, 0)
-        with self.assertRaises(ValueError):
+        data['steps'][-1] = step(3, 0)
+        with self.assertRaisesRegex(ValueError, 'incomplete branch/load'):
             analyze(data)
         data = fixture()
         data['steps'][0] = step(0, 0)
