@@ -14,7 +14,7 @@ from tools.audit_record_custodian_recovery import (
     recover as recover_custodian,
 )
 from tools.audit_record_custodian_write_quarantine import (
-    QuarantineConflict, _quarantine_row, install, main,
+    QuarantineConflict, QUARANTINE_USER_VERSION, _quarantine_row, install, main,
 )
 from tools.audit_record_witness_fence_quiescence import PreflightConflict
 
@@ -37,7 +37,7 @@ class WriteQuarantineTests(unittest.TestCase):
         for attr in ('ca', 'server_key', 'server_cert', 'server_pin',
                      'client_key', 'client_cert', 'client_pin',
                      'sign_key', 'sign_pub', 'sign_pub_pin'):
-            setattr(cls, attr, getattr(Fixture, attr))
+            setattr(cls, attr, getattr(fixture_module.QuiescencePreflightTests, attr))
 
     @classmethod
     def tearDownClass(cls):
@@ -148,6 +148,67 @@ class WriteQuarantineTests(unittest.TestCase):
             reserve(self.custody, head[0], head[3], TOKEN)
         with self.assertRaises(QuarantineConflict):
             deposit(self.custody, self.new_offer())
+
+    def test_sealed_sqlite_header_and_row_agree(self):
+        original = self.request()
+        self.fence(original)
+        with sqlite3.connect(self.custody) as con:
+            self.assertEqual(con.execute('PRAGMA user_version').fetchone()[0], 0)
+        self.install(original)
+        with sqlite3.connect(self.custody) as con:
+            self.assertEqual(
+                con.execute('PRAGMA user_version').fetchone()[0],
+                QUARANTINE_USER_VERSION)
+            self.assertIsNotNone(_quarantine_row(con))
+
+    def test_dropped_quarantine_table_still_blocks_writers(self):
+        original = self.request()
+        self.fence(original)
+        self.install(original)
+        with sqlite3.connect(self.custody) as con:
+            con.execute('DROP TABLE custodian_writer_quarantine')
+            self.assertEqual(
+                con.execute('PRAGMA user_version').fetchone()[0],
+                QUARANTINE_USER_VERSION)
+        head = _read_latest(self.custody)
+        with self.assertRaises(QuarantineConflict):
+            reserve(self.custody, head[0], head[3], TOKEN)
+        with self.assertRaises(QuarantineConflict):
+            deposit(self.custody, self.new_offer())
+        self.assertIsNotNone(self.outstanding())
+
+    def test_erased_header_marker_still_blocks_writers(self):
+        original = self.request()
+        self.fence(original)
+        self.install(original)
+        with sqlite3.connect(self.custody) as con:
+            con.execute('PRAGMA user_version=0')
+        head = _read_latest(self.custody)
+        with self.assertRaises(QuarantineConflict):
+            reserve(self.custody, head[0], head[3], TOKEN)
+        with self.assertRaises(QuarantineConflict):
+            deposit(self.custody, self.new_offer())
+        self.assertIsNotNone(self.outstanding())
+
+    def test_nonzero_unknown_header_refuses_writes_and_install(self):
+        original = self.request()
+        self.fence(original)
+        with sqlite3.connect(self.custody) as con:
+            con.execute('PRAGMA user_version=1')
+        head = _read_latest(self.custody)
+        with self.assertRaises(QuarantineConflict):
+            reserve(self.custody, head[0], head[3], TOKEN)
+        with self.assertRaises(QuarantineConflict):
+            self.install(original)
+        self.assertIsNotNone(self.outstanding())
+
+    def test_failed_install_does_not_leave_partial_header(self):
+        original = self.request()
+        with self.assertRaises(PreflightConflict):
+            self.install(original)
+        with sqlite3.connect(self.custody) as con:
+            self.assertEqual(con.execute('PRAGMA user_version').fetchone()[0], 0)
+            self.assertIsNone(_quarantine_row(con))
 
     def test_duplicate_install_refused_and_original_fence_retained(self):
         original = self.request()
