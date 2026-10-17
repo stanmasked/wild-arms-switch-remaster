@@ -39,6 +39,8 @@ on:
       - 'tools/mips_return_boundary.py'
       - 'tools/audit_actions_job_bootstrap.py'
       - 'tools/audit_ps1_regression_gate.py'
+      - 'tools/audit_record_base_provenance.py'
+      - 'tests/test_record_base_provenance.py'
       - 'tools/audit_record_pointer_use.py'
       - 'tests/test_record_pointer_use.py'
       - 'tests/test_audit_ps1_regression_gate.py'
@@ -134,6 +136,7 @@ jobs:
       - name: Run matrix and trig audit unit tests (synthetic assets only)
         run: |
           python -m tools.audit_ps1_regression_gate
+          python -m unittest discover -s tests -p 'test_record_base_provenance.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
           python -m unittest discover -s tests -p 'test_gp0_matrix_*.py' -v
           python -m unittest discover -s tests -p 'test_mips_fixed32.py' -v
