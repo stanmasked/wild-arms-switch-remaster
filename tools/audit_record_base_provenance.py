@@ -57,7 +57,7 @@ def _trace_tail(words):
     """
     if not isinstance(words, (tuple, list)) or len(words) > WINDOW_WORDS - 11:
         raise ValueError('invalid bounded tail')
-    queue = deque([(0, False, frozenset())])
+    queue = deque([(0, False)])
     visited = set()
     terminal_success = 0
     terminal_unknown = 0
@@ -67,19 +67,22 @@ def _trace_tail(words):
         if len(visited) >= MAX_STATES or terminal_success + terminal_unknown > MAX_TERMINALS:
             return {'success': 0, 'unknown': 1, 'known_branches': known_branches,
                     'unknown_branches': unknown_branches, 'bounded_out': True}
-        pc, added, path = queue.popleft()
+        pc, added = queue.popleft()
         state = (pc, added)
-        if pc < 0 or pc >= len(words) or pc in path or state in visited:
+        if pc < 0 or pc >= len(words):
             terminal_unknown += 1
+            continue
+        # Forward-only successors make repeated states safe to coalesce.
+        # Do not count such convergence as an unresolved path.
+        if state in visited:
             continue
         visited.add(state)
         word = words[pc]
-        next_path = path | {pc}
         if word == 0:
-            queue.append((pc + 1, added, next_path))
+            queue.append((pc + 1, added))
             continue
         if word in _POINTER_ADDS and not added:
-            queue.append((pc + 1, True, next_path))
+            queue.append((pc + 1, True))
             continue
         op = word >> 26
         if op in _MEMORY_OPS and (word >> 21) & 31 == 3 and added:
@@ -104,7 +107,7 @@ def _trace_tail(words):
                 if dest <= pc + 1 or dest >= len(words):
                     terminal_unknown += 1
                 else:
-                    queue.append((dest, added, next_path | {pc + 1}))
+                    queue.append((dest, added))
             continue
         # Unsupported opcode, another ADDU, earlier base-v1 memory access,
         # J/JAL, JR/JALR, REGIMM/likely branch, or coprocessor control:
