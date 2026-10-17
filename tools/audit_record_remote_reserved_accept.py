@@ -24,12 +24,12 @@ except ImportError:
 
 def evidence_digest(evidence):
     """Bind a reserved head to the exact eight length-delimited byte fields."""
-    if len(evidence) != 8 or any(type(value) is not bytes for value in evidence):
+    if len(evidence) != 8 or any(not isinstance(value, (bytes, bytearray)) for value in evidence):
         raise ValueError('invalid evidence bundle')
     checksum = hashlib.sha256(b'wild-arms-reserved-accept-evidence-v1\x00')
     for item in evidence:
         checksum.update(len(item).to_bytes(8, 'big'))
-        checksum.update(item)
+        checksum.update(bytes(item))
     return checksum.hexdigest()
 
 
