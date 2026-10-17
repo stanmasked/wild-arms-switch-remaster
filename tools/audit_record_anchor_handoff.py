@@ -145,6 +145,8 @@ def deposit(custodian_db, checkpoint_raw, *, expected_sequence=None,
                 if not matches_expected:
                     raise HandoffRegression('stale expected custodian history')
             if prior and prior[-1][1] == digest:
+                if conditional:
+                    raise HandoffRegression('candidate does not advance custody head')
                 con.commit()
                 return prior[-1][0], False
             if len(prior) >= MAX_ROUNDS:
