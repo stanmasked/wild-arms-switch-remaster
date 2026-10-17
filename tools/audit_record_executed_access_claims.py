@@ -72,7 +72,7 @@ def _read_site_words(exe, base, size, site):
     return words
 
 
-def analyze(exe, reference):
+def analyze(exe, reference, *, path_validator=None):
     """Compare claimed PC order, executable bytes, and address relations.
 
     Strictly a *claim* correlation: even an exact match cannot demonstrate
@@ -124,8 +124,8 @@ def analyze(exe, reference):
             raise ValueError('invalid number of site claims')
         words = _read_site_words(exe, load, size, _SITES[name])
         candidate = _candidate_tail(words)
-        shape = candidate is not None and candidate[1] == offset
-        matched_access_shapes += bool(shape)
+        shape = (candidate is not None and candidate[1] == offset
+                 if path_validator is None else False)
         delta_rows = []
         row_by_index = {}
         for row in rows:
@@ -155,12 +155,17 @@ def analyze(exe, reference):
                 'global_base_u32': row['global_base_u32'],
                 'effective_address_u32': row['effective_address_u32']})
             total_claims += 1
-            if shape:
+            if path_validator is not None:
+                if path_validator(words, _SITES[name], pcs, offset, address) is not None:
+                    claim_pc_matches += 1
+                    shape = True
+            elif shape:
                 end, _, width = candidate
                 expected = tuple(_SITES[name] + 4 * i
                                  for i in range(end + 1))
                 if pcs == expected and address % width == 0:
                     claim_pc_matches += 1
+        matched_access_shapes += bool(shape)
         delta_result = analyze_deltas({
             'schema': DELTA_SCHEMA,
             'source': reference['source'],
