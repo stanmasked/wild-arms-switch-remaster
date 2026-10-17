@@ -162,7 +162,7 @@ class CoupledBranchLoadTests(unittest.TestCase):
     def test_false_branch_pc_claim_cannot_be_rescued_by_registers(self):
         exe, joined = example()
         pcs = joined['access_claim']['observations'][0]['samples'][0]['executed_pcs']
-        pcs[13] = _hex(TARGETS[0]+14*4)
+        pcs[13] = _hex(TARGETS[0]+13*4)
         r = analyze(exe, joined)
         self.assertFalse(r['stage237_exe_address_claims_consistent'])
         self.assertFalse(r['joined_private_claims_consistent'])
