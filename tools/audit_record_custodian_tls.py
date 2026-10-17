@@ -142,7 +142,7 @@ def _signed_latest(custodian_db, signing_key, tag):
     return row, data
 
 
-def _process(request, custodian_db, signing_key, tag):
+def _process(request, custodian_db, signing_key, tag, *, witness_head=None):
     if (type(request) is not dict
             or request.get('schema') != REQUEST_SCHEMA
             or request.get('action') not in (
@@ -164,7 +164,8 @@ def _process(request, custodian_db, signing_key, tag):
     if action == 'reserve':
         reserve(
             custodian_db, request['expected_sequence'],
-            request['expected_receipt_sha256'], request['reservation_token'])
+            request['expected_receipt_sha256'], request['reservation_token'],
+            witness_head=witness_head)
     elif action in ('deposit', 'deposit-reserved'):
         offered = _b64_decode(request['checkpoint_b64'], MAX_CHECKPOINT_BYTES)
         _validate_checkpoint(offered)
@@ -173,7 +174,8 @@ def _process(request, custodian_db, signing_key, tag):
             expected_sequence=request['expected_sequence'],
             expected_receipt_sha256=request['expected_receipt_sha256'],
             reservation_token=(request['reservation_token']
-                               if action == 'deposit-reserved' else None))
+                               if action == 'deposit-reserved' else None),
+            witness_head=witness_head)
     row, signed = _signed_latest(custodian_db, signing_key, tag)
     return {
         'schema': RESPONSE_SCHEMA,
@@ -185,7 +187,7 @@ def _process(request, custodian_db, signing_key, tag):
 
 
 def serve_one(listener, custodian_db, signing_key, cert, key, ca,
-              expected_client_cert_sha256, *, tag):
+              expected_client_cert_sha256, *, tag, witness_head=None):
     """Handle exactly one mutual TLS connection; false for rejected request.
 
     The caller owns the bound/listening socket. Deliberate one-shot API:
@@ -200,7 +202,12 @@ def serve_one(listener, custodian_db, signing_key, cert, key, ca,
                 _peer_pin(tls, expected_client_cert_sha256)
                 request = _receive(tls)
                 try:
-                    response = _process(request, custodian_db, signing_key, tag)
+                    if witness_head is None:
+                        response = _process(request, custodian_db, signing_key, tag)
+                    else:
+                        response = _process(
+                            request, custodian_db, signing_key, tag,
+                            witness_head=witness_head)
                 except (OSError, ValueError, HandoffRegression, sqlite3.Error):
                     _send(tls, {
                         'schema': RESPONSE_SCHEMA,
@@ -297,16 +304,23 @@ def exchange(host, port, *, hostname, cert, key, ca, server_cert_sha256,
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='operation', required=True)
-    server = sub.add_parser('serve-once', help='one authenticated custodian connection')
-    server.add_argument('custodian_database', type=Path)
-    server.add_argument('private_ed25519_signing_key', type=Path)
-    server.add_argument('tls_server_cert', type=Path)
-    server.add_argument('tls_server_key', type=Path)
-    server.add_argument('trusted_client_ca', type=Path)
-    server.add_argument('expected_client_certificate_der_sha256')
-    server.add_argument('--custodian-tag', required=True)
-    server.add_argument('--host', default='127.0.0.1')
-    server.add_argument('--port', type=int, required=True)
+    for mode in ('serve-once', 'serve-once-witness-guarded'):
+        server = sub.add_parser(mode, help='one authenticated custodian connection')
+        server.add_argument('custodian_database', type=Path)
+        server.add_argument('private_ed25519_signing_key', type=Path)
+        server.add_argument('tls_server_cert', type=Path)
+        server.add_argument('tls_server_key', type=Path)
+        server.add_argument('trusted_client_ca', type=Path)
+        server.add_argument('expected_client_certificate_der_sha256')
+        server.add_argument('--custodian-tag', required=True)
+        server.add_argument('--host', default='127.0.0.1')
+        server.add_argument('--port', type=int, required=True)
+        if mode == 'serve-once-witness-guarded':
+            server.add_argument('independent_witness_database', type=Path)
+            server.add_argument('current_signed_witness_receipt', type=Path)
+            server.add_argument('trusted_witness_public_pem', type=Path)
+            server.add_argument('trusted_witness_pem_sha256')
+            server.add_argument('--witness-tag', required=True)
     for name in ('latest', 'deposit'):
         p = sub.add_parser(name)
         p.add_argument('host')
@@ -327,9 +341,26 @@ def main(argv=None):
             p.add_argument('--expected-receipt-sha256', required=True)
     args = parser.parse_args(argv)
     try:
-        if args.operation == 'serve-once':
+        if args.operation in ('serve-once', 'serve-once-witness-guarded'):
             if not 1 <= args.port <= 65535:
                 raise ValueError('invalid listen port')
+            witness_head = None
+            if args.operation == 'serve-once-witness-guarded':
+                try:
+                    from .audit_record_recovery_witness import (
+                        authenticated_head, MAX_SIGNED_BYTES as MAX_WITNESS_SIGNED,
+                    )
+                except ImportError:
+                    from audit_record_recovery_witness import (
+                        authenticated_head, MAX_SIGNED_BYTES as MAX_WITNESS_SIGNED,
+                    )
+                raw_witness = _read_limited(
+                    _private_regular_file(args.current_signed_witness_receipt),
+                    MAX_WITNESS_SIGNED)
+                witness_head = authenticated_head(
+                    args.independent_witness_database, raw_witness,
+                    args.trusted_witness_public_pem,
+                    args.trusted_witness_pem_sha256, tag=args.witness_tag)
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
                 listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 listener.bind((args.host, args.port))
@@ -341,8 +372,10 @@ def main(argv=None):
                     args.tls_server_cert, args.tls_server_key,
                     args.trusted_client_ca,
                     args.expected_client_certificate_der_sha256,
-                    tag=args.custodian_tag)
-            result, status = {'request_accepted': accepted}, 0 if accepted else 1
+                    tag=args.custodian_tag, witness_head=witness_head)
+            result, status = {'request_accepted': accepted,
+                              'custodian_witness_guarded': witness_head is not None}, (
+                0 if accepted else 1)
         else:
             offer = (_read_limited(
                 _private_regular_file(args.private_checkpoint_offer),
