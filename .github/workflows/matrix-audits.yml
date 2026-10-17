@@ -49,9 +49,12 @@ on:
       - 'tools/audit_record_temporal_slot_snapshots.py'
       - 'tools/audit_record_capture_stream_binding.py'
       - 'tools/audit_record_capture_provenance.py'
+      - 'tools/audit_record_capture_replay.py'
       - 'tests/test_record_capture_stream_binding.py'
       - 'tests/test_record_capture_provenance.py'
+      - 'tests/test_record_capture_replay.py'
       - 'docs/ps1-capture-session-provenance.md'
+      - 'docs/ps1-capture-replay-preflight.md'
       - 'tests/test_record_temporal_slot_snapshots.py'
       - 'tests/test_record_global_slot_witness.py'
       - 'tests/test_record_pipeline_coupling.py'
@@ -166,6 +169,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_record_temporal_slot_snapshots.py' -v
           python -m unittest discover -s tests -p 'test_record_capture_stream_binding.py' -v
           python -m unittest discover -s tests -p 'test_record_capture_provenance.py' -v
+          python -m unittest discover -s tests -p 'test_record_capture_replay.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
           python -m unittest discover -s tests -p 'test_gp0_matrix_*.py' -v
           python -m unittest discover -s tests -p 'test_mips_fixed32.py' -v
