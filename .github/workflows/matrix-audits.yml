@@ -41,6 +41,8 @@ on:
       - 'tools/audit_ps1_regression_gate.py'
       - 'tools/audit_record_base_provenance.py'
       - 'tools/audit_record_address_deltas.py'
+      - 'tools/audit_record_executed_access_claims.py'
+      - 'tests/test_record_executed_access_claims.py'
       - 'tests/test_record_address_deltas.py'
       - 'tests/test_record_base_provenance.py'
       - 'tools/audit_record_pointer_use.py'
@@ -140,6 +142,7 @@ jobs:
           python -m tools.audit_ps1_regression_gate
           python -m unittest discover -s tests -p 'test_record_base_provenance.py' -v
           python -m unittest discover -s tests -p 'test_record_address_deltas.py' -v
+          python -m unittest discover -s tests -p 'test_record_executed_access_claims.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
           python -m unittest discover -s tests -p 'test_gp0_matrix_*.py' -v
           python -m unittest discover -s tests -p 'test_mips_fixed32.py' -v
