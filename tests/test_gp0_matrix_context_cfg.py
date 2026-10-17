@@ -28,8 +28,10 @@ class ContextTests(unittest.TestCase):
             f'0x{START:08X}',
             f'0x{START+4:08X}',
             f'0x{START+4:08X}@delay_of_0x{START:08X}',
+            f'0x{START+4:08X}@delay_of_0x{START:08X}',
         ])
-        self.assertEqual(len(first['edges']),3)
+        # Unknown BEQ predicate has both taken and not-taken targets.
+        self.assertEqual(len(first['edges']),4)
         self.assertTrue(first['valid_range'])
 
     def test_unconditional_jump_not_fallthrough(self):
