@@ -65,6 +65,7 @@ on:
       - 'tools/audit_record_witness_fence.py'
       - 'tools/audit_record_witness_fence_reconciliation.py'
       - 'tools/audit_record_witness_fence_quiescence.py'
+      - 'tools/audit_record_custodian_write_quarantine.py'
       - 'tools/audit_record_remote_witness_fence.py'
       - 'tools/audit_record_remote_reserved_issue.py'
       - 'tools/audit_record_remote_reserved_accept.py'
@@ -87,6 +88,7 @@ on:
       - 'tests/test_record_witness_fence.py'
       - 'tests/test_record_witness_fence_reconciliation.py'
       - 'tests/test_record_witness_fence_quiescence.py'
+      - 'tests/test_record_custodian_write_quarantine.py'
       - 'tests/test_record_witness_gated_recovery.py'
       - 'tests/test_record_witness_gated_custody.py'
       - 'tests/test_record_reserved_accept.py'
@@ -96,6 +98,7 @@ on:
       - 'docs/ps1-witness-conditional-fence.md'
       - 'docs/ps1-witness-fence-reconciliation.md'
       - 'docs/ps1-witness-fence-quiescence-preflight.md'
+      - 'docs/ps1-custodian-write-quarantine.md'
       - 'docs/ps1-witness-gated-recovery.md'
       - 'docs/ps1-witness-gated-custody-writes.md'
       - 'docs/ps1-reserved-capture-acceptance.md'
@@ -244,6 +247,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_record_witness_fence.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_fence_reconciliation.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_fence_quiescence.py' -v
+          python -m unittest discover -s tests -p 'test_record_custodian_write_quarantine.py' -v
           python -m unittest discover -s tests -p 'test_record_reserved_accept.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
           python -m unittest discover -s tests -p 'test_gp0_matrix_*.py' -v
