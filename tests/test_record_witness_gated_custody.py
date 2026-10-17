@@ -81,7 +81,9 @@ class GuardedCustodianWriteTests(unittest.TestCase):
             self.assertEqual(reservation_row(con)[4], 'reserved')
 
     def test_missing_witness_never_authorizes_mutation(self):
-        with self.assertRaises(ValueError):
+        # A missing witness database is a fail-closed filesystem error,
+        # not a forged or synthetic signed-head value.
+        with self.assertRaises((OSError, ValueError)):
             authenticated_head(
                 self.witness, b'{}', self.public, self.pin, tag=self.tag)
         # No independent signed proof means the guarded caller never
