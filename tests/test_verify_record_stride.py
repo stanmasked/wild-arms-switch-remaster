@@ -2,8 +2,12 @@ import unittest
 from tools.verify_record_stride import INDEX_WORDS, GLOBAL_WORDS, stride_from_index_words, inspect_exe
 
 class RecordStrideTests(unittest.TestCase):
-    def test_mips_arithmetic(self):
-        self.assertEqual(stride_from_index_words(INDEX_WORDS), 364)
+    def test_mips_arithmetic_exposes_unresolved_stride_discrepancy(self):
+        # The checked-in eight instruction words evaluate to 677 index
+        # units, and the subsequent SLL by 2 makes 2708, *not* 364.
+        self.assertEqual(stride_from_index_words(INDEX_WORDS), 2708)
+        self.assertNotEqual(stride_from_index_words(INDEX_WORDS), 364)
+        self.assertEqual((INDEX_WORDS[4] >> 6) & 31, 3)
 
     def test_changed_opcode_rejected(self):
         x = list(INDEX_WORDS)
@@ -11,7 +15,7 @@ class RecordStrideTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             stride_from_index_words(x)
 
-    def test_three_function_prefixes(self):
+    def test_three_function_prefixes_do_not_certify_false_stride(self):
         base = 0x80011420
         data = bytearray(2048 + 0xc1800)
         data[:8] = b'PS-X EXE'
@@ -21,9 +25,9 @@ class RecordStrideTests(unittest.TestCase):
             offset = 2048 + target - base
             for i, w in enumerate(INDEX_WORDS + GLOBAL_WORDS):
                 data[offset + 4*i:offset + 4*i+4] = w.to_bytes(4, 'little')
-        rows = inspect_exe(data)
-        self.assertEqual(len(rows), 3)
-        self.assertEqual([x['stride_bytes'] for x in rows], [364]*3)
+        # Matching opcodes alone cannot prove the legacy constant.
+        with self.assertRaisesRegex(ValueError, 'unverified record stride'):
+            inspect_exe(data)
 
     def test_invalid_executable(self):
         with self.assertRaises(ValueError):
