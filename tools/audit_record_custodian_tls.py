@@ -187,12 +187,15 @@ def _process(request, custodian_db, signing_key, tag, *, witness_head=None):
 
 
 def serve_one(listener, custodian_db, signing_key, cert, key, ca,
-              expected_client_cert_sha256, *, tag, witness_head=None):
+              expected_client_cert_sha256, *, tag, witness_head=None,
+              remote_witness_provider=None):
     """Handle exactly one mutual TLS connection; false for rejected request.
 
     The caller owns the bound/listening socket. Deliberate one-shot API:
     deployment needs process supervision, backpressure and network hardening.
     """
+    if witness_head is not None and remote_witness_provider is not None:
+        raise ValueError('multiple witness admission sources are forbidden')
     ctx = _tls_context(cert, key, ca, server=True)
     _digest(expected_client_cert_sha256)
     with listener.accept()[0] as conn:
@@ -202,12 +205,28 @@ def serve_one(listener, custodian_db, signing_key, cert, key, ca,
                 _peer_pin(tls, expected_client_cert_sha256)
                 request = _receive(tls)
                 try:
-                    if witness_head is None:
+                    head = witness_head
+                    if remote_witness_provider is not None and (
+                            type(request) is dict and
+                            request.get('action') in (
+                                'reserve', 'deposit', 'deposit-reserved')):
+                        # Obtain a fresh authenticated witness response after
+                        # authenticating the custody client and its request.
+                        # No witness DB is opened by this custodian process.
+                        head = remote_witness_provider()
+                        if head is None:
+                            raise ValueError('remote witness did not respond')
+                    if head is None:
+                        if remote_witness_provider is not None and (
+                                type(request) is dict and
+                                request.get('action') in (
+                                    'reserve', 'deposit', 'deposit-reserved')):
+                            raise ValueError('required remote witness missing')
                         response = _process(request, custodian_db, signing_key, tag)
                     else:
                         response = _process(
                             request, custodian_db, signing_key, tag,
-                            witness_head=witness_head)
+                            witness_head=head)
                 except (OSError, ValueError, HandoffRegression, sqlite3.Error):
                     _send(tls, {
                         'schema': RESPONSE_SCHEMA,
@@ -304,7 +323,8 @@ def exchange(host, port, *, hostname, cert, key, ca, server_cert_sha256,
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='operation', required=True)
-    for mode in ('serve-once', 'serve-once-witness-guarded'):
+    for mode in ('serve-once', 'serve-once-witness-guarded',
+                 'serve-once-remote-witness-guarded'):
         server = sub.add_parser(mode, help='one authenticated custodian connection')
         server.add_argument('custodian_database', type=Path)
         server.add_argument('private_ed25519_signing_key', type=Path)
@@ -315,6 +335,17 @@ def main(argv=None):
         server.add_argument('--custodian-tag', required=True)
         server.add_argument('--host', default='127.0.0.1')
         server.add_argument('--port', type=int, required=True)
+        if mode == 'serve-once-remote-witness-guarded':
+            server.add_argument('witness_host')
+            server.add_argument('witness_port', type=int)
+            server.add_argument('witness_tls_hostname')
+            server.add_argument('witness_tls_client_cert', type=Path)
+            server.add_argument('witness_tls_client_key', type=Path)
+            server.add_argument('witness_trusted_server_ca', type=Path)
+            server.add_argument('witness_server_leaf_der_sha256')
+            server.add_argument('trusted_witness_public_pem', type=Path)
+            server.add_argument('trusted_witness_public_pem_sha256')
+            server.add_argument('--witness-tag', required=True)
         if mode == 'serve-once-witness-guarded':
             server.add_argument('independent_witness_database', type=Path)
             server.add_argument('current_signed_witness_receipt', type=Path)
@@ -341,10 +372,28 @@ def main(argv=None):
             p.add_argument('--expected-receipt-sha256', required=True)
     args = parser.parse_args(argv)
     try:
-        if args.operation in ('serve-once', 'serve-once-witness-guarded'):
+        if args.operation in ('serve-once', 'serve-once-witness-guarded',
+                              'serve-once-remote-witness-guarded'):
             if not 1 <= args.port <= 65535:
                 raise ValueError('invalid listen port')
             witness_head = None
+            remote_witness_provider = None
+            if args.operation == 'serve-once-remote-witness-guarded':
+                try:
+                    from .audit_record_remote_recovery_witness import fetch_head
+                except ImportError:
+                    from audit_record_remote_recovery_witness import fetch_head
+                def remote_witness_provider():
+                    return fetch_head(
+                        args.witness_host, args.witness_port,
+                        hostname=args.witness_tls_hostname,
+                        cert=args.witness_tls_client_cert,
+                        key=args.witness_tls_client_key,
+                        ca=args.witness_trusted_server_ca,
+                        server_pin=args.witness_server_leaf_der_sha256,
+                        pinned_witness_public_key=args.trusted_witness_public_pem,
+                        witness_public_key_pin=args.trusted_witness_public_pem_sha256,
+                        tag=args.witness_tag)
             if args.operation == 'serve-once-witness-guarded':
                 try:
                     from .audit_record_recovery_witness import (
@@ -372,9 +421,14 @@ def main(argv=None):
                     args.tls_server_cert, args.tls_server_key,
                     args.trusted_client_ca,
                     args.expected_client_certificate_der_sha256,
-                    tag=args.custodian_tag, witness_head=witness_head)
+                    tag=args.custodian_tag, witness_head=witness_head,
+                    remote_witness_provider=remote_witness_provider)
             result, status = {'request_accepted': accepted,
-                              'custodian_witness_guarded': witness_head is not None}, (
+                              'custodian_witness_guarded': (
+                                  witness_head is not None
+                                  or remote_witness_provider is not None),
+                              'remote_witness_fetched_per_mutation': (
+                                  remote_witness_provider is not None)}, (
                 0 if accepted else 1)
         else:
             offer = (_read_limited(
