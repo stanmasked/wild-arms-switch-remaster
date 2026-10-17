@@ -29,8 +29,8 @@ RECEIPT_SCHEMA = 'wild-arms-ps1-collector-receipt-v1'
 REPORT_SCHEMA = 'wild-arms-ps1-session-provenance-audit-v1'
 MAX_PROVENANCE_BYTES = 8192
 MAX_RECEIPT_BYTES = 4096
-_NONCE = re.compile(r'[0-9a-f]{32}\\Z')
-_VERSION = re.compile(r'[A-Za-z0-9][A-Za-z0-9._+\\-]{0,39}\\Z')
+_NONCE = re.compile(r'[0-9a-f]{32}\Z')
+_VERSION = re.compile(r'[A-Za-z0-9][A-Za-z0-9._+\-]{0,39}\Z')
 _CONDITIONS = {
     'target_kind': {'emulator', 'hardware', 'unknown'},
     'cpu_backend': {'interpreter', 'dynarec', 'unknown'},
