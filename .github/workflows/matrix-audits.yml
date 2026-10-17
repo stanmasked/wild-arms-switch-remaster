@@ -38,6 +38,8 @@ on:
       - 'tests/test_mips_entry_dependencies.py'
       - 'tools/mips_return_boundary.py'
       - 'tools/audit_actions_job_bootstrap.py'
+      - 'tools/audit_ps1_regression_gate.py'
+      - 'tests/test_audit_ps1_regression_gate.py'
       - 'tests/test_audit_actions_job_bootstrap.py'
       - 'tools/mips_matrix_arithmetic_attribution.py'
       - 'tests/test_mips_matrix_arithmetic_attribution.py'
@@ -129,6 +131,7 @@ jobs:
           python -m compileall -q tools tests
       - name: Run matrix and trig audit unit tests (synthetic assets only)
         run: |
+          python -m tools.audit_ps1_regression_gate
           python -m unittest discover -s tests -p 'test_gp0_matrix_*.py' -v
           python -m unittest discover -s tests -p 'test_mips_fixed32.py' -v
           python -m unittest discover -s tests -p 'test_mips_integer_step.py' -v
@@ -155,6 +158,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_mips_store_value_sequence.py' -v
           python -m unittest discover -s tests -p 'test_mips_arithmetic_event_sequence.py' -v
           python -m unittest discover -s tests -p 'test_audit_actions_job_bootstrap.py' -v
+          python -m unittest discover -s tests -p 'test_audit_ps1_regression_gate.py' -v
           python -m unittest discover -s tests -p 'test_mips_matrix_arithmetic_attribution.py' -v
           python -m unittest discover -s tests -p 'test_ps1_arithmetic_matrix_attribution.py' -v
           python -m unittest discover -s tests -p 'test_ps1_arithmetic_capture.py' -v
