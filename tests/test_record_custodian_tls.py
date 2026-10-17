@@ -113,7 +113,8 @@ class MutualTlsCustodianTests(unittest.TestCase):
     def run_channel(self, *, action='latest', checkpoint=None,
                     server_pin=None, client_pin=None, signer_pin=None,
                     tag=None, client_key=None, client_cert=None,
-                    expected_head=None, reservation_token=None):
+                    expected_head=None, reservation_token=None,
+                    witness_head=None):
         if action in ('deposit', 'reserve', 'deposit-reserved') and expected_head is None:
             prior = _read_latest(self.custody)
             expected_head = (prior[0], prior[3])
@@ -127,7 +128,7 @@ class MutualTlsCustodianTests(unittest.TestCase):
                     serve_one, listener, self.custody,
                     self.sign_key, self.server_cert, self.server_key, self.ca,
                     self.client_pin if client_pin is None else client_pin,
-                    tag=self.tag)
+                    tag=self.tag, witness_head=witness_head)
                 try:
                     response = exchange(
                         '127.0.0.1', port, hostname='localhost',
