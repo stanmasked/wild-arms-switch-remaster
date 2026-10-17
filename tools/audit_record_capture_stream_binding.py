@@ -109,8 +109,12 @@ def analyze(exe, temporal_raw, manifest_raw, before_raw, after_raw):
     Files are never modified. Successful cryptographic digests prove only
     that supplied bytes equal supplied digest values.
     """
-    if any(type(raw) is not bytes for raw in
-           (exe, temporal_raw, manifest_raw, before_raw, after_raw)):
+    # Existing bounded PS-X EXE readers and synthetic fixtures may
+    # return a bytearray; hash it byte-for-byte without reserialization.
+    # The four private evidence artifacts must be immutable raw bytes.
+    if (type(exe) not in (bytes, bytearray)
+            or any(type(raw) is not bytes for raw in
+                   (temporal_raw, manifest_raw, before_raw, after_raw))):
         raise ValueError('unexpected private input types')
     if (not 0 < len(temporal_raw) <= MAX_REFERENCE_BYTES
             or not 0 < len(manifest_raw) <= MAX_MANIFEST_BYTES):
