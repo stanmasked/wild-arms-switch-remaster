@@ -45,6 +45,8 @@ on:
       - 'tools/mips_record_branch_trace.py'
       - 'tools/audit_mips_load_delay_predicates.py'
       - 'tools/audit_record_pipeline_coupling.py'
+      - 'tools/audit_record_global_slot_witness.py'
+      - 'tests/test_record_global_slot_witness.py'
       - 'tests/test_record_pipeline_coupling.py'
       - 'tests/test_audit_mips_load_delay_predicates.py'
       - 'tools/audit_record_branch_access_claims.py'
@@ -153,6 +155,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_record_branch_access_claims.py' -v
           python -m unittest discover -s tests -p 'test_audit_mips_load_delay_predicates.py' -v
           python -m unittest discover -s tests -p 'test_record_pipeline_coupling.py' -v
+          python -m unittest discover -s tests -p 'test_record_global_slot_witness.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
           python -m unittest discover -s tests -p 'test_gp0_matrix_*.py' -v
           python -m unittest discover -s tests -p 'test_mips_fixed32.py' -v
