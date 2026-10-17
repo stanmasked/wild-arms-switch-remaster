@@ -17,11 +17,12 @@ import stat
 try:
     from .audit_record_linux_writer_inventory import (
         _canonical, _strict_json, _abs_path, _SHA256, _PID,
-        _read_executable, _process_identity, _target_inodes,
+        _read_executable, _read_at, _process_identity, _target_inodes,
         _mount_is_procfs, InventoryConflict, MAX_PIDS, MAX_WRITERS,
     )
     from .audit_record_linux_interpreted_writers import (
         inspect as inspect_python, _bounded_argv, _MODULE, _private_bytes,
+        MAX_CMDLINE,
         MAX_ENTRYPOINT_MANIFEST,
     )
     from .audit_record_linux_writer_inventory import MAX_MANIFEST
@@ -129,15 +130,12 @@ def _scan(proc_root, enrolled_launchers, modules, scripts):
                 # Kernel threads have no userspace exe/cmdline. For every
                 # observable userspace process, require bounded argv.
                 if exe is None:
-                    from_missing_exe = False
-                    try:
-                        argv = _bounded_argv(fd)
-                    except InventoryConflict:
-                        argv = ()
-                    if argv:
-                        from_missing_exe = True
-                    if from_missing_exe:
-                        raise InventoryConflict('unbound executable identity')
+                    # The only exception is a genuine kernel thread with
+                    # *empty* procfs cmdline. Missing or malformed data
+                    # must not be interpreted as proof of a kernel thread.
+                    if _read_at(fd, 'cmdline', MAX_CMDLINE):
+                        raise InventoryConflict('unbound userspace process exe')
+                    argv = ()
                 else:
                     argv = _bounded_argv(fd)
                 matching = (exe in enrolled_launchers
