@@ -281,9 +281,9 @@ class WitnessGuardedTLSCustodianTests(unittest.TestCase):
             str(self.custody), str(self.sign_key),
             str(self.server_cert), str(self.server_key), str(self.ca),
             self.client_pin,
-            '--custodian-tag', self.tag, '--port', '38481',
             str(self.witness), str(self.receipt),
             str(self.witness_public), 'f'*64,
+            '--custodian-tag', self.tag, '--port', '38481',
             '--witness-tag', self.witness_tag,
         ]
         # The command rejects invalid pinned credentials before binding
