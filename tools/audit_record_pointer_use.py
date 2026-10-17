@@ -94,13 +94,23 @@ def main(argv=None):
     parser.add_argument('inventory', type=Path,
                         help='Private inspect_disc.py --json inventory')
     args = parser.parse_args(argv)
-    entries = json.loads(args.inventory.read_text(encoding='utf-8'))['entries']
-    matches = [row for row in entries
-               if row.get('path') == '/EXE/WILDARMS.EXE;1'
-               and not row.get('directory', False)]
-    if len(matches) != 1:
-        parser.error('expected one main EXE entry')
-    report = inspect(read_raw_iso_entry(args.disc, matches[0]))
+    try:
+        entries = json.loads(args.inventory.read_text(encoding='utf-8'))['entries']
+        matches = [row for row in entries
+                   if isinstance(row, dict)
+                   and row.get('path') == '/EXE/WILDARMS.EXE;1'
+                   and not row.get('directory', False)]
+        if len(matches) != 1:
+            raise ValueError('invalid main EXE inventory')
+        report = inspect(read_raw_iso_entry(args.disc, matches[0]))
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError,
+            IndexError, OverflowError):
+        # A caller may supply a private local path or malformed RAM/image
+        # contents. Do not serialize exception messages or traceback text.
+        print(json.dumps({'schema': SCHEMA, 'valid_input': False,
+                          'error_code': 'invalid_private_input',
+                          'private_game_data_emitted': False}, sort_keys=True))
+        return 2
     print(json.dumps(report, sort_keys=True))
     return 0
 
