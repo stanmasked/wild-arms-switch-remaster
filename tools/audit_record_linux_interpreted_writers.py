@@ -78,11 +78,12 @@ def _entrypoints(raw, independent_pin):
             raise ValueError('interpreters must be sorted and unique')
         paths.append(path)
         previous = path
-    modules = _sorted_unique(
-        body['modules'],
-        validator=lambda x: x if _MODULE.fullmatch(x) else
-        (_ for _ in ()).throw(ValueError('invalid Python module name')),
-        maximum=MAX_WRITERS)
+    def valid_module(value):
+        if not _MODULE.fullmatch(value):
+            raise ValueError('invalid Python module name')
+        return value
+    modules = _sorted_unique(body['modules'], validator=valid_module,
+                             maximum=MAX_WRITERS)
     scripts = _sorted_unique(body['scripts'], validator=_abs_path,
                              maximum=MAX_WRITERS)
     if not modules and not scripts:
