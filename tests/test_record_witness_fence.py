@@ -213,6 +213,52 @@ class WitnessFenceTests(unittest.TestCase):
         self.assertEqual(record(self.witness_db,
                                 _canonical(snapshot(self.custody))), (1, True))
 
+    def test_real_custody_mutual_tls_reserve_with_fenced_remote_witness(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as witness_listener, \
+                socket.socket(socket.AF_INET, socket.SOCK_STREAM) as custody_listener:
+            witness_listener.bind(('127.0.0.1', 0))
+            custody_listener.bind(('127.0.0.1', 0))
+            for sock in (witness_listener, custody_listener):
+                sock.listen(3)
+                sock.settimeout(6)
+            witness_port = witness_listener.getsockname()[1]
+            custody_port = custody_listener.getsockname()[1]
+            def witness_server():
+                return [witness_serve(
+                    witness_listener, self.witness_db,
+                    self.witness_sign_key, self.server_cert, self.server_key,
+                    self.ca, self.client_pin, tag=self.witness_tag)
+                    for _ in range(3)]
+            def custody_server():
+                return custody_serve(
+                    custody_listener, self.custody, self.sign_key,
+                    self.server_cert, self.server_key, self.ca,
+                    self.client_pin, tag=self.tag,
+                    witness_fence_provider=lambda request:
+                    fenced_custody_request(request, **self.tls_opts(witness_port)))
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                witness = pool.submit(witness_server)
+                custody = pool.submit(custody_server)
+                row = _read_latest(self.custody)
+                actual = custody_exchange(
+                    '127.0.0.1', custody_port, hostname='localhost',
+                    cert=self.client_cert, key=self.client_key, ca=self.ca,
+                    server_cert_sha256=self.server_pin,
+                    pinned_signing_public_key=self.sign_pub,
+                    signing_public_key_sha256=self.sign_pub_pin,
+                    tag=self.tag, action='reserve', checkpoint_raw=None,
+                    expected_sequence=row[0],
+                    expected_receipt_sha256=row[3],
+                    reservation_token=A)
+                self.assertEqual(actual[2], 1)
+                self.assertTrue(custody.result(timeout=9))
+                self.assertTrue(all(witness.result(timeout=9)))
+        self.assertIsNone(self.row())
+        with sqlite3.connect(self.custody) as con:
+            self.assertEqual(con.execute(
+                'SELECT status FROM custodian_reservation'
+                ' WHERE slot=1').fetchone()[0], 'reserved')
+
     def test_fence_provider_does_not_release_early_on_custody_exception(self):
         # Exception handling still performs exact remote release AFTER
         # the local protected block is unwound.
