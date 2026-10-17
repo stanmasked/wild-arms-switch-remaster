@@ -1,7 +1,13 @@
 import unittest
+import contextlib
+from io import StringIO
+import json
+from pathlib import Path
+import tempfile
+from unittest.mock import patch
 from tools.verify_record_stride import (
     INDEX_WORDS, GLOBAL_WORDS, TARGETS, stride_from_index_words, inspect_exe,
-    inspect_index_scale_evidence, _static_index_scale,
+    inspect_index_scale_evidence, _static_index_scale, main,
 )
 
 def three_signature_exe():
@@ -91,6 +97,27 @@ class RecordStrideTests(unittest.TestCase):
                          ['opcode_derived_index_scale_bytes'], 2708)
         with self.assertRaisesRegex(ValueError, 'unverified record stride'):
             inspect_exe(data)
+
+    def test_private_disc_cli_evidence_mode_emits_only_safe_fields(self):
+        private = three_signature_exe()
+        with tempfile.TemporaryDirectory() as tmp:
+            inventory = Path(tmp) / 'inventory.json'
+            inventory.write_text(json.dumps({'entries': [
+                {'path': '/EXE/WILDARMS.EXE;1', 'lba': 0,
+                 'size': len(private)}]}), encoding='utf-8')
+            output = StringIO()
+            with patch('sys.argv', ['record-stride', '/private/game.bin',
+                                    str(inventory), '--index-evidence-only']):
+                with patch('tools.verify_record_stride.read_raw_iso_entry',
+                           return_value=private):
+                    with contextlib.redirect_stdout(output):
+                        main()
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['matched_index_sites'], 3)
+            self.assertEqual(report['opcode_derived_index_scale_bytes'], 2708)
+            self.assertFalse(report['record_layout_verified'])
+            self.assertNotIn('/private/game.bin', output.getvalue())
+            self.assertNotIn('0x8006', output.getvalue())
 
     def test_invalid_executable(self):
         with self.assertRaises(ValueError):
