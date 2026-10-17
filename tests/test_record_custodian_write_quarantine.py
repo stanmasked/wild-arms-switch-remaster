@@ -36,6 +36,10 @@ class WriteQuarantineTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         Fixture.setUpClass()
+        for attr in ('ca', 'server_key', 'server_cert', 'server_pin',
+                     'client_key', 'client_cert', 'client_pin',
+                     'sign_key', 'sign_pub', 'sign_pub_pin'):
+            setattr(cls, attr, getattr(Fixture, attr))
 
     @classmethod
     def tearDownClass(cls):
