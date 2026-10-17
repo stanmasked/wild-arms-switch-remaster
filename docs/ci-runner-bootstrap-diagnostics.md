@@ -175,3 +175,39 @@ logs. They **do not prove** the current PR tests pass: fresh GitHub
 Actions still fails to allocate a runner, and the complete PS1
 regression suite has not been rerun successfully. Avoid merging until
 a runner or independent full local regression is available.
+
+
+## Stage 229 — recovered caller CFG provenance test crash
+
+The last inspected **executed** host job before the later no-runner
+failures, run `38942396412` / job `117113025777`
+(2026-10-16 17:47 UTC), contains an additional reproducible
+Python error, distinct from both the context-edge sort issue and
+the REGIMM fixture issue:
+
+```text
+ValueError: too many values to unpack (expected 2)
+```
+
+In `tools/mips_caller_cfg_sources.py`, each successfully explored path
+is appended as a *triple* `(register_origins, pending_load, pc_path)`.
+The `load_pending_on_any_path` check incorrectly unpacked that triple
+as `(register_origins, pending_load)`. The bug caused errors in the
+caller-CFG source tests and downstream probe-path/preflight and
+runtime-correlation suites; it does **not** demonstrate that any
+arithmetic or control-flow value from the original PlayStation
+was wrong.
+
+The draft-branch implementation now correctly unpacks three fields
+and keeps pending-load checks scoped to the register of interest.
+Two new synthetic regressions cover a pending LW in the delay slot
+of JAL after two possible conditional paths, and the absence of
+a pending load on a straight-line call. Existing replay/preflight
+and caller-CFG suites exercise the same defect from different layers.
+
+As of this entry, this fix has been code-reviewed against the exact
+source and historical traceback but **not independently verified by
+a complete successful GitHub Actions or CTest run**. Later CI
+attempts still report empty runner names and zero steps. That
+infrastructure failure must not be misrepresented as a fresh
+test assertion against the patch. PR #1 stays draft and unmerged.
