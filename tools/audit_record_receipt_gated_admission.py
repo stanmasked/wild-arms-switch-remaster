@@ -277,6 +277,17 @@ def issue(verifier_db, custodian_db, receipt_raw, *, ttl_seconds=300, now=None):
 def accept(verifier_db, custodian_db, receipt_raw, exe, temporal_raw,
            binding_raw, before_raw, after_raw, provenance_raw,
            before_receipt_raw, after_receipt_raw, *, now=None):
+    # Preserve stage-249's public error precedence: evidence validation
+    # runs before the custodian high-water check.
+    prior = audit_provenance(
+        exe, temporal_raw, binding_raw, before_raw, after_raw,
+        provenance_raw, before_receipt_raw, after_receipt_raw)
+    if not prior['all_supplied_provenance_claims_consistent']:
+        return False
+    _json_object(provenance_raw, MAX_PROVENANCE_BYTES)['session_nonce']
+    _now(now)
+    if _sha(before_raw) == _sha(after_raw):
+        raise ValueError('identical capture stream digests')
     return accept_with_latest(
         verifier_db, _latest_with_receipt(custodian_db, receipt_raw),
         exe, temporal_raw, binding_raw, before_raw, after_raw,
