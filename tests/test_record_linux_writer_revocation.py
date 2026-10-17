@@ -160,7 +160,7 @@ class WriterRevocationTests(unittest.TestCase):
     def test_cgroup_changes_or_stop_signature_changed_refused(self):
         self.prepare()
         self.write_controls(self.scope_path, procs='9999\n')
-        with self.assertRaises(RevocationConflict):
+        with self.assertRaises(QuiescenceConflict):
             self.check()
 
     def test_systemd_unit_injection_and_duplicate_fields_refused(self):
