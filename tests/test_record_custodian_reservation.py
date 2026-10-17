@@ -19,6 +19,7 @@ from tools.audit_record_custodian_reservation import (
     reserve, reservation_row, ReservationConflict,
 )
 from tools.audit_record_anchor_handoff import _read_latest
+from tools.audit_record_verifier_checkpoint import save_checkpoint
 from tools.audit_record_receipt_gated_admission import PendingHandoff, AnchorConflict
 
 NONCE_C = 'fedcba9876543210fedcba9876543210'
@@ -74,6 +75,11 @@ class ReservedIssueTests(unittest.TestCase):
 
     def head(self):
         return _read_latest(self.custody)
+
+    def offered(self):
+        p = self.v / 'pending-reserved.json'
+        save_checkpoint(self.verifier, p)
+        return p.read_bytes()
 
     def state(self):
         with sqlite3.connect(self.verifier) as con:
@@ -153,7 +159,7 @@ class ReservedIssueTests(unittest.TestCase):
 
     def test_unreserved_network_deposit_cannot_bypass_live_reservation(self):
         self.new_issue()
-        checkpoint = self.new_offer()
+        checkpoint = self.offered()
         old = self.head()
         with self.assertRaisesRegex(ValueError, 'refused'):
             self.run_channel(action='deposit', checkpoint=checkpoint,
@@ -162,7 +168,7 @@ class ReservedIssueTests(unittest.TestCase):
 
     def test_wrong_owner_token_cannot_deposit_reserved_checkpoint(self):
         self.new_issue()
-        checkpoint = self.new_offer()
+        checkpoint = self.offered()
         old = self.head()
         with self.assertRaisesRegex(ValueError, 'refused'):
             self.run_channel(
