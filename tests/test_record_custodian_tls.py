@@ -112,7 +112,11 @@ class MutualTlsCustodianTests(unittest.TestCase):
 
     def run_channel(self, *, action='latest', checkpoint=None,
                     server_pin=None, client_pin=None, signer_pin=None,
-                    tag=None, client_key=None, client_cert=None):
+                    tag=None, client_key=None, client_cert=None,
+                    expected_head=None):
+        if action == 'deposit' and expected_head is None:
+            prior = _read_latest(self.custody)
+            expected_head = (prior[0], prior[3])
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
             listener.bind(('127.0.0.1', 0))
             listener.listen(1)
@@ -136,7 +140,9 @@ class MutualTlsCustodianTests(unittest.TestCase):
                         signing_public_key_sha256=self.sign_pub_pin
                         if signer_pin is None else signer_pin,
                         tag=self.tag if tag is None else tag,
-                        action=action, checkpoint_raw=checkpoint)
+                        action=action, checkpoint_raw=checkpoint,
+                        expected_sequence=expected_head[0] if expected_head else None,
+                        expected_receipt_sha256=expected_head[1] if expected_head else None)
                 except Exception:
                     result = done.result(timeout=6)
                     raise
@@ -155,12 +161,14 @@ class MutualTlsCustodianTests(unittest.TestCase):
 
     def test_deposit_then_latest_and_idempotent_retry(self):
         offered = self.new_offer()
+        old_head = _read_latest(self.custody)
         (_, _, sequence), ok = self.run_channel(
             action='deposit', checkpoint=offered)
         self.assertTrue(ok)
         self.assertEqual(sequence, 2)
         (checkpoint, _, again), ok = self.run_channel(
-            action='deposit', checkpoint=offered)
+            action='deposit', checkpoint=offered,
+            expected_head=(old_head[0], old_head[3]))
         self.assertTrue(ok)
         self.assertEqual(again, 2)
         self.assertEqual(checkpoint, offered)
@@ -236,6 +244,7 @@ class MutualTlsCustodianTests(unittest.TestCase):
 
     def test_lost_server_reply_after_durable_deposit_recovers(self):
         offered = self.new_offer()
+        old_head = _read_latest(self.custody)
         import tools.audit_record_custodian_tls as channel
         process = channel._process
         def disappear_after_commit(*args):
@@ -246,7 +255,9 @@ class MutualTlsCustodianTests(unittest.TestCase):
             with self.assertRaises((ValueError, OSError, ssl.SSLError)):
                 self.run_channel(action='deposit', checkpoint=offered)
         self.assertEqual(_read_latest(self.custody)[0], 2)
-        (_, _, seq), ok = self.run_channel(action='deposit', checkpoint=offered)
+        (_, _, seq), ok = self.run_channel(
+            action='deposit', checkpoint=offered,
+            expected_head=(old_head[0], old_head[3]))
         self.assertEqual(seq, 2)
         self.assertTrue(ok)
 
