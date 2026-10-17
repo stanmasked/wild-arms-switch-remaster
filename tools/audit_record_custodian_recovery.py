@@ -291,8 +291,8 @@ def recover_with_witness(custodian_db, request_raw, approval_a, approval_b,
         head = authenticated_head(
             witness_db, signed_witness_raw,
             witness_public_key, witness_public_pem_pin, tag=witness_tag)
-    except ValueError as exc:
-        raise RecoveryConflict('witness signature or freshness check refused recovery') from exc
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        raise RecoveryConflict('witness missing, corrupt, stale or unauthenticated') from exc
     return recover(
         custodian_db, request_raw, approval_a, approval_b,
         admin_a_id, admin_a_public, admin_a_pin,
