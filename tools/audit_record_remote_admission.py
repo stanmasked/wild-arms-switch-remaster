@@ -57,12 +57,14 @@ REPORT_SCHEMA = 'wild-arms-ps1-remote-receipt-gated-admission-v1'
 
 def _remote_head(transport, public_key, pinned_sha256, *, tag,
                  action='latest', checkpoint_raw=None,
-                 expected_sequence=None, expected_receipt_sha256=None):
+                 expected_sequence=None, expected_receipt_sha256=None,
+                 reservation_token=None):
     """Return a custody row compatible with stage 249 from a signed TLS reply."""
     checkpoint, envelope, sequence = transport(
         action=action, checkpoint_raw=checkpoint_raw,
         expected_sequence=expected_sequence,
-        expected_receipt_sha256=expected_receipt_sha256)
+        expected_receipt_sha256=expected_receipt_sha256,
+        reservation_token=reservation_token)
     if type(sequence) is not int or sequence < 1:
         raise ValueError('invalid custodian sequence')
     _validate_checkpoint(checkpoint)
@@ -134,7 +136,7 @@ def acknowledge_remote(db_path, transport, public_key, pinned_sha256, *, tag):
 
 def _transport(args):
     def invoke(*, action, checkpoint_raw, expected_sequence=None,
-               expected_receipt_sha256=None):
+               expected_receipt_sha256=None, reservation_token=None):
         return exchange(
             args.host, args.port, hostname=args.tls_hostname,
             cert=args.tls_client_cert, key=args.tls_client_key,
@@ -144,7 +146,8 @@ def _transport(args):
             signing_public_key_sha256=args.custodian_ed25519_public_pem_sha256,
             tag=args.custodian_tag, action=action, checkpoint_raw=checkpoint_raw,
             expected_sequence=expected_sequence,
-            expected_receipt_sha256=expected_receipt_sha256)
+            expected_receipt_sha256=expected_receipt_sha256,
+            reservation_token=reservation_token)
     return invoke
 
 
