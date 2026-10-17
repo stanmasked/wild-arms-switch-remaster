@@ -15,7 +15,7 @@ import subprocess
 
 try:
     from .audit_record_linux_writer_inventory import (
-        _canonical, _strict_json, _private_bytes, _SHA256,
+        _canonical, _strict_json, _SHA256,
     )
 except ImportError:
     from audit_record_linux_writer_inventory import (
@@ -24,7 +24,7 @@ except ImportError:
 try:
     from .audit_record_linux_interpreted_writers import _private_bytes
     from .audit_record_linux_writer_revocation import (
-        _unit, _parse_unit, _read_systemd, PROPERTIES as SERVICE_PROPERTIES,
+        _unit, PROPERTIES as SERVICE_PROPERTIES,
         RevocationConflict,
     )
 except ImportError:
