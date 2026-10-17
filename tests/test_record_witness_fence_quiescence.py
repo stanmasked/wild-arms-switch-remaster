@@ -10,6 +10,7 @@ from tests import test_record_witness_fence as fences
 from tests import test_record_witness_fence_reconciliation as fixture
 from tools.audit_record_anchor_handoff import _canonical, _read_latest, deposit
 from tools.audit_record_custodian_reservation import reserve
+from tools.audit_record_witness_fence import _owner
 from tools.audit_record_witness_fence_reconciliation import _sign, _audit
 from tools.audit_record_witness_fence_quiescence import (
     STOP_SCHEMA, STOP_DOMAIN, PreflightConflict, preflight, main,
@@ -47,7 +48,7 @@ class QuiescencePreflightTests(unittest.TestCase):
             'schema': STOP_SCHEMA,
             'supervisor_tag': 'independent-supervisor',
             'custody_request_sha256': fixture._request_digest(original),
-            'fence_owner_sha256': fixture._owner(head['request_id']),
+            'fence_owner_sha256': _owner(head['request_id']),
             'stop_session_nonce': '5'*32,
             'process_identity_sha256': '6'*64,
             'control_evidence_sha256': '7'*64,
