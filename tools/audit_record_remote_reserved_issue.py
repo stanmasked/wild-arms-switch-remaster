@@ -20,7 +20,7 @@ import sqlite3
 import ssl
 
 try:
-    from .audit_record_atomic_verifier import _connect
+    from .audit_record_atomic_verifier import _connect, MIN_TTL_SECONDS, MAX_TTL_SECONDS
     from .audit_record_capture_stream_binding import _digest
     from .audit_record_custodian_reservation import token_hash
     from .audit_record_receipt_gated_admission import (
@@ -31,7 +31,7 @@ try:
     from .audit_record_verifier_checkpoint import _snapshot_from_connection
     from .audit_record_anchor_handoff import _canonical
 except ImportError:
-    from audit_record_atomic_verifier import _connect
+    from audit_record_atomic_verifier import _connect, MIN_TTL_SECONDS, MAX_TTL_SECONDS
     from audit_record_capture_stream_binding import _digest
     from audit_record_custodian_reservation import token_hash
     from audit_record_receipt_gated_admission import (
@@ -117,6 +117,9 @@ def _prepare(db_path, latest):
 def issue_reserved(db_path, transport, public_key, pinned_sha256, *, tag,
                    ttl_seconds=300, now=None):
     """Reserve remote custody first; only then issue an actual private nonce."""
+    if (type(ttl_seconds) is not int
+            or not MIN_TTL_SECONDS <= ttl_seconds <= MAX_TTL_SECONDS):
+        raise ValueError('invalid lifetime, reservation not attempted')
     latest = _remote_head(transport, public_key, pinned_sha256, tag=tag)
     token = _prepare(db_path, latest)
     confirmed = _remote_head(
