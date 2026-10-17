@@ -113,8 +113,8 @@ class MutualTlsCustodianTests(unittest.TestCase):
     def run_channel(self, *, action='latest', checkpoint=None,
                     server_pin=None, client_pin=None, signer_pin=None,
                     tag=None, client_key=None, client_cert=None,
-                    expected_head=None):
-        if action == 'deposit' and expected_head is None:
+                    expected_head=None, reservation_token=None):
+        if action in ('deposit', 'reserve', 'deposit-reserved') and expected_head is None:
             prior = _read_latest(self.custody)
             expected_head = (prior[0], prior[3])
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
@@ -142,7 +142,8 @@ class MutualTlsCustodianTests(unittest.TestCase):
                         tag=self.tag if tag is None else tag,
                         action=action, checkpoint_raw=checkpoint,
                         expected_sequence=expected_head[0] if expected_head else None,
-                        expected_receipt_sha256=expected_head[1] if expected_head else None)
+                        expected_receipt_sha256=expected_head[1] if expected_head else None,
+                        reservation_token=reservation_token)
                 except Exception:
                     result = done.result(timeout=6)
                     raise
