@@ -124,3 +124,54 @@ stage 225 lineage tests and the full host suite remain **not verified**
 by GitHub Actions while there are no executed steps. The nine local
 stage 226 bootstrap-classifier tests independently pass under Python
 3.13, but they are only tests of that diagnostic tool.
+
+
+## Stage 228 — real executed test failures recovered from historical job logs
+
+Unlike the later zero-step runner failures, several older GitHub-hosted
+jobs **did execute**. Their logs were recovered through the authenticated
+GitHub job-log endpoint and must be treated as *actual code failures*:
+
+- `116858676010` (disc Python test job): 59 tests, **four errors** in
+  `test_gp0_matrix_context_cfg` / `test_gp0_matrix_context_sources`.
+  They all originate at
+  `tools/audit_gp0_matrix_context_cfg.py` when native Python
+  `sorted(edges)` tries comparing a normal CFG node `(pc, None)`
+  with its delay-slot version `(pc, controller_pc)`:
+  `TypeError: '<' not supported between instances of 'NoneType' and 'int'`.
+- `116858676561` (matrix host CTest) and `116858676255` (host core)
+  corroborate the same graph error. Two affected CTest test modules
+  failed, though many unrelated host tests completed successfully.
+- `116858676050` (a different disc Python job) shows an **additional**
+  record-stride failure: `test_verify_record_stride` expected
+  `364`, but the exact `INDEX_WORDS` sequence and final shift
+  currently compute `2708`. That test run reported 403 tests total,
+  with one assertion failure and the same four graph errors.
+
+### Implemented in the stage-225 draft branch, not main
+
+1. CFG edges are now ordered with an explicit `(PC, controller or -1)`
+   sort key; normal and delay-slot nodes remain distinct. A new
+   regression checks deterministic ordering and four actual edges from
+   a BEQ-to-own-slot fixture (both conditional outcomes included).
+2. The `BLTZL` context-source regression previously encoded
+   `BLTZL $zero`, which is **always not taken**. It now uses an
+   unknown `$t0` source so the branch-likely path genuinely
+   exercises both taken and annulled alternatives. The existing
+   zero-register predicate tests remain in place.
+3. The record-stride inspection used to hard-code `stride_bytes=364`
+   even though the checked-in eight MIPS index words compute `677`
+   units, multiplied by four by the subsequent `SLL`, i.e.
+   `2708`. It now **fails closed** with a generic `ValueError`
+   rather than emitting an unsupported 364-byte attestation.
+   Synthetic tests record the arithmetic discrepancy and require
+   refusal of the contradictory prefix. The correct **original-game**
+   record stride remains **unresolved**; no guessed replacement
+   for 364 is claimed. Authentic original debugger/EXE evidence is
+   needed before changing record layout or reporting verified stride.
+
+The fixes target specific source/test failures confirmed by historical
+logs. They **do not prove** the current PR tests pass: fresh GitHub
+Actions still fails to allocate a runner, and the complete PS1
+regression suite has not been rerun successfully. Avoid merging until
+a runner or independent full local regression is available.
