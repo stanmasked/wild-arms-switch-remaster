@@ -24,7 +24,9 @@ privately held custody/witness databases.
 4. Still holding the custody writer lock, insert a single SHA-256-checked
    `custodian_writer_quarantine` record referencing the request digest,
    fence owner, supervisor proof digest, snapshot classification and
-   witness head. Commit custody state atomically.
+   witness head. In **the same transaction**, set the SQLite header
+   `PRAGMA user_version` to `0x5741524D` (WARM). The writer requires
+   **both** the record and the header to agree. Commit custody state atomically.
 
 The witness transaction is rolled back **without changes**. The
 quarantine is not a new custody checkpoint, never consumes a reservation,
@@ -80,10 +82,14 @@ release API. A damaged quarantine row blocks guarded writers.
 - A stale executable without these new guards, direct SQLite writes,
   modified binaries, alternate custody files, and other independently
   deployed services are **not** disabled by this table.
-- The quarantine row and its hash are inside the same writable SQLite
-  database. A malicious administrator who can delete/replace the database
-  or table can bypass the guard; SHA-256 checks are not immutable audit
+- The quarantine row, hash and redundant header marker are inside the
+  **same** writable SQLite database. They detect one-sided accidental damage,
+  **not** coordinated removal of both artifacts, a restored older database,
+  direct SQL, or modified binaries. SHA-256 checks are not immutable audit
   transparency or hardware-enforced antirollback.
+- This prototype reserves SQLite `user_version` exclusively for the custody
+  quarantine. An already nonzero unrecognized value fails closed. Future
+  custody schema migrations must explicitly account for this marker.
 - The supervisor signing key, witness and custody state require separate
   provisioning and access controls. The cross-database transaction is
   not a distributed atomic commit.
