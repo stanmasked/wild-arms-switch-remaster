@@ -10,7 +10,8 @@ INDEX_WORDS = (
     0x000210c0, 0x00451021, 0x00021080, 0x00451021,
 )
 GLOBAL_WORDS = (0x3c03800d, 0x8c632c3c, 0x00021080)
-# The third stage is a 2-bit shift (x4); final scale = 364.
+# Existing 364-byte field assumption is NOT validated by INDEX_WORDS.
+# Word 0x000210c0 shifts by three bits, and these words imply 2708 bytes.
 SYNC = b'\x00' + b'\xff' * 10 + b'\x00'
 
 def stride_from_index_words(words):
@@ -44,7 +45,13 @@ def inspect_exe(exe_data):
         words = [int.from_bytes(exe_data[pos+i:pos+i+4], 'little')
                  for i in range(0, 0x54, 4)]
         if tuple(words[:8]) != INDEX_WORDS or tuple(words[8:11]) != GLOBAL_WORDS:
-            raise ValueError(f'unexpected index prefix at {target:#x}')
+            raise ValueError('unexpected index prefix')
+        # The existing 364-byte stride claim conflicts with the exact
+        # INDEX_WORDS arithmetic (currently 2708 bytes including its final
+        # SLL). Do not publish a hard-coded 364 as a verified observation.
+        # Require a revalidated instruction trace before trusting this field.
+        if stride_from_index_words(words[:8]) != 364:
+            raise ValueError('unverified record stride: MIPS arithmetic contradicts 364')
         # After eleven prefix instructions each function computes v1 = base + v0.
         # CDGD function at 0x8006dca0 branches before that addition.
         fields = sorted({(w & 0xffff) for w in words[11:]
