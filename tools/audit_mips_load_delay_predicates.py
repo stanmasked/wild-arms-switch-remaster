@@ -27,7 +27,7 @@ def _signed_16(word):
     return imm - 65536 if imm & 32768 else imm
 
 
-def analyze(reference):
+def analyze(reference, *, expected_final_lw_access_u32=None):
     """Check a self-reported short PC trace with one-slot delayed LW writes.
 
     Branch operands read registers BEFORE a pending load from the previous
@@ -39,6 +39,10 @@ def analyze(reference):
             or reference['schema'] != SCHEMA
             or reference['source'] not in ('synthetic', 'external_ps1_capture_claim')):
         raise ValueError('invalid claim schema')
+    if (expected_final_lw_access_u32 is not None
+            and (type(expected_final_lw_access_u32) is not int
+                 or not 0 <= expected_final_lw_access_u32 <= _U32)):
+        raise ValueError('invalid private final access expectation')
     initial = reference['initial_gprs_u32']
     steps = reference['steps']
     if (type(initial) is not dict or len(initial) > 31
@@ -69,6 +73,7 @@ def analyze(reference):
     pending = None
     post_slot_pc = None
     checked_loads = checked_branches = hazards = checked_slots = 0
+    final_address_confirmed = False
 
     for i, (pc, word, item) in enumerate(parsed):
         if pc != expected_pc:
@@ -93,6 +98,10 @@ def analyze(reference):
             addr = regs[rs] + _signed_16(word)
             if not 0 <= addr <= _U32 or addr & 3:
                 raise ValueError('unsupported wrapped/unaligned LW address')
+            if i == len(parsed) - 1 and expected_final_lw_access_u32 is not None:
+                if addr != expected_final_lw_access_u32:
+                    raise ValueError('claimed final LW effective address differs')
+                final_address_confirmed = True
             new_pending = (rt, _hex_u32(item['load_result_u32']))
             checked_loads += 1
         elif op == 0 and fn == 0 and rs == 0:  # SLL
@@ -161,6 +170,9 @@ def analyze(reference):
         else:
             expected_pc = pc + 4
 
+    if (expected_final_lw_access_u32 is not None
+            and not final_address_confirmed):
+        raise ValueError('claimed trace missing the expected final LW')
     if post_slot_pc is not None or checked_branches == 0 or checked_loads == 0:
         raise ValueError('incomplete branch/load claim')
     return {
