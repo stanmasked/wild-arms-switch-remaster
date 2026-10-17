@@ -122,7 +122,10 @@ class GlobalSlotWitnessTests(unittest.TestCase):
                     witnesses[-1]['site'] = witnesses[0]['site']
                 else:
                     witnesses[-1]['site'] = 'site_4'
-                with self.assertRaisesRegex(ValueError, 'coverage|duplicate|foreign'):
+                # A missing sample may fail the strict 6..96 count
+                # guard before the exact site/index coverage check.
+                with self.assertRaisesRegex(
+                        ValueError, 'bounded|coverage|duplicate|foreign'):
                     analyze(exe, reference)
 
     def test_injected_memory_dump_and_bad_index_are_refused(self):
