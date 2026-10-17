@@ -56,10 +56,13 @@ REPORT_SCHEMA = 'wild-arms-ps1-remote-receipt-gated-admission-v1'
 
 
 def _remote_head(transport, public_key, pinned_sha256, *, tag,
-                 action='latest', checkpoint_raw=None):
+                 action='latest', checkpoint_raw=None,
+                 expected_sequence=None, expected_receipt_sha256=None):
     """Return a custody row compatible with stage 249 from a signed TLS reply."""
     checkpoint, envelope, sequence = transport(
-        action=action, checkpoint_raw=checkpoint_raw)
+        action=action, checkpoint_raw=checkpoint_raw,
+        expected_sequence=expected_sequence,
+        expected_receipt_sha256=expected_receipt_sha256)
     if type(sequence) is not int or sequence < 1:
         raise ValueError('invalid custodian sequence')
     _validate_checkpoint(checkpoint)
@@ -98,7 +101,7 @@ def _pending_state(db_path):
     with closing(_connect(db_path)) as con:
         con.execute('BEGIN')
         try:
-            seq, _, pending_seq, pending_hash = _guard(con)
+            seq, acknowledged_hash, pending_seq, pending_hash = _guard(con)
             if pending_seq is None:
                 con.commit()
                 return None
@@ -106,7 +109,7 @@ def _pending_state(db_path):
             if (_sha(raw) != pending_hash or pending_seq != seq + 1):
                 raise AnchorConflict('pending checkpoint was changed')
             con.commit()
-            return raw
+            return raw, seq, acknowledged_hash
         except Exception:
             con.rollback()
             raise
@@ -123,12 +126,15 @@ def acknowledge_remote(db_path, transport, public_key, pinned_sha256, *, tag):
     latest = _remote_head(
         transport, public_key, pinned_sha256, tag=tag,
         action='deposit' if pending is not None else 'latest',
-        checkpoint_raw=pending)
+        checkpoint_raw=pending[0] if pending is not None else None,
+        expected_sequence=pending[1] if pending is not None else None,
+        expected_receipt_sha256=pending[2] if pending is not None else None)
     return acknowledge_with_latest(db_path, latest)
 
 
 def _transport(args):
-    def invoke(*, action, checkpoint_raw):
+    def invoke(*, action, checkpoint_raw, expected_sequence=None,
+               expected_receipt_sha256=None):
         return exchange(
             args.host, args.port, hostname=args.tls_hostname,
             cert=args.tls_client_cert, key=args.tls_client_key,
@@ -136,7 +142,9 @@ def _transport(args):
             server_cert_sha256=args.server_leaf_der_sha256,
             pinned_signing_public_key=args.pinned_custodian_ed25519_public_key,
             signing_public_key_sha256=args.custodian_ed25519_public_pem_sha256,
-            tag=args.custodian_tag, action=action, checkpoint_raw=checkpoint_raw)
+            tag=args.custodian_tag, action=action, checkpoint_raw=checkpoint_raw,
+            expected_sequence=expected_sequence,
+            expected_receipt_sha256=expected_receipt_sha256)
     return invoke
 
 

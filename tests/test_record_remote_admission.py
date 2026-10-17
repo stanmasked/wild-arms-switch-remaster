@@ -47,9 +47,12 @@ class RemoteCustodyAdmissionTests(unittest.TestCase):
         bootstrap_remote(self.verifier, self.remote, self.sign_pub,
                          self.sign_pub_pin, tag=self.tag)
 
-    def _channel(self, *, action, checkpoint_raw):
+    def _channel(self, *, action, checkpoint_raw,
+                 expected_sequence=None, expected_receipt_sha256=None):
+        expected = ((expected_sequence, expected_receipt_sha256)
+                    if expected_sequence is not None else None)
         response, _ = self.run_channel(
-            action=action, checkpoint=checkpoint_raw)
+            action=action, checkpoint=checkpoint_raw, expected_head=expected)
         return response
 
     def issue(self, nonce=NONCE_B):
@@ -101,7 +104,8 @@ class RemoteCustodyAdmissionTests(unittest.TestCase):
     def test_pending_checkpoint_committed_before_disconnection(self):
         self.issue()
         original = self.remote
-        def offline(*, action, checkpoint_raw):
+        def offline(*, action, checkpoint_raw,
+                    expected_sequence=None, expected_receipt_sha256=None):
             raise OSError('network disconnection')
         self.remote = offline
         with self.assertRaises(OSError):
@@ -177,7 +181,8 @@ class RemoteCustodyAdmissionTests(unittest.TestCase):
 
     def test_bogus_network_reply_not_accepted_even_when_signed_fixture_exists(self):
         _, good_sig, seq = self.remote(action='latest', checkpoint_raw=None)
-        def bad_channel(*, action, checkpoint_raw):
+        def bad_channel(*, action, checkpoint_raw,
+                        expected_sequence=None, expected_receipt_sha256=None):
             return b'not a valid checkpoint', good_sig, seq
         with self.assertRaises(ValueError):
             issue_remote(self.verifier, bad_channel, self.sign_pub,

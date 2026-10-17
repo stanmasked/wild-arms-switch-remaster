@@ -150,13 +150,17 @@ def _process(request, custodian_db, signing_key, tag):
         raise ValueError('invalid authenticated custody request')
     action = request['action']
     if set(request) != ({
-        'schema', 'action', 'request_id', 'checkpoint_b64'}
+        'schema', 'action', 'request_id', 'checkpoint_b64',
+        'expected_sequence', 'expected_receipt_sha256'}
         if action == 'deposit' else {'schema', 'action', 'request_id'}):
         raise ValueError('unexpected authenticated request fields')
     if action == 'deposit':
         offered = _b64_decode(request['checkpoint_b64'], MAX_CHECKPOINT_BYTES)
         _validate_checkpoint(offered)
-        deposit(custodian_db, offered)
+        deposit(
+            custodian_db, offered,
+            expected_sequence=request['expected_sequence'],
+            expected_receipt_sha256=request['expected_receipt_sha256'])
     row, signed = _signed_latest(custodian_db, signing_key, tag)
     return {
         'schema': RESPONSE_SCHEMA,
@@ -201,7 +205,8 @@ def serve_one(listener, custodian_db, signing_key, cert, key, ca,
 
 def exchange(host, port, *, hostname, cert, key, ca, server_cert_sha256,
              pinned_signing_public_key, signing_public_key_sha256,
-             tag, action='latest', checkpoint_raw=None):
+             tag, action='latest', checkpoint_raw=None,
+             expected_sequence=None, expected_receipt_sha256=None):
     """Mutually authenticated exchange; verify signed response before return."""
     if type(port) is not int or not 1 <= port <= 65535:
         raise ValueError('invalid custodian TLS port')
@@ -216,8 +221,16 @@ def exchange(host, port, *, hostname, cert, key, ca, server_cert_sha256,
     }
     if action == 'deposit':
         _validate_checkpoint(checkpoint_raw)
+        if (type(expected_sequence) is not int or expected_sequence < 1
+                or type(expected_receipt_sha256) is not str):
+            raise ValueError('expected authenticated previous custody head is required')
+        _digest(expected_receipt_sha256)
         request['checkpoint_b64'] = base64.b64encode(checkpoint_raw).decode('ascii')
-    elif action != 'latest' or checkpoint_raw is not None:
+        request['expected_sequence'] = expected_sequence
+        request['expected_receipt_sha256'] = expected_receipt_sha256
+    elif (action != 'latest' or checkpoint_raw is not None
+          or expected_sequence is not None
+          or expected_receipt_sha256 is not None):
         raise ValueError('invalid custodian operation')
     with socket.create_connection((host, port), timeout=SOCKET_TIMEOUT) as plain:
         plain.settimeout(SOCKET_TIMEOUT)
@@ -241,11 +254,16 @@ def exchange(host, port, *, hostname, cert, key, ca, server_cert_sha256,
         custodian_tag=tag))
     if _sha(latest_checkpoint) != receipt['checkpoint_sha256']:
         raise ValueError('signed custody reply not bound to returned checkpoint')
-    if (action == 'deposit' and
-            not all(set(_validate_checkpoint(checkpoint_raw)[field]).issubset(
-                    _validate_checkpoint(latest_checkpoint)[field])
-                    for field in ('issued_commitments', 'accepted_commitments'))):
-        raise ValueError('custodian response omits submitted checkpoint')
+    if action == 'deposit':
+        # A distinct future round, even one containing the offered state,
+        # is NOT an acknowledgment of this CAS request. Permit only the
+        # single expected next sequence for both fresh commits and retries.
+        if receipt['sequence'] != expected_sequence + 1:
+            raise ValueError('custodian reply not at expected next sequence')
+        if receipt['previous_receipt_sha256'] != expected_receipt_sha256:
+            raise ValueError('custodian reply does not chain to expected head')
+        if latest_checkpoint != checkpoint_raw:
+            raise ValueError('custodian reply not for exact offered checkpoint')
     return latest_checkpoint, signed, receipt['sequence']
 
 
@@ -278,6 +296,8 @@ def main(argv=None):
         p.add_argument('--custodian-tag', required=True)
         if name == 'deposit':
             p.add_argument('private_checkpoint_offer', type=Path)
+            p.add_argument('--expected-sequence', type=int, required=True)
+            p.add_argument('--expected-receipt-sha256', required=True)
     args = parser.parse_args(argv)
     try:
         if args.operation == 'serve-once':
@@ -308,7 +328,11 @@ def main(argv=None):
                 pinned_signing_public_key=args.pinned_ed25519_custodian_public_key,
                 signing_public_key_sha256=args.custodian_signing_public_key_sha256,
                 tag=args.custodian_tag,
-                action=args.operation, checkpoint_raw=offer)
+                action=args.operation, checkpoint_raw=offer,
+                expected_sequence=(args.expected_sequence
+                                   if args.operation == 'deposit' else None),
+                expected_receipt_sha256=(args.expected_receipt_sha256
+                                         if args.operation == 'deposit' else None))
             _write_new_private(args.private_signed_receipt_output, signed)
             _write_new_private(args.private_checkpoint_output, checkpoint)
             result, status = {
