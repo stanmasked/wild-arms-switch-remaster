@@ -106,7 +106,7 @@ def _history(con, *, create=False):
 
 
 def deposit(custodian_db, checkpoint_raw, *, expected_sequence=None,
-            expected_receipt_sha256=None):
+            expected_receipt_sha256=None, reservation_token=None):
     """Durably store next monotonic checkpoint, no output receipt side effect.
 
     A repeat of the *latest* deposit is idempotent; an older checkpoint
@@ -120,6 +120,8 @@ def deposit(custodian_db, checkpoint_raw, *, expected_sequence=None,
     digest = _sha(checkpoint_raw)
     conditional = (expected_sequence is not None or
                    expected_receipt_sha256 is not None)
+    if reservation_token is not None and not conditional:
+        raise ValueError('reserved deposit requires expected custody head')
     if conditional:
         if (type(expected_sequence) is not int or expected_sequence < 1
                 or type(expected_receipt_sha256) is not str):
@@ -129,6 +131,23 @@ def deposit(custodian_db, checkpoint_raw, *, expected_sequence=None,
         con.execute('BEGIN IMMEDIATE')
         try:
             prior = _history(con, create=True)
+            try:
+                from .audit_record_custodian_reservation import (
+                    reservation_row, token_hash, ReservationConflict,
+                )
+            except ImportError:
+                from audit_record_custodian_reservation import (
+                    reservation_row, token_hash, ReservationConflict,
+                )
+            reserved = reservation_row(con)
+            if reservation_token is not None:
+                offered_token_hash = token_hash(reservation_token)
+                if reserved is None:
+                    raise ReservationConflict('required reservation missing')
+            else:
+                offered_token_hash = None
+                if reserved is not None and reserved[4] == 'reserved':
+                    raise ReservationConflict('custodian head reserved by another writer')
             if conditional:
                 if not prior:
                     raise HandoffRegression('expected custodian history absent')
@@ -140,10 +159,23 @@ def deposit(custodian_db, checkpoint_raw, *, expected_sequence=None,
                     and head[2] == expected_receipt_sha256
                     and head[1] == digest)
                 if retry_of_exact_next:
+                    if reservation_token is not None:
+                        if (reserved is None or reserved[4] != 'committed'
+                                or (reserved[1], reserved[2], reserved[3],
+                                    reserved[5]) != (
+                                        expected_sequence, expected_receipt_sha256,
+                                        offered_token_hash, digest)):
+                            raise ReservationConflict('reserved replay does not match owner')
                     con.commit()
                     return head[0], False
                 if not matches_expected:
                     raise HandoffRegression('stale expected custodian history')
+                if reservation_token is not None and (
+                        reserved is None or reserved[4] != 'reserved'
+                        or (reserved[1], reserved[2], reserved[3]) != (
+                            expected_sequence, expected_receipt_sha256,
+                            offered_token_hash)):
+                    raise ReservationConflict('different or unowned custody reservation')
             if prior and prior[-1][1] == digest:
                 if conditional:
                     raise HandoffRegression('candidate does not advance custody head')
@@ -169,6 +201,11 @@ def deposit(custodian_db, checkpoint_raw, *, expected_sequence=None,
                 '(sequence,checkpoint_sha256,previous_receipt_sha256,'
                 ' receipt_sha256,checkpoint_bytes) VALUES(?,?,?,?,?)',
                 (seq, digest, previous, receipt_hash, checkpoint_raw))
+            if reservation_token is not None:
+                con.execute(
+                    "UPDATE custodian_reservation SET status='committed',"
+                    "committed_checkpoint_sha256=? WHERE slot=1",
+                    (digest,))
             con.commit()
             return seq, True
         except Exception:
