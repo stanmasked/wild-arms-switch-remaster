@@ -13,6 +13,7 @@ import hmac
 import json
 from pathlib import Path
 import secrets
+import sqlite3
 import socket
 import ssl
 import struct
@@ -183,7 +184,7 @@ def serve_one(listener, custodian_db, signing_key, cert, key, ca,
                 request = _receive(tls)
                 try:
                     response = _process(request, custodian_db, signing_key, tag)
-                except (OSError, ValueError, HandoffRegression):
+                except (OSError, ValueError, HandoffRegression, sqlite3.Error):
                     _send(tls, {
                         'schema': RESPONSE_SCHEMA,
                         'request_id': request.get('request_id')
@@ -194,7 +195,7 @@ def serve_one(listener, custodian_db, signing_key, cert, key, ca,
                     return False
                 _send(tls, response)
                 return True
-        except (OSError, ValueError, ssl.SSLError):
+        except (OSError, ValueError, ssl.SSLError, sqlite3.Error):
             return False
 
 
@@ -315,7 +316,7 @@ def main(argv=None):
                 'private_authenticated_checkpoint_saved': True,
                 'custodian_sequence': seq}, 0
     except (OSError, ValueError, TypeError, KeyError, OverflowError,
-            ssl.SSLError, TimeoutError):
+            ssl.SSLError, TimeoutError, sqlite3.Error):
         result, status = {
             'valid_input': False,
             'error_code': 'invalid_private_input_or_channel',
