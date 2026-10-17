@@ -74,8 +74,11 @@ def accept_reserved(db_path, transport, public_key, pinned_sha256,
     # Freeze mutable executable/stream buffers once. The reserved digest,
     # both provenance audits and the eventual SQLite commit must bind the
     # very same bytes even if a caller retains a writable bytearray.
-    digest = evidence_digest(evidence)
+    if len(evidence) != 8 or any(
+            not isinstance(value, (bytes, bytearray)) for value in evidence):
+        raise ValueError('invalid complete evidence bundle')
     evidence = tuple(bytes(value) for value in evidence)
+    digest = evidence_digest(evidence)
     current = _remote_head(transport, public_key, pinned_sha256, tag=tag)
     if not eligible(db_path, current, evidence, now=now):
         return False
