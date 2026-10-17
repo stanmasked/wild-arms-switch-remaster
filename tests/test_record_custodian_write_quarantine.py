@@ -6,9 +6,7 @@ import json
 import sqlite3
 import unittest
 
-from tests.test_record_witness_fence_quiescence import (
-    QuiescencePreflightTests as Fixture,
-)
+from tests import test_record_witness_fence_quiescence as fixture_module
 from tools.audit_record_anchor_handoff import _read_latest, deposit
 from tools.audit_record_custodian_reservation import reserve
 from tools.audit_record_custodian_recovery import (
@@ -24,18 +22,18 @@ TOKEN = 'a'*32
 
 
 class WriteQuarantineTests(unittest.TestCase):
-    setUp = Fixture.setUp
-    request = Fixture.request
-    fence = Fixture.fence
-    stop = Fixture.stop
-    path = Fixture.path
-    outstanding = Fixture.outstanding
-    new_offer = Fixture.new_offer
-    make_offer_and_deposit = Fixture.make_offer_and_deposit
+    setUp = fixture_module.QuiescencePreflightTests.setUp
+    request = fixture_module.QuiescencePreflightTests.request
+    fence = fixture_module.QuiescencePreflightTests.fence
+    stop = fixture_module.QuiescencePreflightTests.stop
+    path = fixture_module.QuiescencePreflightTests.path
+    outstanding = fixture_module.QuiescencePreflightTests.outstanding
+    new_offer = fixture_module.QuiescencePreflightTests.new_offer
+    make_offer_and_deposit = fixture_module.QuiescencePreflightTests.make_offer_and_deposit
 
     @classmethod
     def setUpClass(cls):
-        Fixture.setUpClass()
+        fixture_module.QuiescencePreflightTests.setUpClass()
         for attr in ('ca', 'server_key', 'server_cert', 'server_pin',
                      'client_key', 'client_cert', 'client_pin',
                      'sign_key', 'sign_pub', 'sign_pub_pin'):
@@ -43,7 +41,7 @@ class WriteQuarantineTests(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        Fixture.tearDownClass()
+        fixture_module.QuiescencePreflightTests.tearDownClass()
 
     def install(self, original, proof=None):
         signed, pub, pin = proof if proof is not None else self.stop(original)
