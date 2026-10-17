@@ -27,7 +27,14 @@ versioned schema and precisely enumerated fields, including **true**
 for locally completed checks and **false** for all unsatisfied global
 revocation or witness-retirement assertions. Any extra field, missing
 field, noncanonical encoding, boolean coercion or an unsuccessful
-observation fails closed.
+observation fails closed. For the report files, the verifier accepts
+**both** the compact canonical representation and the exact
+`print(json.dumps(report, sort_keys=True))` serialization emitted by
+the existing audit CLIs (including its final newline). It stores the
+SHA-256 of the **unchanged source bytes**, so differing accepted
+serializations are not interchangeable after publication. The raw
+cgroup observation and the composite manifest must remain compact
+canonical JSON.
 
 The two independent negative custody reports must agree on the
 classification: either a reservation was **not observed in the
