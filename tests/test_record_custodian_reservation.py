@@ -142,6 +142,16 @@ class ReservedIssueTests(unittest.TestCase):
         self.assertEqual(self.new_issue(), NONCE_B)
         self.assertEqual(self.intent()[3], retained[3])
 
+    def test_invalid_ttl_is_refused_before_reserving_head(self):
+        with self.assertRaises(ValueError):
+            issue_reserved(
+                self.verifier, self.transport, self.sign_pub,
+                self.sign_pub_pin, tag=self.tag, ttl_seconds=0, now=FIXED_NOW+1)
+        self.assertIsNone(self.intent())
+        with sqlite3.connect(self.custody) as con:
+            self.assertIsNone(reservation_row(con))
+        self.assertEqual(self.state(), (1, (1, None)))
+
     def test_second_different_verifier_cannot_claim_reserved_head(self):
         self.new_issue()
         secondary = self.v / 'second-verifier.sqlite'
