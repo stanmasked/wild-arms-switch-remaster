@@ -147,6 +147,40 @@ class RecordPointerUseTests(unittest.TestCase):
             self.assertNotIn('/private', output.getvalue())
             self.assertNotIn('0x8006', output.getvalue())
 
+    def test_missing_private_disc_never_prints_path_or_exception(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            inventory = Path(tmp) / 'inventory.json'
+            inventory.write_text(json.dumps({'entries': [
+                {'path': '/EXE/WILDARMS.EXE;1', 'lba': 0,
+                 'size': 2048, 'directory': False}]}))
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                status = main(['/private/SECRET-PATH.bin', str(inventory)])
+            self.assertEqual(status, 2)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['error_code'], 'invalid_private_input')
+            self.assertFalse(report['private_game_data_emitted'])
+            self.assertNotIn('SECRET-PATH', output.getvalue())
+            self.assertNotIn('Traceback', output.getvalue())
+            self.assertNotIn('FileNotFoundError', output.getvalue())
+
+    def test_corrupt_private_exe_is_sanitized(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            inventory = Path(tmp) / 'inventory.json'
+            inventory.write_text(json.dumps({'entries': [
+                {'path': '/EXE/WILDARMS.EXE;1', 'lba': 0,
+                 'size': 2048, 'directory': False}]}))
+            output = io.StringIO()
+            with patch('tools.audit_record_pointer_use.read_raw_iso_entry',
+                       return_value=b'PRIVATE_RAM_0x80010000'):
+                with contextlib.redirect_stdout(output):
+                    status = main(['/private/game.bin', str(inventory)])
+            self.assertEqual(status, 2)
+            self.assertNotIn('PRIVATE_RAM', output.getvalue())
+            self.assertNotIn('/private/', output.getvalue())
+            self.assertEqual(json.loads(output.getvalue())['valid_input'], False)
+
+
 
 if __name__ == '__main__':
     unittest.main()
