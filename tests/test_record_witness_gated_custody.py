@@ -39,7 +39,7 @@ TOKEN_C = 'c'*32
 
 class GuardedCustodianWriteTests(unittest.TestCase):
     setUp = RecoveryWitnessTests.setUp
-    reserve_initial = RecoveryWitnessTests.reserve
+    reserve = RecoveryWitnessTests.reserve
     recover_once = RecoveryWitnessTests.recover_once
     record_current = RecoveryWitnessTests.record_current
     sign = RecoveryWitnessTests.sign
