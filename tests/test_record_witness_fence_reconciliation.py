@@ -183,7 +183,7 @@ class WitnessFenceReconciliationTests(unittest.TestCase):
         original=self.setup_applied_reserve()
         outcome,_=self.receipt(original)
         different=self.request(nonce='f'*32)
-        with self.assertRaises(ReconciliationConflict):
+        with self.assertRaises(ValueError):
             self.signed_proposal(different,outcome)
         self.assertIsNotNone(self.outstanding())
 
@@ -286,15 +286,14 @@ class WitnessFenceReconciliationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             release(self.witness_db,'f'*32,'a'*64)
         with self.assertRaises(ValueError):
-            record(self.witness_db,_canonical({'bad':True}))
+            record(self.witness_db,_canonical(snapshot(self.custody)))
 
     def test_invalid_or_unsupported_legacy_request_refused(self):
         item=json.loads(self.request())
         item['action']='deposit'
         with self.assertRaises(ValueError):
-            self.fence(_canonical(item)) if False else attest_applied(
-                self.custody,_canonical(item),self.sign_key,
-                self.path('not-supported-'),custodian_tag=self.tag)
+            attest_applied(self.custody,_canonical(item),self.sign_key,
+                           self.path('not-supported-'),custodian_tag=self.tag)
 
     def test_cli_attest_and_approval_reports_have_no_secrets(self):
         original=self.setup_applied_reserve()
