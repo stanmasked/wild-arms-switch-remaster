@@ -210,8 +210,12 @@ def _verify_approval(request_raw, approval_raw, admin_id,
 
 def recover(custodian_db, request_raw, approval_a, approval_b,
             admin_a_id, admin_a_public, admin_a_pin,
-            admin_b_id, admin_b_public, admin_b_pin):
-    """Atomic two-admin authorization, audit, and orphan retirement."""
+            admin_b_id, admin_b_public, admin_b_pin, *, witness_head=None):
+    """Atomically retire an orphaned reservation.
+
+    Optional witness enforcement is inside the *same* local write transaction
+    as administrative recovery. Legacy calls remain unguarded.
+    """
     request = _request(request_raw)
     if _tag(admin_a_id) == _tag(admin_b_id) or admin_a_pin == admin_b_pin:
         raise ValueError('two distinct independently pinned admin keys required')
@@ -225,6 +229,15 @@ def recover(custodian_db, request_raw, approval_a, approval_b,
     with closing(_connect(custodian_db)) as con:
         con.execute('BEGIN IMMEDIATE')
         try:
+            if witness_head is not None:
+                try:
+                    from .audit_record_recovery_witness import check_locked
+                except ImportError:
+                    from audit_record_recovery_witness import check_locked
+                try:
+                    check_locked(con, witness_head, require_exact=True)
+                except ValueError as exc:
+                    raise RecoveryConflict('witness continuity check refused recovery') from exc
             rows = _history(con)
             events = audit_history(con, create=True)
             reserved = reservation_row(con)
@@ -263,6 +276,30 @@ def recover(custodian_db, request_raw, approval_a, approval_b,
             raise
 
 
+def recover_with_witness(custodian_db, request_raw, approval_a, approval_b,
+                         admin_a_id, admin_a_public, admin_a_pin,
+                         admin_b_id, admin_b_public, admin_b_pin,
+                         *, witness_db, signed_witness_raw,
+                         witness_public_key, witness_public_pem_pin,
+                         witness_tag):
+    """Require pinned signed witness state; compare it inside recovery TX."""
+    try:
+        from .audit_record_recovery_witness import authenticated_head
+    except ImportError:
+        from audit_record_recovery_witness import authenticated_head
+    try:
+        head = authenticated_head(
+            witness_db, signed_witness_raw,
+            witness_public_key, witness_public_pem_pin, tag=witness_tag)
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        raise RecoveryConflict('witness missing, corrupt, stale or unauthenticated') from exc
+    return recover(
+        custodian_db, request_raw, approval_a, approval_b,
+        admin_a_id, admin_a_public, admin_a_pin,
+        admin_b_id, admin_b_public, admin_b_pin,
+        witness_head=head)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_subparsers(dest='mode', required=True)
@@ -274,15 +311,22 @@ def main(argv=None):
     p.add_argument('admin_id')
     p.add_argument('private_admin_key', type=Path)
     p.add_argument('private_approval_out', type=Path)
-    p = modes.add_parser('recover')
-    p.add_argument('custodian_db', type=Path)
-    p.add_argument('private_request', type=Path)
-    p.add_argument('private_approval_a', type=Path)
-    p.add_argument('private_approval_b', type=Path)
-    for name in ('a', 'b'):
-        p.add_argument('admin_' + name + '_id')
-        p.add_argument('admin_' + name + '_public_key', type=Path)
-        p.add_argument('admin_' + name + '_trusted_pem_sha256')
+    for mode in ('recover', 'recover-guarded'):
+        p = modes.add_parser(mode)
+        p.add_argument('custodian_db', type=Path)
+        p.add_argument('private_request', type=Path)
+        p.add_argument('private_approval_a', type=Path)
+        p.add_argument('private_approval_b', type=Path)
+        for name in ('a', 'b'):
+            p.add_argument('admin_' + name + '_id')
+            p.add_argument('admin_' + name + '_public_key', type=Path)
+            p.add_argument('admin_' + name + '_trusted_pem_sha256')
+        if mode == 'recover-guarded':
+            p.add_argument('independent_witness_db', type=Path)
+            p.add_argument('private_signed_witness_receipt', type=Path)
+            p.add_argument('pinned_witness_public_pem', type=Path)
+            p.add_argument('trusted_witness_public_pem_sha256')
+            p.add_argument('--witness-tag', required=True)
     args = parser.parse_args(argv)
     try:
         if args.mode == 'prepare':
@@ -302,13 +346,26 @@ def main(argv=None):
                                   MAX_APPROVAL)
             sig_b = _read_limited(_private_regular_file(args.private_approval_b),
                                   MAX_APPROVAL)
-            number = recover(
+            public_args = (
                 args.custodian_db, raw, sig_a, sig_b,
                 args.admin_a_id, args.admin_a_public_key,
                 args.admin_a_trusted_pem_sha256,
                 args.admin_b_id, args.admin_b_public_key,
                 args.admin_b_trusted_pem_sha256)
+            if args.mode == 'recover-guarded':
+                signed = _read_limited(
+                    _private_regular_file(args.private_signed_witness_receipt),
+                    2048)
+                number = recover_with_witness(
+                    *public_args, witness_db=args.independent_witness_db,
+                    signed_witness_raw=signed,
+                    witness_public_key=args.pinned_witness_public_pem,
+                    witness_public_pem_pin=args.trusted_witness_public_pem_sha256,
+                    witness_tag=args.witness_tag)
+            else:
+                number = recover(*public_args)
             result, code = {'orphan_reservation_retired': True,
+                            'witness_guarded_recovery': args.mode == 'recover-guarded',
                             'recovery_journal_sequence': number}, 0
     except (RecoveryConflict, ReservationConflict):
         result, code = {'recovery_refused_due_to_changed_state': True}, 1
