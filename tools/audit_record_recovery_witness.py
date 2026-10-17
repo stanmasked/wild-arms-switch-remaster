@@ -106,6 +106,14 @@ def snapshot(custodian_db):
             rows = audit_history(con)
             events = _validate_events(
                 [_event_from_row(row) for row in rows], require_nonempty=False)
+            # Recovery decisions refer to an exact historical custody head.
+            # Verify that the recovery chain is also bound to the still
+            # retained checkpoint ledger, not merely self-consistent.
+            for event in events:
+                base = event['base_sequence']
+                if (base > len(anchor)
+                        or anchor[base-1][3] != event['base_receipt_sha256']):
+                    raise ValueError('recovery event not bound to custodian head')
             result = {
                 'schema': SNAPSHOT_SCHEMA,
                 'custodian_sequence': anchor[-1][0],
@@ -132,9 +140,8 @@ def _snapshot_input(raw):
         raise ValueError('invalid witness snapshot schema')
     _digest(record['custodian_receipt_sha256'])
     _validate_events(record['recovery_events'], require_nonempty=False)
-    if (record['recovery_events']
-            and record['recovery_events'][-1]['base_sequence'] >
-                record['custodian_sequence']):
+    if any(event['base_sequence'] > record['custodian_sequence']
+           for event in record['recovery_events']):
         raise ValueError('witness event after supplied custody sequence')
     return record
 
