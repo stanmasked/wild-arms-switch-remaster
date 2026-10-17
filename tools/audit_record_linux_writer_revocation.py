@@ -236,7 +236,7 @@ def main(argv=None):
             custody_database=args.custody_database,
             db_device=args.db_device, db_inode=args.db_inode))
         code = 0
-    except RevocationConflict:
+    except (RevocationConflict, QuiescenceConflict):
         report['service_or_writer_access_not_revoked'] = True
         code = 1
     except (ValueError, KeyError, TypeError, OSError,
