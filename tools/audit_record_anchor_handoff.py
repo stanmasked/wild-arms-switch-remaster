@@ -57,14 +57,25 @@ def _receipt_hash(receipt):
                           + _canonical(receipt)).hexdigest()
 
 
-def _history(con):
-    con.execute("""CREATE TABLE IF NOT EXISTS anchor_history (
-        sequence INTEGER PRIMARY KEY,
-        checkpoint_sha256 TEXT NOT NULL UNIQUE,
-        previous_receipt_sha256 TEXT NOT NULL,
-        receipt_sha256 TEXT NOT NULL UNIQUE,
-        checkpoint_bytes BLOB NOT NULL
-    )""")
+def _history(con, *, create=False):
+    if create:
+        con.execute("""CREATE TABLE IF NOT EXISTS anchor_history (
+            sequence INTEGER PRIMARY KEY,
+            checkpoint_sha256 TEXT NOT NULL UNIQUE,
+            previous_receipt_sha256 TEXT NOT NULL,
+            receipt_sha256 TEXT NOT NULL UNIQUE,
+            checkpoint_bytes BLOB NOT NULL
+        )""")
+    elif con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name='anchor_history'").fetchone() is None:
+        raise ValueError('no committed custodian history')
+    columns = {row[1] for row in con.execute(
+        'PRAGMA table_info("anchor_history")')}
+    if columns != {'sequence', 'checkpoint_sha256',
+                   'previous_receipt_sha256', 'receipt_sha256',
+                   'checkpoint_bytes'}:
+        raise ValueError('invalid custodian table schema')
     entries = con.execute(
         'SELECT sequence, checkpoint_sha256, previous_receipt_sha256,'
         ' receipt_sha256, checkpoint_bytes FROM anchor_history'
@@ -105,7 +116,7 @@ def deposit(custodian_db, checkpoint_raw):
     with closing(_connect(custodian_db, create=True)) as con:
         con.execute('BEGIN IMMEDIATE')
         try:
-            prior = _history(con)
+            prior = _history(con, create=True)
             if prior and prior[-1][1] == digest:
                 con.commit()
                 return prior[-1][0], False
