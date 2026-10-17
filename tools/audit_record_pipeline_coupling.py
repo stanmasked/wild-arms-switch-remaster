@@ -94,6 +94,11 @@ def analyze(exe, reference):
                 or (words[9] >> 26) != 35
                 or (words[10] != 0x00021080)):
             raise ValueError('unverified load gap in claimed EXE path')
+        if any(pc < _SITES[site] or pc >= _SITES[site] + 84
+               or (pc - _SITES[site]) & 3 for pc in pcs):
+            # The stage-237 syntactic PC claim already fails. Do not
+            # reinterpret a foreign PC as a negative Python array index.
+            continue
         expected_lws = {
             pc for pc in pcs[9:]
             if (words[(pc - _SITES[site]) // 4] >> 26) == 35
@@ -101,7 +106,11 @@ def analyze(exe, reference):
         # This intentionally allows only the original global LW and one
         # terminal LW, not extra loads or branch-slot memory operations.
         if (len(expected_lws) != 2
-                or set(_address(pc) for pc in load_results) != expected_lws):
+                or set(load_results) != {
+                    f'0x{pc:08x}' for pc in expected_lws}
+                or any(_address(pc) != pc_value
+                       for pc, pc_value in zip(
+                           sorted(load_results), sorted(expected_lws)))):
             raise ValueError('unexpected private LW capture shape')
         if (registers.get('2') != f'0x{677 * index & _U32:08x}'
                 or _address(load_results[f'0x{pcs[9]:08x}'])
