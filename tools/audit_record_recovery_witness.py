@@ -246,14 +246,32 @@ def record(witness_db, snapshot_raw):
             raise
 
 
+def initialize(witness_db):
+    """Explicitly initialize a separately administered EMPTY witness.
+
+    Its genesis receipt is required to guard the *first* recovery.
+    This must be independently provisioned and pinned; it is not
+    automatic bootstrap by a potentially compromised custodian.
+    """
+    with closing(_connect(witness_db, create=True)) as con:
+        con.execute('BEGIN IMMEDIATE')
+        try:
+            rows = _witness_rows(con, create=True)
+            con.commit()
+            return len(rows)
+        except Exception:
+            con.rollback()
+            raise
+
+
 def _head(witness_db):
     with closing(_connect(witness_db)) as con:
         con.execute('BEGIN')
         try:
             rows = _witness_rows(con)
-            if not rows:
-                raise ValueError('no witnessed recovery events')
             con.commit()
+            if not rows:
+                return 0, GENESIS, GENESIS, []
             return len(rows), rows[-1][2], rows[-1][4], [row[1] for row in rows]
         except Exception:
             con.rollback()
@@ -289,9 +307,13 @@ def sign_latest(witness_db, private_signing_key, private_output, *, tag):
     return head[0]
 
 
-def verify(custodian_db, witness_db, signed_raw, public_key,
-           pinned_public_pem_sha256, *, tag, require_exact=False):
-    """Compare the current custody journal to a signed independent high-water."""
+def authenticated_head(witness_db, signed_raw, public_key,
+                       pinned_public_pem_sha256, *, tag):
+    """Return a validated signed witness prefix without opening custodian DB.
+
+    The signature AND current independent witness state are required.
+    A self-consistent old signed receipt is NOT a freshness oracle.
+    """
     _digest(pinned_public_pem_sha256)
     if type(signed_raw) is not bytes or not 0 < len(signed_raw) <= MAX_SIGNED_BYTES:
         raise ValueError('invalid private signed witness receipt')
@@ -315,18 +337,53 @@ def verify(custodian_db, witness_db, signed_raw, public_key,
             signature=bytes.fromhex(envelope['signature_hex']),
             public_key_bytes=pem):
         raise ValueError('invalid witness Ed25519 signature')
-    current = snapshot(custodian_db)
-    events = current['recovery_events']
+    return head
+
+
+def check_locked(con, head, *, require_exact=True):
+    """Check current custodian rows under the CALLER's SQLite transaction.
+
+    This must be called while the custodian is holding BEGIN IMMEDIATE
+    before any administrative mutation. No other writer can replace
+    the recovery journal between this check and the local SQL commit.
+    """
+    anchors = _history(con)
+    if not anchors:
+        raise WitnessRegression('missing current custodian history')
+    from .audit_record_custodian_recovery import audit_history
+    recovery = audit_history(con)
+    events = [_event_from_row(row) for row in recovery]
+    for event in events:
+        base = event['base_sequence']
+        if (base > len(anchors)
+                or anchors[base-1][3] != event['base_receipt_sha256']):
+            raise WitnessRegression('recovery event not bound to custodian checkpoint')
     if len(events) < head[0]:
-        raise WitnessRegression('custodian journal rolled back below witness')
-    for number, raw in enumerate(head[3]):
-        if _canonical(events[number]) != raw:
-            raise WitnessRegression('custodian recovery journal fork detected')
+        raise WitnessRegression('custodian recovery journal rolled back')
+    for index, historical in enumerate(head[3]):
+        if _canonical(events[index]) != historical:
+            raise WitnessRegression('custodian recovery journal fork')
     if require_exact and len(events) != head[0]:
-        raise WitnessRegression('new recovery events await independent witness')
+        raise WitnessRegression('new recovery event not independently witnessed')
+    return len(events)
+
+
+def verify(custodian_db, witness_db, signed_raw, public_key,
+           pinned_public_pem_sha256, *, tag, require_exact=False):
+    """Read-only current recovery verification against signed witness head."""
+    head = authenticated_head(
+        witness_db, signed_raw, public_key, pinned_public_pem_sha256, tag=tag)
+    with closing(_connect(custodian_db)) as con:
+        con.execute('BEGIN')
+        try:
+            count = check_locked(con, head, require_exact=require_exact)
+            con.commit()
+        except Exception:
+            con.rollback()
+            raise
     return {
         'verified_recoveries': head[0],
-        'unwitnessed_recoveries': len(events)-head[0],
+        'unwitnessed_recoveries': count-head[0],
         'current_custodian_recovery_chain_matches_witness': True,
         'independent_witness_operated_by_separate_actor': False,
         'global_rollback_prevention_guaranteed': False,
@@ -336,6 +393,8 @@ def verify(custodian_db, witness_db, signed_raw, public_key,
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='mode', required=True)
+    p = sub.add_parser('initialize')
+    p.add_argument('witness_database', type=Path)
     p = sub.add_parser('capture')
     p.add_argument('custodian_database', type=Path)
     p.add_argument('private_snapshot_output', type=Path)
@@ -357,7 +416,13 @@ def main(argv=None):
     p.add_argument('--require-exact', action='store_true')
     args = parser.parse_args(argv)
     try:
-        if args.mode == 'capture':
+        if args.mode == 'initialize':
+            count = initialize(args.witness_database)
+            status, result = 0, {
+                'private_witness_initialized': True,
+                'witnessed_recovery_count': count,
+            }
+        elif args.mode == 'capture':
             data = snapshot(args.custodian_database)
             if not data['recovery_events']:
                 raise ValueError('no recovery events to witness')
