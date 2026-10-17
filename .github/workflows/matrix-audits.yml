@@ -72,6 +72,7 @@ on:
       - 'tools/audit_record_linux_interpreted_writers.py'
       - 'tools/audit_record_linux_launcher_inventory.py'
       - 'tools/audit_record_linux_activation_units.py'
+      - 'tools/audit_record_witness_composite_evidence.py'
       - 'tools/audit_record_remote_witness_fence.py'
       - 'tools/audit_record_remote_reserved_issue.py'
       - 'tools/audit_record_remote_reserved_accept.py'
@@ -101,6 +102,7 @@ on:
       - 'tests/test_record_linux_interpreted_writers.py'
       - 'tests/test_record_linux_launcher_inventory.py'
       - 'tests/test_record_linux_activation_units.py'
+      - 'tests/test_record_witness_composite_evidence.py'
       - 'tests/test_record_witness_gated_recovery.py'
       - 'tests/test_record_witness_gated_custody.py'
       - 'tests/test_record_reserved_accept.py'
@@ -117,6 +119,7 @@ on:
       - 'docs/ps1-linux-interpreted-writers.md'
       - 'docs/ps1-linux-launcher-inventory.md'
       - 'docs/ps1-linux-activation-units.md'
+      - 'docs/ps1-witness-composite-evidence.md'
       - 'docs/ps1-witness-gated-recovery.md'
       - 'docs/ps1-witness-gated-custody-writes.md'
       - 'docs/ps1-reserved-capture-acceptance.md'
@@ -272,6 +275,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_record_linux_interpreted_writers.py' -v
           python -m unittest discover -s tests -p 'test_record_linux_launcher_inventory.py' -v
           python -m unittest discover -s tests -p 'test_record_linux_activation_units.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_composite_evidence.py' -v
           python -m unittest discover -s tests -p 'test_record_reserved_accept.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
           python -m unittest discover -s tests -p 'test_gp0_matrix_*.py' -v
