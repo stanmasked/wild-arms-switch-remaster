@@ -164,6 +164,29 @@ class RecoveryWitnessTests(unittest.TestCase):
         with self.assertRaises(WitnessRegression):
             self.record_current()
 
+    def test_rewritten_event_with_wrong_custodian_base_is_refused(self):
+        self.first()
+        with sqlite3.connect(self.custody) as con:
+            row = con.execute(
+                'SELECT sequence,request_sha256,base_sequence,'
+                'base_receipt_sha256,retired_token_sha256,'
+                'previous_event_sha256 FROM custodian_recovery_history').fetchone()
+            forged = {
+                'schema': EVENT_SCHEMA, 'sequence': row[0],
+                'request_sha256': row[1], 'base_sequence': row[2],
+                'base_receipt_sha256': 'e'*64,
+                'retired_token_sha256': row[4],
+                'previous_event_sha256': row[5],
+            }
+            con.execute(
+                'UPDATE custodian_recovery_history SET '
+                'base_receipt_sha256=?,event_sha256=? WHERE sequence=1',
+                ('e'*64, _event_hash(forged)))
+        with self.assertRaisesRegex(ValueError, 'not bound'):
+            snapshot(self.custody)
+        with self.assertRaisesRegex(ValueError, 'not bound'):
+            self.check()
+
     def test_stale_signed_receipt_rejected_after_new_witness_event(self):
         self.first()
         old_receipt = self.signed
