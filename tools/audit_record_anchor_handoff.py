@@ -106,7 +106,8 @@ def _history(con, *, create=False):
 
 
 def deposit(custodian_db, checkpoint_raw, *, expected_sequence=None,
-            expected_receipt_sha256=None, reservation_token=None):
+            expected_receipt_sha256=None, reservation_token=None,
+            witness_head=None):
     """Durably store next monotonic checkpoint, no output receipt side effect.
 
     A repeat of the *latest* deposit is idempotent; an older checkpoint
@@ -130,6 +131,12 @@ def deposit(custodian_db, checkpoint_raw, *, expected_sequence=None,
     with closing(_connect(custodian_db, create=True)) as con:
         con.execute('BEGIN IMMEDIATE')
         try:
+            if witness_head is not None:
+                try:
+                    from .audit_record_recovery_witness import check_locked
+                except ImportError:
+                    from audit_record_recovery_witness import check_locked
+                check_locked(con, witness_head, require_exact=True)
             prior = _history(con, create=True)
             try:
                 from .audit_record_custodian_reservation import (

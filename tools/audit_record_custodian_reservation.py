@@ -80,7 +80,8 @@ def reservation_row(con, *, create=False):
     return row
 
 
-def reserve(db, expected_sequence, expected_receipt_sha256, token):
+def reserve(db, expected_sequence, expected_receipt_sha256, token, *,
+            witness_head=None):
     """Idempotently reserve exactly the caller's current custody head."""
     if type(expected_sequence) is not int or expected_sequence < 1:
         raise ValueError('invalid expected reservation version')
@@ -89,6 +90,12 @@ def reserve(db, expected_sequence, expected_receipt_sha256, token):
     with closing(_connect(db, create=True)) as con:
         con.execute('BEGIN IMMEDIATE')
         try:
+            if witness_head is not None:
+                try:
+                    from .audit_record_recovery_witness import check_locked
+                except ImportError:
+                    from audit_record_recovery_witness import check_locked
+                check_locked(con, witness_head, require_exact=True)
             from .audit_record_custodian_recovery import audit_history
             audit_history(con)
             history = _history(con)

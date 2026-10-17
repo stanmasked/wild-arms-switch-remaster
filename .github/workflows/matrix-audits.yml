@@ -79,10 +79,12 @@ on:
       - 'tests/test_record_custodian_recovery.py'
       - 'tests/test_record_recovery_witness.py'
       - 'tests/test_record_witness_gated_recovery.py'
+      - 'tests/test_record_witness_gated_custody.py'
       - 'tests/test_record_reserved_accept.py'
       - 'docs/ps1-custodian-two-admin-recovery.md'
       - 'docs/ps1-independent-recovery-witness.md'
       - 'docs/ps1-witness-gated-recovery.md'
+      - 'docs/ps1-witness-gated-custody-writes.md'
       - 'docs/ps1-reserved-capture-acceptance.md'
       - 'docs/ps1-preissue-custodian-reservation.md'
       - 'docs/ps1-custodian-compare-and-swap.md'
@@ -224,6 +226,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_record_custodian_recovery.py' -v
           python -m unittest discover -s tests -p 'test_record_recovery_witness.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_gated_recovery.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_gated_custody.py' -v
           python -m unittest discover -s tests -p 'test_record_reserved_accept.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
           python -m unittest discover -s tests -p 'test_gp0_matrix_*.py' -v
