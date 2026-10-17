@@ -211,3 +211,44 @@ a complete successful GitHub Actions or CTest run**. Later CI
 attempts still report empty runner names and zero steps. That
 infrastructure failure must not be misrepresented as a fresh
 test assertion against the patch. PR #1 stays draft and unmerged.
+
+
+## Stage 230 — offline PS1 focused regression gate
+
+The historical runner-backed failures were concentrated in context-sensitive
+MIPS CFG, caller argument provenance, record-stride verification, and private
+matrix arithmetic attribution. While GitHub-hosted runners are unavailable,
+a separate **local host regression gate** can exercise exactly those modules
+without requiring GitHub Actions or original game assets.
+
+From a **checked-out repository root** with Python 3.11 or newer, run:
+
+```sh
+python3 -m unittest discover -s tests -p 'test_audit_ps1_regression_gate.py' -v
+python3 -m tools.audit_ps1_regression_gate
+```
+
+The first command tests the gate's own reporting contract. The second runs
+nine fixed synthetic host test modules: context CFG, context sources,
+caller CFG sources, CFG probe correlation, runtime CFG correlation, replay
+preflight, record-stride arithmetic, MIPS arithmetic dependency attribution,
+and end-to-end PS1 arithmetic matrix attribution.
+
+Results are one JSON object of **counts and booleans only**. Failure or
+import error sets `passed: false` and a nonzero process exit code.
+Private test failure tracebacks and stdout/stderr are deliberately
+suppressed from the public summary. No original RAM, instruction bytes,
+guest PCs, executable paths, or intermediate arithmetic values are emitted.
+This is a regression *gate*, not a PS1 hardware verification tool.
+
+Stage 230 developed this tool in isolation and executed its **five synthetic
+contract tests successfully** on the local Python host. Python syntax
+compilation also passed. Those five passing tests are **not** a substitute
+for running the nine actual repository modules: those modules and their
+dependencies were not locally available in this isolated test environment.
+The matrix GitHub Actions workflow now invokes the focused gate and its
+contract tests once runner provisioning recovers; as long as Actions jobs
+show `steps: []`, no new GitHub test pass is confirmed.
+
+Do not merge PR #1 until the focused gate, required GitHub workflow tests,
+and other host regressions can be executed with documented results.
