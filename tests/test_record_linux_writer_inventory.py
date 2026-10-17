@@ -176,6 +176,25 @@ class WriterProcessInventoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.run_inventory(manifest=dup)
 
+    def test_symlinked_enrolled_custody_file_refused(self):
+        actual = self.priv/'original.sqlite'
+        self.db.rename(actual)
+        self.db.symlink_to(actual)
+        with self.assertRaises(audit.InventoryConflict):
+            self.run_inventory()
+
+    def test_symlinked_enrolled_custody_directory_refused(self):
+        actual = self.root/'original-custody'
+        self.priv.rename(actual)
+        self.priv.symlink_to(actual, target_is_directory=True)
+        with self.assertRaises(audit.InventoryConflict):
+            self.run_inventory()
+
+    def test_symlinked_sqlite_sidecar_refused(self):
+        (Path(str(self.db)+'-wal')).symlink_to(self.other)
+        with self.assertRaises(audit.InventoryConflict):
+            self.run_inventory()
+
     def test_enrolled_database_inode_mismatch_refused(self):
         self.inode += 1
         with self.assertRaises(audit.InventoryConflict):
