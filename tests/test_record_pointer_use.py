@@ -58,10 +58,22 @@ class RecordPointerUseTests(unittest.TestCase):
 
     def test_one_site_add_without_access_is_counted_separately(self):
         data = three_signature_exe()
-        word_at(data, TARGETS[1], 11, ADDU_V1_V1_V0)
+        # Use the first distant site: the other two windows overlap,
+        # so their non-NOP signatures naturally terminate this scan.
+        word_at(data, TARGETS[0], 11, ADDU_V1_V1_V0)
         r = inspect(data)
         self.assertEqual(r['add_without_memory_access_patterns'], 1)
         self.assertEqual(r['unresolved_post_index_patterns'], 2)
+
+    def test_overlapping_next_signature_does_not_prove_missing_access(self):
+        data = three_signature_exe()
+        # The second target lies close to the third, so scanning ten
+        # suffix words encounters the next prefix. Do not call that
+        # a clean straight-line add with no memory access.
+        word_at(data, TARGETS[1], 11, ADDU_V1_V1_V0)
+        r = inspect(data)
+        self.assertEqual(r['add_without_memory_access_patterns'], 0)
+        self.assertEqual(r['unresolved_post_index_patterns'], 3)
 
     def test_control_flow_prevents_false_direct_path_claim(self):
         data = three_signature_exe()
