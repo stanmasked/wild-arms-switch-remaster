@@ -119,7 +119,12 @@ def analyze(reference):
             target = pc + 4 + _signed_16(word) * 4
             fallthrough = pc + 8
             branch_next = target if actual else fallthrough
-            if not fallthrough <= branch_next <= _U32 or branch_next & 3:
+            # For this strictly forward-only oracle even an untaken
+            # backwards branch is unsupported: its encoded target must
+            # stay outside the branch/slot itself.
+            if (not fallthrough <= target <= _U32
+                    or not fallthrough <= branch_next <= _U32
+                    or branch_next & 3):
                 raise ValueError('unsupported backward/out-of-range branch')
             if parsed[i + 1][0] != pc + 4 or parsed[i + 1][1] != 0:
                 raise ValueError('branch NOP slot missing')
