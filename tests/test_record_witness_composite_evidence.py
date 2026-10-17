@@ -17,6 +17,7 @@ class CompositeEvidenceTests(unittest.TestCase):
     path = fixture.LinuxCgroupObservationTests.path
     stop = fixture.LinuxCgroupObservationTests.stop
     make_cgroup = fixture.LinuxCgroupObservationTests.make_cgroup
+    write_controls = fixture.LinuxCgroupObservationTests.write_controls
     snapshot = fixture.LinuxCgroupObservationTests.snapshot
     signed_stop_for = fixture.LinuxCgroupObservationTests.signed_stop_for
     new_offer = fixture.LinuxCgroupObservationTests.new_offer
