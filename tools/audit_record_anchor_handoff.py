@@ -146,8 +146,12 @@ def deposit(custodian_db, checkpoint_raw, *, expected_sequence=None,
                     raise ReservationConflict('required reservation missing')
             else:
                 offered_token_hash = None
-                if reserved is not None and reserved[4] == 'reserved':
-                    raise ReservationConflict('custodian head reserved by another writer')
+                # Once a custodian enables durable reservations, block
+                # legacy/unreserved writes permanently, including after
+                # the previous reservation was committed. Otherwise an
+                # older client could silently bypass the active policy.
+                if reserved is not None:
+                    raise ReservationConflict('custodian requires reserved deposits')
             if conditional:
                 if not prior:
                     raise HandoffRegression('expected custodian history absent')
