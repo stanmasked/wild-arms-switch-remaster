@@ -101,7 +101,15 @@ def serve_one(listener, witness_db, signing_key, cert, key, ca,
                 _peer_pin(tls, expected_client_pin)
                 request = _receive(tls)
                 try:
-                    answer = _reply(request, witness_db, signing_key, tag)
+                    if (type(request) is dict and
+                            request.get('action') in ('claim-head', 'release-head')):
+                        try:
+                            from .audit_record_remote_witness_fence import handle
+                        except ImportError:
+                            from audit_record_remote_witness_fence import handle
+                        answer = handle(request, witness_db, signing_key, tag)
+                    else:
+                        answer = _reply(request, witness_db, signing_key, tag)
                 except (OSError, ValueError, sqlite3.Error):
                     _send(tls, {
                         'schema': RESPONSE_SCHEMA, 'status': 'rejected',

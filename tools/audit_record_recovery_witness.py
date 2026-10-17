@@ -215,6 +215,11 @@ def record(witness_db, snapshot_raw):
     with closing(_connect(witness_db, create=True)) as con:
         con.execute('BEGIN IMMEDIATE')
         try:
+            try:
+                from .audit_record_witness_fence import require_unfenced
+            except ImportError:
+                from audit_record_witness_fence import require_unfenced
+            require_unfenced(con)
             rows = _witness_rows(con, create=True)
             if not events and not rows:
                 raise ValueError('no recovery event available for first witness')
