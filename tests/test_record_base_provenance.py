@@ -121,11 +121,11 @@ class RecordBaseProvenanceTests(unittest.TestCase):
                 self.assertEqual(inspect(data)['unresolved_sites'], 3)
 
     def test_convergent_branch_paths_do_not_become_false_unknown(self):
-        # Both outcomes have the same PC when offset=1, i.e. after the slot.
-        # Convergence should be represented only once, without a false
-        # unknown terminal created by duplicate states.
+        # Unknown branch: one route skips two NOPs, the other passes
+        # through them. Both then enter the SAME (pc, added) state.
+        # A duplicate BFS state must not produce a false unknown terminal.
         r = _trace_tail([
-            branch(4, 8, 9, 1), 0, ADDU_V1_V1_V0, LW_A0_V1,
+            branch(4, 8, 9, 3), 0, 0, 0, ADDU_V1_V1_V0, LW_A0_V1,
         ])
         self.assertEqual(r['success'], 1)
         self.assertEqual(r['unknown'], 0)
