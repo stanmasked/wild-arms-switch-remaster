@@ -43,47 +43,32 @@ def _private_regular_file(path):
     return path
 
 
-def _read_database(path):
-    """Return canonical private commitments from a consistent SQLite snapshot."""
-    path = _private_regular_file(path)
-    # Encode a literal absolute filename to prevent URI query injection.
-    uri = 'file:' + quote(str(path.absolute()), safe='/') + '?mode=ro'
-    try:
-        with closing(sqlite3.connect(uri, uri=True, isolation_level=None,
-                                     timeout=10)) as con:
-            con.execute('PRAGMA busy_timeout=10000')
-            con.execute('BEGIN')
-            try:
-                if con.execute('PRAGMA integrity_check').fetchone() != ('ok',):
-                    raise ValueError('invalid verifier database integrity')
-                if con.execute('PRAGMA foreign_key_check').fetchone() is not None:
-                    raise ValueError('invalid verifier foreign keys')
-                for table, columns in (
-                        ('challenges', CHALLENGE_FIELDS),
-                        ('accepted', ACCEPTED_FIELDS),
-                        ('accepted_streams', ('sha256', 'nonce'))):
-                    columns_read = {r[1] for r in con.execute(
-                        'PRAGMA table_info("' + table + '")')}
-                    if columns_read != set(columns):
-                        raise ValueError('unexpected verifier table schema')
-                challenges = con.execute(
-                    'SELECT nonce, issued_at, expires_at, consumed'
-                    ' FROM challenges ORDER BY nonce LIMIT ?', (MAX_ROWS + 1,)).fetchall()
-                accepted = con.execute(
-                    'SELECT nonce, provenance_sha256, accepted_at'
-                    ' FROM accepted ORDER BY nonce LIMIT ?', (MAX_ROWS + 1,)).fetchall()
-                streams = con.execute(
-                    'SELECT sha256, nonce FROM accepted_streams'
-                    ' ORDER BY nonce, sha256 LIMIT ?', (2 * MAX_ROWS + 1,)).fetchall()
-                if (len(challenges) > MAX_ROWS or len(accepted) > MAX_ROWS
-                        or len(streams) > 2 * MAX_ROWS):
-                    raise ValueError('verifier history beyond checkpoint bounds')
-                con.commit()
-            except Exception:
-                con.rollback()
-                raise
-    except sqlite3.DatabaseError as exc:
-        raise ValueError('invalid verifier database') from exc
+def _snapshot_from_connection(con):
+    """Inspect the exact SQLite snapshot/transaction the caller already holds."""
+    if con.execute('PRAGMA integrity_check').fetchone() != ('ok',):
+        raise ValueError('invalid verifier database integrity')
+    if con.execute('PRAGMA foreign_key_check').fetchone() is not None:
+        raise ValueError('invalid verifier foreign keys')
+    for table, columns in (
+            ('challenges', CHALLENGE_FIELDS),
+            ('accepted', ACCEPTED_FIELDS),
+            ('accepted_streams', ('sha256', 'nonce'))):
+        columns_read = {r[1] for r in con.execute(
+            'PRAGMA table_info("' + table + '")')}
+        if columns_read != set(columns):
+            raise ValueError('unexpected verifier table schema')
+    challenges = con.execute(
+        'SELECT nonce, issued_at, expires_at, consumed'
+        ' FROM challenges ORDER BY nonce LIMIT ?', (MAX_ROWS + 1,)).fetchall()
+    accepted = con.execute(
+        'SELECT nonce, provenance_sha256, accepted_at'
+        ' FROM accepted ORDER BY nonce LIMIT ?', (MAX_ROWS + 1,)).fetchall()
+    streams = con.execute(
+        'SELECT sha256, nonce FROM accepted_streams'
+        ' ORDER BY nonce, sha256 LIMIT ?', (2 * MAX_ROWS + 1,)).fetchall()
+    if (len(challenges) > MAX_ROWS or len(accepted) > MAX_ROWS
+            or len(streams) > 2 * MAX_ROWS):
+        raise ValueError('verifier history beyond checkpoint bounds')
 
     challenge_map = {}
     for nonce, issued, expires, consumed in challenges:
@@ -134,6 +119,32 @@ def _read_database(path):
         for nonce in accepted_map)
     return {'schema': SCHEMA, 'issued_commitments': issued,
             'accepted_commitments': accepted_commitments}
+
+
+def _read_database(path):
+    """Return canonical commitments from one consistent read transaction."""
+    path = _private_regular_file(path)
+    uri = 'file:' + quote(str(path.absolute()), safe='/') + '?mode=ro'
+    try:
+        with closing(sqlite3.connect(uri, uri=True, isolation_level=None,
+                                     timeout=10)) as con:
+            con.execute('PRAGMA busy_timeout=10000')
+            con.execute('BEGIN')
+            try:
+                state = _snapshot_from_connection(con)
+                con.commit()
+                return state
+            except Exception:
+                con.rollback()
+                raise
+    except sqlite3.DatabaseError as exc:
+        raise ValueError('invalid verifier database') from exc
+
+
+def _continuity_flags(current, historical):
+    """The historical commitment set must survive in current state."""
+    issued_kept, accepted_kept = _continuity_flags(current, historical)
+    return issued_kept, accepted_kept
 
 
 def _validate_checkpoint(raw):
