@@ -12,6 +12,7 @@ import hmac
 import json
 from pathlib import Path
 import re
+import sqlite3
 import subprocess
 import tempfile
 
@@ -70,13 +71,18 @@ def _signed_bytes(body):
     return SIGNED_CONTEXT + _canonical(body)
 
 
-def _openssl(key_path, raw_message, *, signature=None):
+def _openssl(key_path, raw_message, *, signature=None, public_key_bytes=None):
     """Sign or verify private local payload without exposing subprocess logs."""
     with tempfile.TemporaryDirectory(prefix='wa-custodian-ed25519-') as temp:
         base = Path(temp)
         msg = base / 'payload.bin'
         msg.write_bytes(raw_message)
         signature_path = base / 'signature.bin'
+        # Verify against the exact bytes whose SHA-256 was pinned. Do not
+        # reopen a potentially replaced PEM path after checking its digest.
+        if public_key_bytes is not None:
+            key_path = base / 'verified-public.pem'
+            key_path.write_bytes(public_key_bytes)
         if signature is not None:
             signature_path.write_bytes(signature)
         command = ['openssl', 'pkeyutl']
@@ -162,7 +168,7 @@ def verify_signed(raw_envelope, pinned_public_key, expected_public_key_sha256,
         raise ValueError('trusted custodian public key pin mismatch')
     body = {key: obj[key] for key in ('schema', 'custodian_tag', 'receipt')}
     if not _openssl(key_path, _signed_bytes(body),
-                    signature=bytes.fromhex(hexsig)):
+                    signature=bytes.fromhex(hexsig), public_key_bytes=pub_raw):
         raise ValueError('invalid custodian Ed25519 signature')
     return _canonical(receipt)
 
@@ -273,7 +279,7 @@ def main(argv=None):
     except (PendingHandoff, AnchorConflict):
         result, code = _report(further_admission_blocked=True), 1
     except (OSError, ValueError, UnicodeError, TypeError, KeyError, IndexError,
-            OverflowError, RecursionError):
+            OverflowError, RecursionError, sqlite3.Error):
         result, code = {
             'schema': REPORT_SCHEMA, 'valid_input': False,
             'error_code': 'invalid_private_input',
