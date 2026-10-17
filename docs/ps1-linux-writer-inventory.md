@@ -49,7 +49,8 @@ execute a known enrolled path or holds an open descriptor to:
 - the immediate parent directory of that database;
 - an observed SQLite `-wal`, `-shm`, or `-journal` sidecar.
 
-It refuses unreadable/disappearing processes or file descriptors,
+It refuses symlinked custody DB, immediate directory or sidecar paths,
+unreadable/disappearing processes or file descriptors,
 symlink PID directory escapes, an exceeded PID/FD bound, invalid
 manifest entries, or changed custody filesystem identities. A second
 scan detects writers that appear between observations. No PID, binary
