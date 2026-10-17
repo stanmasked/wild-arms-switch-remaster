@@ -220,6 +220,11 @@ def record(witness_db, snapshot_raw):
             except ImportError:
                 from audit_record_witness_fence import require_unfenced
             require_unfenced(con)
+            try:
+                from .audit_record_witness_fence_reconciliation import _audit
+            except ImportError:
+                from audit_record_witness_fence_reconciliation import _audit
+            _audit(con)
             rows = _witness_rows(con, create=True)
             if not events and not rows:
                 raise ValueError('no recovery event available for first witness')
