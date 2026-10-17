@@ -105,18 +105,45 @@ def _history(con, *, create=False):
     return entries
 
 
-def deposit(custodian_db, checkpoint_raw):
+def deposit(custodian_db, checkpoint_raw, *, expected_sequence=None,
+            expected_receipt_sha256=None):
     """Durably store next monotonic checkpoint, no output receipt side effect.
 
     A repeat of the *latest* deposit is idempotent; an older checkpoint
     cannot be replayed after a newer one has been accepted.
+
+    With expected_sequence + expected_receipt_sha256 this becomes an
+    atomic single-winner CAS inside BEGIN IMMEDIATE. Only an *exact*
+    retry of the immediate next committed round is idempotent.
     """
     candidate = _validate_checkpoint(checkpoint_raw)
     digest = _sha(checkpoint_raw)
+    conditional = (expected_sequence is not None or
+                   expected_receipt_sha256 is not None)
+    if conditional:
+        if (type(expected_sequence) is not int or expected_sequence < 1
+                or type(expected_receipt_sha256) is not str):
+            raise ValueError('invalid expected custodian head')
+        _digest(expected_receipt_sha256)
     with closing(_connect(custodian_db, create=True)) as con:
         con.execute('BEGIN IMMEDIATE')
         try:
             prior = _history(con, create=True)
+            if conditional:
+                if not prior:
+                    raise HandoffRegression('expected custodian history absent')
+                head = prior[-1]
+                matches_expected = (head[0] == expected_sequence and
+                                    head[3] == expected_receipt_sha256)
+                retry_of_exact_next = (
+                    head[0] == expected_sequence + 1
+                    and head[2] == expected_receipt_sha256
+                    and head[1] == digest)
+                if retry_of_exact_next:
+                    con.commit()
+                    return head[0], False
+                if not matches_expected:
+                    raise HandoffRegression('stale expected custodian history')
             if prior and prior[-1][1] == digest:
                 con.commit()
                 return prior[-1][0], False
