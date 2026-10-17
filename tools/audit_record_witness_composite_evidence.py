@@ -164,7 +164,7 @@ def _hex64(value):
             and all(ch in _HEX for ch in value))
 
 
-def _decode_canonical(raw, limit, description):
+def _decode_canonical(raw, limit, description, *, allow_cli_format=False):
     if type(raw) is not bytes or not 0 < len(raw) <= limit:
         raise CompositeConflict('invalid bounded '+description)
     def no_duplicates(pairs):
@@ -178,14 +178,20 @@ def _decode_canonical(raw, limit, description):
         data = json.loads(raw.decode('utf-8'), object_pairs_hook=no_duplicates)
     except (ValueError, UnicodeError) as exc:
         raise CompositeConflict('malformed '+description) from exc
-    if type(data) is not dict or _canonical(data) != raw:
+    # Existing stage-263 CLIs emit json.dumps(..., sort_keys=True)
+    # (with spaces); preserved verbatim, without weakening field checks.
+    allowed = [_canonical(data)]
+    if allow_cli_format:
+        allowed.append((json.dumps(data, sort_keys=True) + '\n').encode('ascii'))
+    if type(data) is not dict or raw not in allowed:
         raise CompositeConflict('noncanonical '+description)
     return data
 
 
 def _report(key, raw):
     schema, positives, negatives, hashes = SPECS[key]
-    result = _decode_canonical(raw, MAX_REPORT, key+' report')
+    result = _decode_canonical(raw, MAX_REPORT, key+' report',
+                               allow_cli_format=True)
     expected = {'schema', *positives, *negatives, *hashes}
     if set(result) != expected or result['schema'] != schema:
         raise CompositeConflict('wrong or incomplete '+key+' report')
