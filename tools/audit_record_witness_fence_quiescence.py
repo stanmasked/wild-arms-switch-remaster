@@ -137,7 +137,8 @@ def preflight(witness_db, custodian_db, original_raw, signed_stop_raw,
                                 _request_digest(original_raw)) or
                             (fence[3], fence[4]) != head):
                         raise PreflightConflict('independent witness fence differs')
-                    witness.rollback()  # This command has no write capability.
+                finally:
+                    witness.rollback()  # No witness write is committed.
             custody.rollback()
         except Exception:
             custody.rollback()
