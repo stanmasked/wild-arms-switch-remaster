@@ -19,6 +19,18 @@ window, the sequence remains **unresolved**. It does not follow control
 flow, prove address uniqueness, emulate load delays, infer a field
 layout, or verify actual access on PS1 hardware.
 
+## Overlapping function windows
+
+Two investigated entry points are only 76 bytes apart while the
+conservative per-site inspection window spans 84 bytes. Accordingly,
+the second window can encounter the next function's index prefix.
+This **must not** be misreported as a clean straight-line pointer
+addition without an access. The analyzer treats those intervening
+non-NOP instructions as unresolved. A specific synthetic overlap
+regression ensures the uncertainty remains visible. This is a
+window-shape limitation, not proof that either target actually
+executes into the next function.
+
 ## Run privately on user-owned source data
 
 ```sh
