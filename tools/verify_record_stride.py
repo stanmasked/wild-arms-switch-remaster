@@ -30,6 +30,68 @@ def stride_from_index_words(words):
             raise ValueError('unsupported instruction')
     return v * 4  # trailing sll v0,v0,2
 
+def _static_index_scale(index_words, global_words):
+    """Evaluate only the known SLL/ADDU address-index prefix with a1 = 1.
+
+    This proves a coefficient for the *checked-in opcode sequence*, not
+    the final record size or execution on genuine PlayStation hardware.
+    """
+    if tuple(index_words) != INDEX_WORDS or tuple(global_words) != GLOBAL_WORDS:
+        raise ValueError('unexpected record index signature')
+    regs = [0] * 32
+    regs[5] = 1  # symbolic coefficient of incoming a1, not an address
+    for word in tuple(index_words) + (global_words[-1],):
+        opcode = word >> 26
+        rs, rt, rd = (word >> 21) & 31, (word >> 16) & 31, (word >> 11) & 31
+        shift, funct = (word >> 6) & 31, word & 63
+        if opcode != 0 or rd != 2:
+            raise ValueError('unsupported record index instruction')
+        if funct == 0 and rs == 0 and rt in (2, 5):
+            regs[2] = (regs[rt] << shift) & 0xffffffff
+        elif funct == 33 and rs == 2 and rt == 5 and shift == 0:
+            regs[2] = (regs[2] + regs[5]) & 0xffffffff
+        else:
+            raise ValueError('unsupported record index instruction')
+    return regs[2]
+
+
+def inspect_index_scale_evidence(exe_data):
+    """Return non-private static index evidence for all three target sites.
+
+    Never reports field sizes, bytes, PCs, original executable contents,
+    or a claim that 364 or the derived coefficient is a real record stride.
+    """
+    if (not isinstance(exe_data, (bytes, bytearray)) or
+            len(exe_data) < 2048 or exe_data[:8] != b'PS-X EXE'):
+        raise ValueError('invalid PS-X EXE')
+    base = int.from_bytes(exe_data[0x18:0x1c], 'little')
+    size = int.from_bytes(exe_data[0x1c:0x20], 'little')
+    if not 0 < size <= 4 * 1024 * 1024 or len(exe_data) < 2048 + size:
+        raise ValueError('invalid bounded EXE payload')
+    scales = []
+    for target in TARGETS:
+        pos = 2048 + target - base
+        if pos < 2048 or pos + 44 > 2048 + size:
+            raise ValueError('record index signature outside EXE')
+        words = [int.from_bytes(exe_data[pos+i:pos+i+4], 'little')
+                 for i in range(0, 44, 4)]
+        scales.append(_static_index_scale(words[:8], words[8:11]))
+    if len(set(scales)) != 1:
+        raise ValueError('record index coefficients disagree')
+    scale = scales[0]
+    # This is deliberately an index-multiplication coefficient, NOT
+    # an attested structure size. The old 364 claim stays unverified.
+    return {
+        'schema': 'wild-arms-ps1-static-index-scale-evidence-v1',
+        'matched_index_sites': len(scales),
+        'opcode_derived_index_scale_bytes': scale,
+        'legacy_364_byte_stride_consistent': scale == 364,
+        'record_layout_verified': False,
+        'original_hardware_execution_verified': False,
+        'private_game_bytes_emitted': False,
+    }
+
+
 def inspect_exe(exe_data):
     if exe_data[:8] != b'PS-X EXE' or len(exe_data) < 2048:
         raise ValueError('invalid PS-X EXE')
@@ -81,12 +143,17 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('image')
     p.add_argument('inventory', help='inspect_disc.py --json')
+    p.add_argument('--index-evidence-only', action='store_true',
+                   help='report only static index coefficient, not record layout')
     args = p.parse_args()
     entries = json.loads(Path(args.inventory).read_text(encoding='utf-8'))['entries']
     matches = [x for x in entries if x['path'] == '/EXE/WILDARMS.EXE;1']
     if len(matches) != 1:
         p.error('WILDARMS.EXE not found')
-    print(json.dumps(inspect_exe(read_raw_iso_entry(args.image, matches[0])), indent=2))
+    exe_data = read_raw_iso_entry(args.image, matches[0])
+    report = (inspect_index_scale_evidence(exe_data) if args.index_evidence_only
+              else inspect_exe(exe_data))
+    print(json.dumps(report, indent=2))
 
 if __name__ == '__main__':
     main()
