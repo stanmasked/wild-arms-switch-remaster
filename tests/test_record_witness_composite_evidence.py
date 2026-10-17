@@ -1,5 +1,7 @@
 """Stage 263J: synthetic cross-report, signed session and composite pin tests."""
+import contextlib
 import copy
+import io
 import hashlib
 import json
 import unittest
@@ -248,6 +250,63 @@ class CompositeEvidenceTests(unittest.TestCase):
             reports['activation'], reports['binary'])
         with self.assertRaises(composite.CompositeConflict):
             self.build(reports)
+
+
+    def _cli_args(self):
+        self.init_capture()
+        targets = {}
+        private = {
+            'original': self.original,
+            'stop': self.stop_raw,
+            'cgroup': self.cgroup,
+            **{name: raw for name, raw in self.reports.items()},
+        }
+        for name, raw in private.items():
+            target = self.path('composite-'+name+'-')
+            target.write_bytes(raw)
+            target.chmod(0o600)
+            targets[name] = target
+        output = self.path('composite-output-')
+        argv = [
+            'publish', str(targets['original']), str(targets['stop']),
+            str(targets['cgroup']), str(self.public), self.pin,
+            str(output), '--supervisor-tag', 'independent-supervisor',
+        ]
+        for name in composite.SPECS:
+            argv.extend(('--'+name+'-report', str(targets[name])))
+        return argv, output
+
+    def test_cli_private_publish_then_pinned_verify(self):
+        argv, target = self._cli_args()
+        with contextlib.redirect_stdout(output := io.StringIO()):
+            rc = composite.main(argv)
+        self.assertEqual(rc, 0)
+        report = json.loads(output.getvalue())
+        self.assertTrue(report['private_manifest_created'])
+        self.assertEqual(target.stat().st_mode & 0o077, 0)
+        pin = report['whole_file_sha256_for_external_enrollment']
+        self.assertEqual(pin, hashlib.sha256(target.read_bytes()).hexdigest())
+        self.assertNotIn('stop_session_nonce', output.getvalue())
+        argv[0] = 'verify'
+        argv.extend(('--expected-composite-sha256', pin))
+        with contextlib.redirect_stdout(output := io.StringIO()):
+            rc = composite.main(argv)
+        self.assertEqual(rc, 0)
+        result = json.loads(output.getvalue())
+        self.assertTrue(result['all_eight_report_bytes_bound'])
+        self.assertFalse(result['witness_fence_retirement_authorized'])
+
+    def test_cli_refuses_overwrite_and_verify_without_external_pin(self):
+        argv, target = self._cli_args()
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(composite.main(argv), 0)
+        with contextlib.redirect_stdout(out := io.StringIO()):
+            self.assertEqual(composite.main(argv), 2)
+        self.assertTrue(json.loads(out.getvalue())['valid_input'] is False)
+        argv[0] = 'verify'
+        with contextlib.redirect_stdout(out := io.StringIO()):
+            self.assertEqual(composite.main(argv), 2)
+        self.assertFalse(json.loads(out.getvalue())['witness_fence_retired'])
 
 
 if __name__ == '__main__':
