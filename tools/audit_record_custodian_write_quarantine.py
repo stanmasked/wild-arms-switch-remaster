@@ -46,6 +46,10 @@ except ImportError:
 SCHEMA = 'wild-arms-ps1-custodian-write-quarantine-v1'
 EVENT_DOMAIN = b'wild-arms-ps1-custodian-write-quarantine-v1\x00'
 REPORT_SCHEMA = 'wild-arms-ps1-custodian-write-quarantine-report-v1'
+# A second, transactionally committed SQLite header marker. This detects an
+# accidentally dropped quarantine table or erased header marker, NOT a
+# privileged rewrite of both artifacts or a restored older database.
+QUARANTINE_USER_VERSION = 0x5741524D  # "WARM", within signed int32.
 COLUMNS = {
     'slot', 'schema', 'custody_request_sha256', 'fence_owner_sha256',
     'signed_stop_sha256', 'negative_classification',
@@ -58,11 +62,18 @@ class QuarantineConflict(ValueError):
 
 
 def _quarantine_row(con):
+    version = con.execute('PRAGMA user_version').fetchone()[0]
+    if type(version) is not int or version not in (0, QUARANTINE_USER_VERSION):
+        raise QuarantineConflict('unexpected custody database version marker')
     table = con.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' "
         "AND name='custodian_writer_quarantine'").fetchone()
     if table is None:
+        if version == QUARANTINE_USER_VERSION:
+            raise QuarantineConflict('quarantine table missing but header remains sealed')
         return None
+    if version != QUARANTINE_USER_VERSION:
+        raise QuarantineConflict('quarantine table present without sealed header')
     cols = {r[1] for r in con.execute(
         'PRAGMA table_info("custodian_writer_quarantine")')}
     if cols != COLUMNS:
@@ -149,6 +160,9 @@ def install(custodian_db, witness_db, original_raw, signed_stop_raw,
             custody.execute(
                 'INSERT INTO custodian_writer_quarantine VALUES (?,?,?,?,?,?,?,?,?)',
                 (*event.values(), event_sha))
+            # SQLite header metadata is transactional: rollback restores both
+            # header and table if installation fails before commit.
+            custody.execute(f'PRAGMA user_version={QUARANTINE_USER_VERSION}')
             if _quarantine_row(custody) is None:
                 raise QuarantineConflict('write gate install not persisted')
             custody.commit()
