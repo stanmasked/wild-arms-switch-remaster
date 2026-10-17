@@ -153,7 +153,7 @@ class ReservedIssueTests(unittest.TestCase):
                         'pending_checkpoint_sha256=NULL')
             con.execute('DELETE FROM remote_issue_reservation')
         # This simulates an independent fork; the custodian is unchanged.
-        with self.assertRaises(ReservationConflict):
+        with self.assertRaisesRegex(ValueError, 'refused'):
             self.new_issue(NONCE_C)
         self.assertEqual(self.state(), (1, (1, None)))
 
