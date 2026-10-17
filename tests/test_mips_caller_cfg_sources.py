@@ -77,6 +77,28 @@ class CFGCallerSourcesTests(unittest.TestCase):
         self.assertTrue(result['window_usable'])
         self.assertTrue(result['arguments'][0]['load_pending_on_any_path'])
 
+    def test_pending_load_bookkeeping_has_three_fields_on_both_paths(self):
+        # An unknown BEQ explores two paths. The JAL delay-slot load is
+        # pending at the boundary on each one; the extra recorded PC path
+        # must not be misinterpreted as part of (registers, pending).
+        words=[i(4,4,6,2),0,i(9,29,5,16),0,
+               i(3),i(35,6,4,0)]
+        result=run(words)
+        self.assertTrue(result['window_usable'])
+        self.assertEqual(result['paths_to_call'],2)
+        reg4=next(item for item in result['arguments'] if item['gpr']==4)
+        self.assertTrue(reg4['load_pending_on_any_path'])
+        reg5=next(item for item in result['arguments'] if item['gpr']==5)
+        self.assertFalse(reg5['load_pending_on_any_path'])
+        self.assertFalse(result['runtime_path_confirmed'])
+
+    def test_straight_line_without_pending_load_reports_false(self):
+        result=run([i(9,29,5,16),0,i(3),0])
+        self.assertTrue(result['window_usable'])
+        self.assertEqual(result['paths_to_call'],1)
+        self.assertTrue(all(not item['load_pending_on_any_path']
+                            for item in result['arguments']))
+
     def test_branch_exits_window_refused(self):
         result=run([i(4,4,6,5),0,i(9,29,5,16),i(3),0])
         self.assertFalse(result['window_usable'])
