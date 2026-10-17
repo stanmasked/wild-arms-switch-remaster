@@ -234,7 +234,10 @@ def recover(custodian_db, request_raw, approval_a, approval_b,
                     from .audit_record_recovery_witness import check_locked
                 except ImportError:
                     from audit_record_recovery_witness import check_locked
-                check_locked(con, witness_head, require_exact=True)
+                try:
+                    check_locked(con, witness_head, require_exact=True)
+                except ValueError as exc:
+                    raise RecoveryConflict('witness continuity check refused recovery') from exc
             rows = _history(con)
             events = audit_history(con, create=True)
             reserved = reservation_row(con)
@@ -284,9 +287,12 @@ def recover_with_witness(custodian_db, request_raw, approval_a, approval_b,
         from .audit_record_recovery_witness import authenticated_head
     except ImportError:
         from audit_record_recovery_witness import authenticated_head
-    head = authenticated_head(
-        witness_db, signed_witness_raw,
-        witness_public_key, witness_public_pem_pin, tag=witness_tag)
+    try:
+        head = authenticated_head(
+            witness_db, signed_witness_raw,
+            witness_public_key, witness_public_pem_pin, tag=witness_tag)
+    except ValueError as exc:
+        raise RecoveryConflict('witness signature or freshness check refused recovery') from exc
     return recover(
         custodian_db, request_raw, approval_a, approval_b,
         admin_a_id, admin_a_public, admin_a_pin,
