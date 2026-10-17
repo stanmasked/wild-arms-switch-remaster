@@ -189,7 +189,8 @@ class CaptureProvenanceTests(unittest.TestCase):
         for idx in (5, 6):
             with self.subTest(file_index=idx):
                 values = list(p)
-                values[idx] = values[idx][:-1] + b',"role":"before"}'
+                extra = b',"schema":"duplicate"}' if idx == 5 else b',"role":"before"}'
+                values[idx] = values[idx][:-1] + extra
                 with self.assertRaisesRegex(ValueError, 'duplicate private JSON field'):
                     run(tuple(values))
 
