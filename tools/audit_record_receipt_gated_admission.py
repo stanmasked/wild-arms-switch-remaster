@@ -131,9 +131,8 @@ def _ready(con, latest):
     return ack_seq
 
 
-def bootstrap(verifier_db, custodian_db, receipt_raw):
+def bootstrap_with_latest(verifier_db, latest):
     """Explicit one-time bootstrap only when verifier state equals custody."""
-    latest = _latest_with_receipt(custodian_db, receipt_raw)
     with closing(_connect(verifier_db)) as con:
         con.execute('BEGIN IMMEDIATE')
         try:
@@ -162,11 +161,10 @@ def bootstrap(verifier_db, custodian_db, receipt_raw):
             raise
 
 
-def issue(verifier_db, custodian_db, receipt_raw, *, ttl_seconds=300, now=None):
+def issue_with_latest(verifier_db, latest, *, ttl_seconds=300, now=None):
     if (type(ttl_seconds) is not int
             or not MIN_TTL_SECONDS <= ttl_seconds <= MAX_TTL_SECONDS):
         raise ValueError('invalid challenge lifetime')
-    latest = _latest_with_receipt(custodian_db, receipt_raw)
     timestamp = _now(now)
     with closing(_connect(verifier_db)) as con:
         con.execute('BEGIN IMMEDIATE')
@@ -188,9 +186,9 @@ def issue(verifier_db, custodian_db, receipt_raw, *, ttl_seconds=300, now=None):
             raise
 
 
-def accept(verifier_db, custodian_db, receipt_raw, exe, temporal_raw,
-           binding_raw, before_raw, after_raw, provenance_raw,
-           before_receipt_raw, after_receipt_raw, *, now=None):
+def accept_with_latest(verifier_db, latest, exe, temporal_raw,
+                       binding_raw, before_raw, after_raw, provenance_raw,
+                       before_receipt_raw, after_receipt_raw, *, now=None):
     # The complete stage-243 provenance/temporal/stream gate always runs.
     prior = audit_provenance(
         exe, temporal_raw, binding_raw, before_raw, after_raw,
@@ -202,7 +200,6 @@ def accept(verifier_db, custodian_db, receipt_raw, exe, temporal_raw,
     before_hash, after_hash = _sha(before_raw), _sha(after_raw)
     if before_hash == after_hash:
         raise ValueError('identical capture stream digests')
-    latest = _latest_with_receipt(custodian_db, receipt_raw)
     with closing(_connect(verifier_db)) as con:
         con.execute('BEGIN IMMEDIATE')
         try:
@@ -238,9 +235,8 @@ def accept(verifier_db, custodian_db, receipt_raw, exe, temporal_raw,
             raise
 
 
-def acknowledge(verifier_db, custodian_db, receipt_raw):
+def acknowledge_with_latest(verifier_db, latest):
     """Consume pending marker only after matching committed custodian receipt."""
-    latest = _latest_with_receipt(custodian_db, receipt_raw)
     with closing(_connect(verifier_db)) as con:
         con.execute('BEGIN IMMEDIATE')
         try:
@@ -265,6 +261,31 @@ def acknowledge(verifier_db, custodian_db, receipt_raw):
         except Exception:
             con.rollback()
             raise
+
+
+def bootstrap(verifier_db, custodian_db, receipt_raw):
+    return bootstrap_with_latest(
+        verifier_db, _latest_with_receipt(custodian_db, receipt_raw))
+
+
+def issue(verifier_db, custodian_db, receipt_raw, *, ttl_seconds=300, now=None):
+    return issue_with_latest(
+        verifier_db, _latest_with_receipt(custodian_db, receipt_raw),
+        ttl_seconds=ttl_seconds, now=now)
+
+
+def accept(verifier_db, custodian_db, receipt_raw, exe, temporal_raw,
+           binding_raw, before_raw, after_raw, provenance_raw,
+           before_receipt_raw, after_receipt_raw, *, now=None):
+    return accept_with_latest(
+        verifier_db, _latest_with_receipt(custodian_db, receipt_raw),
+        exe, temporal_raw, binding_raw, before_raw, after_raw,
+        provenance_raw, before_receipt_raw, after_receipt_raw, now=now)
+
+
+def acknowledge(verifier_db, custodian_db, receipt_raw):
+    return acknowledge_with_latest(
+        verifier_db, _latest_with_receipt(custodian_db, receipt_raw))
 
 
 def _report(*, bootstrapped=False, issued=False, accepted=False,
