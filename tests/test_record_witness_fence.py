@@ -33,6 +33,7 @@ D2 = '2'*64
 
 
 class WitnessFenceTests(unittest.TestCase):
+    make_offer_and_deposit = TLSFixture.make_offer_and_deposit
     setUp = PriorTLS.setUp
     add_unwitnessed_recovery = PriorTLS.add_unwitnessed_recovery
     new_offer = TLSFixture.new_offer
