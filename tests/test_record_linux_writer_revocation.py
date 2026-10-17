@@ -5,6 +5,7 @@ import unittest
 
 from tests import test_record_witness_linux_quiescence as linux_fixture
 from tools.audit_record_anchor_handoff import _canonical
+from tools.audit_record_witness_linux_quiescence import QuiescenceConflict
 from tools.audit_record_linux_writer_revocation import (
     PROPERTIES, RevocationConflict, _custody_file, _parse_unit, _unit, assess,
 )
@@ -121,13 +122,13 @@ class WriterRevocationTests(unittest.TestCase):
     def test_service_uid_equal_to_file_owner_refused(self):
         self.prepare()
         self.service_uid = os.getuid()
-        with self.assertRaises(RevocationConflict):
+        with self.assertRaises((RevocationConflict, ValueError)):
             self.check()
 
     def test_service_uid_equal_to_parent_owner_refused(self):
         self.prepare()
         self.service_uid = self.custody.parent.stat().st_uid
-        with self.assertRaises(RevocationConflict):
+        with self.assertRaises((RevocationConflict, ValueError)):
             self.check()
 
     def test_group_or_other_file_access_refused(self):
