@@ -21,7 +21,7 @@ import sys
 
 try:
     from .audit_record_anchor_handoff import (
-        deposit, _read_latest, _receipt, _canonical, HandoffRegression,
+        deposit, _read_latest, _receipt, _receipt_hash, _canonical, HandoffRegression,
     )
     from .audit_record_signed_custodian import (
         ENVELOPE_SCHEMA, _signed_bytes, _openssl, _tag, MAX_PEM_BYTES,
@@ -34,9 +34,10 @@ try:
     from .audit_record_capture_stream_binding import (
         _read_limited, _parse, _digest, _sha,
     )
+    from .audit_record_custodian_reservation import reserve, token_hash
 except ImportError:
     from audit_record_anchor_handoff import (
-        deposit, _read_latest, _receipt, _canonical, HandoffRegression,
+        deposit, _read_latest, _receipt, _receipt_hash, _canonical, HandoffRegression,
     )
     from audit_record_signed_custodian import (
         ENVELOPE_SCHEMA, _signed_bytes, _openssl, _tag, MAX_PEM_BYTES,
@@ -49,6 +50,7 @@ except ImportError:
     from audit_record_capture_stream_binding import (
         _read_limited, _parse, _digest, _sha,
     )
+    from audit_record_custodian_reservation import reserve, token_hash
 
 REQUEST_SCHEMA = 'wild-arms-ps1-mutual-tls-custodian-request-v1'
 RESPONSE_SCHEMA = 'wild-arms-ps1-mutual-tls-custodian-response-v1'
@@ -143,24 +145,35 @@ def _signed_latest(custodian_db, signing_key, tag):
 def _process(request, custodian_db, signing_key, tag):
     if (type(request) is not dict
             or request.get('schema') != REQUEST_SCHEMA
-            or request.get('action') not in ('latest', 'deposit')
+            or request.get('action') not in (
+                'latest', 'deposit', 'reserve', 'deposit-reserved')
             or type(request.get('request_id')) is not str
             or len(request['request_id']) != 32
             or any(x not in '0123456789abcdef' for x in request['request_id'])):
         raise ValueError('invalid authenticated custody request')
     action = request['action']
-    if set(request) != ({
-        'schema', 'action', 'request_id', 'checkpoint_b64',
-        'expected_sequence', 'expected_receipt_sha256'}
-        if action == 'deposit' else {'schema', 'action', 'request_id'}):
+    expected_keys = {'schema', 'action', 'request_id'}
+    if action in ('reserve', 'deposit', 'deposit-reserved'):
+        expected_keys.update({'expected_sequence', 'expected_receipt_sha256'})
+    if action in ('deposit', 'deposit-reserved'):
+        expected_keys.add('checkpoint_b64')
+    if action in ('reserve', 'deposit-reserved'):
+        expected_keys.add('reservation_token')
+    if set(request) != expected_keys:
         raise ValueError('unexpected authenticated request fields')
-    if action == 'deposit':
+    if action == 'reserve':
+        reserve(
+            custodian_db, request['expected_sequence'],
+            request['expected_receipt_sha256'], request['reservation_token'])
+    elif action in ('deposit', 'deposit-reserved'):
         offered = _b64_decode(request['checkpoint_b64'], MAX_CHECKPOINT_BYTES)
         _validate_checkpoint(offered)
         deposit(
             custodian_db, offered,
             expected_sequence=request['expected_sequence'],
-            expected_receipt_sha256=request['expected_receipt_sha256'])
+            expected_receipt_sha256=request['expected_receipt_sha256'],
+            reservation_token=(request['reservation_token']
+                               if action == 'deposit-reserved' else None))
     row, signed = _signed_latest(custodian_db, signing_key, tag)
     return {
         'schema': RESPONSE_SCHEMA,
@@ -206,7 +219,8 @@ def serve_one(listener, custodian_db, signing_key, cert, key, ca,
 def exchange(host, port, *, hostname, cert, key, ca, server_cert_sha256,
              pinned_signing_public_key, signing_public_key_sha256,
              tag, action='latest', checkpoint_raw=None,
-             expected_sequence=None, expected_receipt_sha256=None):
+             expected_sequence=None, expected_receipt_sha256=None,
+             reservation_token=None):
     """Mutually authenticated exchange; verify signed response before return."""
     if type(port) is not int or not 1 <= port <= 65535:
         raise ValueError('invalid custodian TLS port')
@@ -219,18 +233,27 @@ def exchange(host, port, *, hostname, cert, key, ca, server_cert_sha256,
     request = {
         'schema': REQUEST_SCHEMA, 'action': action, 'request_id': request_id,
     }
-    if action == 'deposit':
-        _validate_checkpoint(checkpoint_raw)
+    if action in ('reserve', 'deposit', 'deposit-reserved'):
         if (type(expected_sequence) is not int or expected_sequence < 1
                 or type(expected_receipt_sha256) is not str):
             raise ValueError('expected authenticated previous custody head is required')
         _digest(expected_receipt_sha256)
-        request['checkpoint_b64'] = base64.b64encode(checkpoint_raw).decode('ascii')
         request['expected_sequence'] = expected_sequence
         request['expected_receipt_sha256'] = expected_receipt_sha256
+        if action in ('deposit', 'deposit-reserved'):
+            _validate_checkpoint(checkpoint_raw)
+            request['checkpoint_b64'] = base64.b64encode(checkpoint_raw).decode('ascii')
+        elif checkpoint_raw is not None:
+            raise ValueError('unexpected checkpoint on reserve')
+        if action in ('reserve', 'deposit-reserved'):
+            token_hash(reservation_token)
+            request['reservation_token'] = reservation_token
+        elif reservation_token is not None:
+            raise ValueError('unexpected reservation token')
     elif (action != 'latest' or checkpoint_raw is not None
           or expected_sequence is not None
-          or expected_receipt_sha256 is not None):
+          or expected_receipt_sha256 is not None
+          or reservation_token is not None):
         raise ValueError('invalid custodian operation')
     with socket.create_connection((host, port), timeout=SOCKET_TIMEOUT) as plain:
         plain.settimeout(SOCKET_TIMEOUT)
@@ -254,7 +277,7 @@ def exchange(host, port, *, hostname, cert, key, ca, server_cert_sha256,
         custodian_tag=tag))
     if _sha(latest_checkpoint) != receipt['checkpoint_sha256']:
         raise ValueError('signed custody reply not bound to returned checkpoint')
-    if action == 'deposit':
+    if action in ('deposit', 'deposit-reserved'):
         # A distinct future round, even one containing the offered state,
         # is NOT an acknowledgment of this CAS request. Permit only the
         # single expected next sequence for both fresh commits and retries.
@@ -264,6 +287,10 @@ def exchange(host, port, *, hostname, cert, key, ca, server_cert_sha256,
             raise ValueError('custodian reply does not chain to expected head')
         if latest_checkpoint != checkpoint_raw:
             raise ValueError('custodian reply not for exact offered checkpoint')
+    if action == 'reserve' and (
+            receipt['sequence'] != expected_sequence
+            or _receipt_hash(receipt) != expected_receipt_sha256):
+        raise ValueError('custodian reserve returned an unexpected previous head')
     return latest_checkpoint, signed, receipt['sequence']
 
 

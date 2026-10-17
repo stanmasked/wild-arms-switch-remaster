@@ -58,6 +58,8 @@ on:
       - 'tools/audit_record_signed_custodian.py'
       - 'tools/audit_record_custodian_tls.py'
       - 'tools/audit_record_remote_admission.py'
+      - 'tools/audit_record_custodian_reservation.py'
+      - 'tools/audit_record_remote_reserved_issue.py'
       - 'tests/test_record_capture_stream_binding.py'
       - 'tests/test_record_capture_provenance.py'
       - 'tests/test_record_capture_replay.py'
@@ -70,6 +72,8 @@ on:
       - 'tests/test_record_custodian_tls.py'
       - 'tests/test_record_remote_admission.py'
       - 'tests/test_record_custodian_cas.py'
+      - 'tests/test_record_custodian_reservation.py'
+      - 'docs/ps1-preissue-custodian-reservation.md'
       - 'docs/ps1-custodian-compare-and-swap.md'
       - 'docs/ps1-remote-receipt-gated-admission.md'
       - 'docs/ps1-mutual-tls-custodian-channel.md'
@@ -205,6 +209,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_record_custodian_tls.py' -v
           python -m unittest discover -s tests -p 'test_record_remote_admission.py' -v
           python -m unittest discover -s tests -p 'test_record_custodian_cas.py' -v
+          python -m unittest discover -s tests -p 'test_record_custodian_reservation.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
           python -m unittest discover -s tests -p 'test_gp0_matrix_*.py' -v
           python -m unittest discover -s tests -p 'test_mips_fixed32.py' -v
