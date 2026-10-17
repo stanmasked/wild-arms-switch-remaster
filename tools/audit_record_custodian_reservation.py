@@ -90,6 +90,11 @@ def reserve(db, expected_sequence, expected_receipt_sha256, token, *,
     with closing(_connect(db, create=True)) as con:
         con.execute('BEGIN IMMEDIATE')
         try:
+            try:
+                from .audit_record_custodian_write_quarantine import require_unquarantined
+            except ImportError:
+                from audit_record_custodian_write_quarantine import require_unquarantined
+            require_unquarantined(con)
             if witness_head is not None:
                 try:
                     from .audit_record_recovery_witness import check_locked
