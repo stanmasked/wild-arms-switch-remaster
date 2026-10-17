@@ -43,6 +43,12 @@ inventory format used in prior stages apply. Never publish game images,
 executable sections, proprietary assets, traces, private debugger
 registers or RAM dumps.
 
+If a private input path does not exist, the inventory is malformed,
+or a signature or window check fails, the CLI emits only a generic
+`invalid_private_input` JSON status and returns exit code 2. It does
+not display a file path, Python traceback or private exception text.
+The successful exit code is 0.
+
 The output includes only the three-site count, committed opcode-derived
 coefficient, numbers of **syntactic** patterns with direct v1-based
 memory use, syntactic additions without such use, and unresolved
