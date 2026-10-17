@@ -55,6 +55,7 @@ on:
       - 'tools/audit_record_guarded_admission.py'
       - 'tools/audit_record_anchor_handoff.py'
       - 'tools/audit_record_receipt_gated_admission.py'
+      - 'tools/audit_record_signed_custodian.py'
       - 'tests/test_record_capture_stream_binding.py'
       - 'tests/test_record_capture_provenance.py'
       - 'tests/test_record_capture_replay.py'
@@ -63,6 +64,8 @@ on:
       - 'tests/test_record_guarded_admission.py'
       - 'tests/test_record_anchor_handoff.py'
       - 'tests/test_record_receipt_gated_admission.py'
+      - 'tests/test_record_signed_custodian.py'
+      - 'docs/ps1-signed-custodian-receipts.md'
       - 'docs/ps1-receipt-gated-admission.md'
       - 'docs/ps1-continuity-guarded-admission.md'
       - 'docs/ps1-custodian-anchor-handoff.md'
@@ -190,6 +193,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_record_guarded_admission.py' -v
           python -m unittest discover -s tests -p 'test_record_anchor_handoff.py' -v
           python -m unittest discover -s tests -p 'test_record_receipt_gated_admission.py' -v
+          python -m unittest discover -s tests -p 'test_record_signed_custodian.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
           python -m unittest discover -s tests -p 'test_gp0_matrix_*.py' -v
           python -m unittest discover -s tests -p 'test_mips_fixed32.py' -v
