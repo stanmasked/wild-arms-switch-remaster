@@ -178,7 +178,15 @@ def _witness_rows(con, *, create=False):
                 or event['previous_event_sha256'] != prev_event
                 or event['event_sha256'] != event_digest):
             raise ValueError('corrupt independent recovery witness')
-        _validate_events([event] if seq == 1 else [], require_nonempty=False) if seq == 1 else None
+        if (type(event) is not dict or set(event) != _EVENT_COLS
+                or type(event['sequence']) is not int
+                or event['sequence'] != seq
+                or type(event['base_sequence']) is not int
+                or event['base_sequence'] < 1):
+            raise ValueError('invalid witnessed recovery event shape')
+        for name in ('request_sha256', 'base_receipt_sha256',
+                     'retired_token_sha256'):
+            _digest(event[name])
         check = {**{k:v for k,v in event.items() if k != 'event_sha256'},
                  'schema': EVENT_SCHEMA}
         if _event_hash(check) != event_digest:
