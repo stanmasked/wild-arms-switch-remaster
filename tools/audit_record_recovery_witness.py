@@ -131,8 +131,10 @@ def _snapshot_input(raw):
             or record['custodian_sequence'] < 1):
         raise ValueError('invalid witness snapshot schema')
     _digest(record['custodian_receipt_sha256'])
-    _validate_events(record['recovery_events'])
-    if record['recovery_events'][-1]['base_sequence'] > record['custodian_sequence']:
+    _validate_events(record['recovery_events'], require_nonempty=False)
+    if (record['recovery_events']
+            and record['recovery_events'][-1]['base_sequence'] >
+                record['custodian_sequence']):
         raise ValueError('witness event after supplied custody sequence')
     return record
 
@@ -207,6 +209,8 @@ def record(witness_db, snapshot_raw):
         con.execute('BEGIN IMMEDIATE')
         try:
             rows = _witness_rows(con, create=True)
+            if not events and not rows:
+                raise ValueError('no recovery event available for first witness')
             if len(events) < len(rows):
                 raise WitnessRegression('custodian rolled back before witnessed recovery')
             for index, row in enumerate(rows):
