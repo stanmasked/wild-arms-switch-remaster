@@ -18,6 +18,20 @@ class ContextTests(unittest.TestCase):
         edges={(e['from'],e['to']) for e in r['edges']}
         self.assertIn((f'0x{START:08X}',f'0x{START+4:08X}@delay_of_0x{START:08X}'),edges)
         self.assertIn((f'0x{START+4:08X}@delay_of_0x{START:08X}',f'0x{START+4:08X}'),edges)
+    def test_mixed_context_edges_are_stable_and_keep_both_entries(self):
+        # A branch to its own delay slot creates two *distinct* nodes at
+        # the same PC. Sorting must never compare None and an integer.
+        first=run([beq(0),0,0])
+        second=run([beq(0),0,0])
+        self.assertEqual(first['edges'],second['edges'])
+        self.assertEqual([edge['from'] for edge in first['edges']],[
+            f'0x{START:08X}',
+            f'0x{START+4:08X}',
+            f'0x{START+4:08X}@delay_of_0x{START:08X}',
+        ])
+        self.assertEqual(len(first['edges']),3)
+        self.assertTrue(first['valid_range'])
+
     def test_unconditional_jump_not_fallthrough(self):
         r=run([j(START+16),0,0,0,0])
         self.assertFalse(any(e['to']==f'0x{START+8:08X}' for e in r['edges']))
