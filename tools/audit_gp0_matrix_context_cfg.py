@@ -97,8 +97,17 @@ def trace(image, base, start=BUILDER, end=RETURN):
     def label(node):
         pc,parent=node
         return f'0x{pc:08X}' if parent is None else f'0x{pc:08X}@delay_of_0x{parent:08X}'
+    # A single instruction can be reached normally and as a branch delay
+    # slot. Raw tuple sorting compares (pc, None) with (pc, controller_pc),
+    # which raises TypeError on Python 3. Preserve distinct contexts and
+    # give ordinary entry a stable ordering before delay-slot entry.
+    def node_sort_key(node):
+        pc, controller = node
+        return (pc, -1 if controller is None else controller)
+    ordered_edges = sorted(edges, key=lambda edge:
+                           (node_sort_key(edge[0]), node_sort_key(edge[1])))
     return {'valid_range':True,
-            'edges':[{'from':label(a),'to':label(b)} for a,b in sorted(edges)],
+            'edges':[{'from':label(a),'to':label(b)} for a,b in ordered_edges],
             'unresolved':[{'pc':f'0x{pc:08X}','reason':reason} for pc,reason in sorted(unresolved)],
             'reachable_contexts':len(visited), 'complete_mips_semantics':False,
             'assets_emitted':False}

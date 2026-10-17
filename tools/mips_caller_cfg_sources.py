@@ -155,7 +155,7 @@ def inspect(image, base, call, lookback_words=8, arguments=(4, 5, 6, 7),
             'memory_kinds': sorted(set().union(*(set(v['memory_kinds']) for v in variations))),
             'same_origin_across_paths': len(set(versions)) == 1,
             'load_pending_on_any_path': any(pending is not None and pending[0] == reg
-                                            for regs, pending in outputs),
+                                            for regs, pending, path in outputs),
         })
     # Never claim observation if the interpreter was started partway through
     # a longer static window, or if the actual path exited/failed before JAL.

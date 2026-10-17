@@ -162,6 +162,48 @@ class AttributionIntegrationTests(unittest.TestCase):
         self.assertTrue(strict['matches_supplied_nine_coefficients'])
         self.assertFalse(strict['arithmetic_matrix_attribution']['attribution_performed'])
 
+    def test_ram_alias_guard_does_not_change_optional_numerical_verdict(self):
+        alias=0xa0110028
+        scratch=MATRIX+40
+        words=[reg(33,rs=8,rt=9,rd=10),
+               op(43,6,10,0),op(35,7,11,0),0]
+        words += [op(41,5,10,2*i) for i in range(9)]
+        payload=struct.pack('<%dI'%len(words),*words)
+        header=bytearray(2048)
+        header[:8]=b'PS-X EXE'
+        struct.pack_into('<II',header,0x18,BASE,len(payload))
+        blob=bytes(header)+payload
+        reference=fixture(blob,values=[11]*9)
+        reference['gpr'][8]=4
+        reference['gpr'][9]=7
+        reference['gpr'][6]=scratch
+        reference['gpr'][7]=alias
+        reference['memory_segments'] += [
+            {'address':scratch,'data_hex':'00'*4},
+            {'address':alias,'data_hex':'00'*4}]
+        reference['expected_arithmetic_events']={
+            'schema':'wild-arms-ps1-arithmetic-events-v1',
+            'events':[{'pc':BASE,'kind':'addu','result_u32':12,
+                       'secondary_u32':None}]}
+        optional=compare(blob,reference)
+        self.assertTrue(optional['matches_supplied_nine_coefficients'])
+        self.assertTrue(optional['matches_complete_reference'])
+        self.assertFalse(optional['arithmetic_events']['matches_reference'])
+        result=optional['arithmetic_matrix_attribution']
+        self.assertTrue(result['reference_event_alignment_confirmed'])
+        self.assertFalse(result['attribution_performed'])
+        self.assertEqual(result['reason_code'],'ram_alias_access_unmodeled')
+        self.assertTrue(result['ram_alias_access_observed'])
+        self.assertEqual(result['candidate_affected_slot_indices'],[])
+        self.assertFalse(result['private_values_emitted'])
+        self.assertNotIn(hex(alias),str(optional))
+        reference['require_arithmetic_events']=True
+        strict=compare(blob,reference)
+        self.assertFalse(strict['matches_complete_reference'])
+        self.assertTrue(strict['matches_supplied_nine_coefficients'])
+        self.assertEqual(strict['arithmetic_matrix_attribution']['reason_code'],
+                         'ram_alias_access_unmodeled')
+
     def test_conservative_labels_not_hardware_proof(self):
         blob,fixture,events=synthetic_builder()
         fixture['expected_arithmetic_events']=events

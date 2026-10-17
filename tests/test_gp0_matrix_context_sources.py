@@ -55,7 +55,9 @@ class ContextSourcesTests(unittest.TestCase):
         self.assertTrue(r['candidate_stores'][0]['merged_predecessors'])
 
     def test_regimm_likely_annuls_lookup_in_slot(self):
-        likely=(1<<26)|(2<<16)|2
+        # BLTZL $zero is provably never taken and must annul its slot.
+        # Use unknown $t0 instead to exercise both possible paths.
+        likely=(1<<26)|(8<<21)|(2<<16)|2
         r=fixture([likely,lw(8),0,sh(8,0)],(1,))
         self.assertEqual(r['candidate_stores'][0]['candidate_lookup_sources'],
                          [f'0x{START+4:08X}'])
