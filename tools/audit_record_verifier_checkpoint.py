@@ -143,7 +143,10 @@ def _read_database(path):
 
 def _continuity_flags(current, historical):
     """The historical commitment set must survive in current state."""
-    issued_kept, accepted_kept = _continuity_flags(current, historical)
+    issued_kept = set(historical['issued_commitments']).issubset(
+        current['issued_commitments'])
+    accepted_kept = set(historical['accepted_commitments']).issubset(
+        current['accepted_commitments'])
     return issued_kept, accepted_kept
 
 
