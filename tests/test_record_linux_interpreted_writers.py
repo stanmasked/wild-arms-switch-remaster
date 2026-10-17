@@ -26,8 +26,8 @@ class InterpretedWriterTests(unittest.TestCase):
                 'path': str(self.python),
                 'sha256': hashlib.sha256(self.python.read_bytes()).hexdigest(),
             }],
-            'modules': ['tools.audit_record_custodian_tls',
-                        'tools.audit_record_custodian_recovery'],
+            'modules': ['tools.audit_record_custodian_recovery',
+                        'tools.audit_record_custodian_tls'],
             'scripts': [str(self.script)],
         })
 
