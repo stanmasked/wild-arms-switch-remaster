@@ -87,7 +87,9 @@ class GlobalSlotWitnessTests(unittest.TestCase):
         sample['initial_gprs_u32']['3'] = '0x80130000'
         result = analyze(exe, reference)
         self.assertFalse(result['all_private_global_slot_claims_consistent'])
-        self.assertFalse(result['prior_branch_pipeline_claims_consistent'])
+        # Stage 239 checked only the *claimed LW result*, not that its
+        # originating register actually pointed at the EXE's LUI/LW slot.
+        self.assertTrue(result['prior_branch_pipeline_claims_consistent'])
 
     def test_wrong_slot_address_or_base_or_load_pc_is_refused(self):
         for field, replacement in (
