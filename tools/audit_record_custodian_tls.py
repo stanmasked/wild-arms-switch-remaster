@@ -188,13 +188,15 @@ def _process(request, custodian_db, signing_key, tag, *, witness_head=None):
 
 def serve_one(listener, custodian_db, signing_key, cert, key, ca,
               expected_client_cert_sha256, *, tag, witness_head=None,
-              remote_witness_provider=None):
+              remote_witness_provider=None, witness_fence_provider=None):
     """Handle exactly one mutual TLS connection; false for rejected request.
 
     The caller owns the bound/listening socket. Deliberate one-shot API:
     deployment needs process supervision, backpressure and network hardening.
     """
-    if witness_head is not None and remote_witness_provider is not None:
+    if sum(v is not None for v in (
+            witness_head, remote_witness_provider,
+            witness_fence_provider)) > 1:
         raise ValueError('multiple witness admission sources are forbidden')
     ctx = _tls_context(cert, key, ca, server=True)
     _digest(expected_client_cert_sha256)
@@ -216,11 +218,18 @@ def serve_one(listener, custodian_db, signing_key, cert, key, ca,
                         head = remote_witness_provider()
                         if head is None:
                             raise ValueError('remote witness did not respond')
-                    if head is None:
-                        if remote_witness_provider is not None and (
-                                type(request) is dict and
-                                request.get('action') in (
-                                    'reserve', 'deposit', 'deposit-reserved')):
+                    modifying = (type(request) is dict
+                                 and request.get('action') in (
+                                     'reserve', 'deposit', 'deposit-reserved'))
+                    if witness_fence_provider is not None and modifying:
+                        with witness_fence_provider(request) as fenced_head:
+                            if fenced_head is None:
+                                raise ValueError('remote fence not acquired')
+                            response = _process(
+                                request, custodian_db, signing_key, tag,
+                                witness_head=fenced_head)
+                    elif head is None:
+                        if remote_witness_provider is not None and modifying:
                             raise ValueError('required remote witness missing')
                         response = _process(request, custodian_db, signing_key, tag)
                     else:
@@ -324,7 +333,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='operation', required=True)
     for mode in ('serve-once', 'serve-once-witness-guarded',
-                 'serve-once-remote-witness-guarded'):
+                 'serve-once-remote-witness-guarded',
+                 'serve-once-remote-witness-fenced'):
         server = sub.add_parser(mode, help='one authenticated custodian connection')
         server.add_argument('custodian_database', type=Path)
         server.add_argument('private_ed25519_signing_key', type=Path)
@@ -335,7 +345,8 @@ def main(argv=None):
         server.add_argument('--custodian-tag', required=True)
         server.add_argument('--host', default='127.0.0.1')
         server.add_argument('--port', type=int, required=True)
-        if mode == 'serve-once-remote-witness-guarded':
+        if mode in ('serve-once-remote-witness-guarded',
+                    'serve-once-remote-witness-fenced'):
             server.add_argument('witness_host')
             server.add_argument('witness_port', type=int)
             server.add_argument('witness_tls_hostname')
@@ -373,11 +384,30 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.operation in ('serve-once', 'serve-once-witness-guarded',
-                              'serve-once-remote-witness-guarded'):
+                              'serve-once-remote-witness-guarded',
+                              'serve-once-remote-witness-fenced'):
             if not 1 <= args.port <= 65535:
                 raise ValueError('invalid listen port')
             witness_head = None
             remote_witness_provider = None
+            witness_fence_provider = None
+            if args.operation == 'serve-once-remote-witness-fenced':
+                try:
+                    from .audit_record_remote_witness_fence import fenced_custody_request
+                except ImportError:
+                    from audit_record_remote_witness_fence import fenced_custody_request
+                def witness_fence_provider(request):
+                    return fenced_custody_request(
+                        request, witness_host=args.witness_host,
+                        witness_port=args.witness_port,
+                        hostname=args.witness_tls_hostname,
+                        cert=args.witness_tls_client_cert,
+                        key=args.witness_tls_client_key,
+                        ca=args.witness_trusted_server_ca,
+                        server_pin=args.witness_server_leaf_der_sha256,
+                        public_key=args.trusted_witness_public_pem,
+                        public_pin=args.trusted_witness_public_pem_sha256,
+                        tag=args.witness_tag)
             if args.operation == 'serve-once-remote-witness-guarded':
                 try:
                     from .audit_record_remote_recovery_witness import fetch_head
@@ -422,11 +452,15 @@ def main(argv=None):
                     args.trusted_client_ca,
                     args.expected_client_certificate_der_sha256,
                     tag=args.custodian_tag, witness_head=witness_head,
-                    remote_witness_provider=remote_witness_provider)
+                    remote_witness_provider=remote_witness_provider,
+                    witness_fence_provider=witness_fence_provider)
             result, status = {'request_accepted': accepted,
                               'custodian_witness_guarded': (
                                   witness_head is not None
-                                  or remote_witness_provider is not None),
+                                  or remote_witness_provider is not None
+                                  or witness_fence_provider is not None),
+                              'remote_witness_fenced_during_mutation': (
+                                  witness_fence_provider is not None),
                               'remote_witness_fetched_per_mutation': (
                                   remote_witness_provider is not None)}, (
                 0 if accepted else 1)
