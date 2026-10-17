@@ -32,6 +32,7 @@ OWNER = 'e'*32
 class WitnessFenceReconciliationTests(unittest.TestCase):
     make_offer_and_deposit = MutualTlsCustodianTests.make_offer_and_deposit
     setUp = WitnessFenceTests.setUp
+    add_unwitnessed_recovery = WitnessFenceTests.add_unwitnessed_recovery
     new_offer = MutualTlsCustodianTests.new_offer
 
     @classmethod
@@ -285,8 +286,12 @@ class WitnessFenceReconciliationTests(unittest.TestCase):
             self.fence(self.request(nonce='f'*32))
         with self.assertRaises(ValueError):
             release(self.witness_db,'f'*32,'a'*64)
-        with self.assertRaises(ValueError):
-            record(self.witness_db,_canonical(snapshot(self.custody)))
+        # Supply an otherwise valid newly observed recovery event, so
+        # failure must arise from the corrupted reconciliation audit.
+        self.add_unwitnessed_recovery()
+        valid_snapshot = _canonical(snapshot(self.custody))
+        with self.assertRaisesRegex(ValueError, 'corrupt reconciliation'):
+            record(self.witness_db, valid_snapshot)
 
     def test_invalid_or_unsupported_legacy_request_refused(self):
         item=json.loads(self.request())
