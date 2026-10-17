@@ -45,7 +45,9 @@ except ImportError:
 REPORT_SCHEMA = 'wild-arms-ps1-reserved-remote-issue-v1'
 INTENT_COLUMNS = {
     'slot', 'base_sequence', 'base_receipt_sha256', 'reservation_token',
+    'purpose', 'evidence_sha256',
 }
+LEGACY_INTENT_COLUMNS = INTENT_COLUMNS - {'purpose', 'evidence_sha256'}
 
 
 def _intent(con, *, create=False):
@@ -54,18 +56,36 @@ def _intent(con, *, create=False):
             slot INTEGER PRIMARY KEY CHECK(slot=1),
             base_sequence INTEGER NOT NULL,
             base_receipt_sha256 TEXT NOT NULL,
-            reservation_token TEXT NOT NULL
+            reservation_token TEXT NOT NULL,
+            purpose TEXT NOT NULL DEFAULT 'issue'
+                CHECK(purpose IN('issue','accept')),
+            evidence_sha256 TEXT,
+            CHECK ((purpose='issue' AND evidence_sha256 IS NULL)
+                OR (purpose='accept' AND evidence_sha256 IS NOT NULL))
         )""")
     elif con.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table'"
         " AND name='remote_issue_reservation'").fetchone() is None:
         return None
     cols = {r[1] for r in con.execute('PRAGMA table_info(remote_issue_reservation)')}
-    if cols != INTENT_COLUMNS:
+    if create and cols == LEGACY_INTENT_COLUMNS:
+        # Stage-254 databases upgrade in place, preserving the old token.
+        con.execute(
+            "ALTER TABLE remote_issue_reservation"
+            " ADD COLUMN purpose TEXT NOT NULL DEFAULT 'issue'")
+        con.execute(
+            "ALTER TABLE remote_issue_reservation ADD COLUMN evidence_sha256 TEXT")
+        cols = {r[1] for r in con.execute(
+            'PRAGMA table_info(remote_issue_reservation)')}
+    if cols not in (INTENT_COLUMNS, LEGACY_INTENT_COLUMNS):
         raise ValueError('invalid local reservation schema')
-    rows = con.execute(
-        'SELECT slot,base_sequence,base_receipt_sha256,reservation_token'
-        ' FROM remote_issue_reservation').fetchall()
+    selection = (
+        'SELECT slot,base_sequence,base_receipt_sha256,reservation_token,'
+        'purpose,evidence_sha256 FROM remote_issue_reservation'
+        if cols == INTENT_COLUMNS else
+        "SELECT slot,base_sequence,base_receipt_sha256,reservation_token,"
+        "'issue',NULL FROM remote_issue_reservation")
+    rows = con.execute(selection).fetchall()
     if len(rows) > 1:
         raise ValueError('invalid local reservation row count')
     if not rows:
@@ -75,11 +95,23 @@ def _intent(con, *, create=False):
         raise ValueError('invalid local reservation counter')
     _digest(row[2])
     token_hash(row[3])
+    if row[4] not in ('issue', 'accept'):
+        raise ValueError('invalid reservation purpose')
+    if row[4] == 'accept':
+        _digest(row[5])
+    elif row[5] is not None:
+        raise ValueError('unexpected issue evidence digest')
     return row
 
 
-def _prepare(db_path, latest):
+def _prepare(db_path, latest, *, purpose='issue', evidence_sha256=None):
     """Create a recoverable pending reservation identity before any network I/O."""
+    if purpose not in ('issue', 'accept'):
+        raise ValueError('invalid reservation purpose')
+    if purpose == 'accept':
+        _digest(evidence_sha256)
+    elif evidence_sha256 is not None:
+        raise ValueError('issue reservation cannot bind evidence')
     with closing(_connect(db_path)) as con:
         con.execute('BEGIN IMMEDIATE')
         try:
@@ -88,6 +120,8 @@ def _prepare(db_path, latest):
             if previous is not None and (
                     previous[1] == latest[0]
                     and previous[2] == latest[3]):
+                if (previous[4], previous[5]) != (purpose, evidence_sha256):
+                    raise AnchorConflict('custody head reserved for different action')
                 con.commit()
                 return previous[3]
             if previous is not None and previous[1] >= latest[0]:
@@ -100,13 +134,16 @@ def _prepare(db_path, latest):
             token = secrets.token_hex(16)
             con.execute(
                 'INSERT INTO remote_issue_reservation'
-                ' (slot,base_sequence,base_receipt_sha256,reservation_token)'
-                ' VALUES(1,?,?,?)'
+                ' (slot,base_sequence,base_receipt_sha256,reservation_token,'
+                ' purpose,evidence_sha256)'
+                ' VALUES(1,?,?,?,?,?)'
                 ' ON CONFLICT(slot) DO UPDATE SET'
                 ' base_sequence=excluded.base_sequence,'
                 ' base_receipt_sha256=excluded.base_receipt_sha256,'
-                ' reservation_token=excluded.reservation_token',
-                (latest[0], latest[3], token))
+                ' reservation_token=excluded.reservation_token,'
+                ' purpose=excluded.purpose,'
+                ' evidence_sha256=excluded.evidence_sha256',
+                (latest[0], latest[3], token, purpose, evidence_sha256))
             con.commit()
             return token
         except Exception:
