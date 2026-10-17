@@ -95,7 +95,7 @@ class RecordExecutedAccessClaimsTests(unittest.TestCase):
 
     def test_one_wrong_pc_in_declared_execution_sequence_is_rejected(self):
         exe, cap = claim()
-        cap['observations'][0]['samples'][1]['executed_pcs'][11] = _hex(TARGETS[0]+48)
+        cap['observations'][0]['samples'][1]['executed_pcs'][11] = _hex(TARGETS[0]+52)
         r = analyze(exe, cap)
         self.assertFalse(r['claimed_data_consistent_with_checked_in_code'])
         self.assertEqual(r['claimed_execution_sequences_matching_static_code'], 5)
