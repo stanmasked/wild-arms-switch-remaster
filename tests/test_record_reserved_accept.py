@@ -144,6 +144,43 @@ class ReservedAcceptanceTests(unittest.TestCase):
         self.assertEqual(self.intent()[3], original)
         self.assertIsNone(self.reservation())
 
+    def test_existing_accept_intent_cannot_be_reused_for_other_evidence(self):
+        head = _read_latest(self.custody)
+        self.assertEqual(len(head), 5)
+        saved = _prepare(
+            self.verifier, head, purpose='accept', evidence_sha256='e'*64)
+        with self.assertRaises(AnchorConflict):
+            self.accept()
+        self.assertEqual(self.intent()[3], saved)
+        self.assertIsNone(self.reservation())
+        self.assertEqual(self.state()[1], 0)
+
+    def test_mutated_caller_buffer_after_reservation_is_not_accepted_as_new_bytes(self):
+        raw = list(fixture(NONCE_A))
+        executable = bytearray(raw[0])
+        raw[0] = executable
+        captured = bytes(executable)
+        def mutating_transport(*, action, checkpoint_raw,
+                               expected_sequence=None,
+                               expected_receipt_sha256=None,
+                               reservation_token=None):
+            response = self.channel(
+                action=action, checkpoint_raw=checkpoint_raw,
+                expected_sequence=expected_sequence,
+                expected_receipt_sha256=expected_receipt_sha256,
+                reservation_token=reservation_token)
+            if action == 'reserve':
+                executable[0] ^= 1
+            return response
+        self.assertTrue(accept_reserved(
+            self.verifier, mutating_transport, self.sign_pub,
+            self.sign_pub_pin, *raw, tag=self.tag, now=FIXED_NOW+1))
+        self.assertNotEqual(bytes(executable), captured)
+        self.assertEqual(self.intent()[5], evidence_digest(
+            (captured, *raw[1:])))
+        self.assertEqual(self.state()[1], 1)
+        self.assertTrue(self.ack())
+
     def test_lost_reserve_reply_can_retry_same_capture(self):
         import tools.audit_record_custodian_tls as network
         call = network._process
