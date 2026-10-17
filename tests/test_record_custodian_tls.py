@@ -164,8 +164,6 @@ class MutualTlsCustodianTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(again, 2)
         self.assertEqual(checkpoint, offered)
-        with self.assertRaisesRegex(AssertionError, 'intentional'):
-            raise AssertionError('intentional')
         self.assertEqual(self.run_channel()[0][2], 2)
 
     def test_stale_offer_refused_by_custodian_history(self):
@@ -238,11 +236,13 @@ class MutualTlsCustodianTests(unittest.TestCase):
 
     def test_lost_server_reply_after_durable_deposit_recovers(self):
         offered = self.new_offer()
-        original = __import__('tools.audit_record_custodian_tls',
-                              fromlist=['_send'])._send
-        def blackhole(sock, value):
+        import tools.audit_record_custodian_tls as channel
+        process = channel._process
+        def disappear_after_commit(*args):
+            process(*args)
             raise OSError('simulated break after durable custodian commit')
-        with patch('tools.audit_record_custodian_tls._send', side_effect=blackhole):
+        with patch('tools.audit_record_custodian_tls._process',
+                   side_effect=disappear_after_commit):
             with self.assertRaises((ValueError, OSError, ssl.SSLError)):
                 self.run_channel(action='deposit', checkpoint=offered)
         self.assertEqual(_read_latest(self.custody)[0], 2)
