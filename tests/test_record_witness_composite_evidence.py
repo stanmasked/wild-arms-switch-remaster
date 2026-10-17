@@ -178,6 +178,23 @@ class CompositeEvidenceTests(unittest.TestCase):
         with self.assertRaises(composite.CompositeConflict):
             self.build(altered)
 
+    def test_existing_cli_json_spacing_preserved_byte_for_byte(self):
+        self.init_capture()
+        actual_cli_reports = {
+            name: (json.dumps(json.loads(raw), sort_keys=True) + '\n').encode()
+            for name, raw in self.reports.items()
+        }
+        manifest = self.build(actual_cli_reports)
+        self.assertEqual(
+            manifest['report_bindings']['activation']['report_sha256'],
+            hashlib.sha256(actual_cli_reports['activation']).hexdigest())
+        self.assertNotEqual(actual_cli_reports['activation'],
+                            self.reports['activation'])
+        report = self.verify(manifest, reports=actual_cli_reports)
+        self.assertTrue(report['all_eight_report_bytes_bound'])
+        with self.assertRaises(composite.CompositeConflict):
+            self.verify(manifest)  # compact source bytes are not interchangeable
+
     def test_noncanonical_report_and_duplicate_json_key_refused(self):
         self.init_capture()
         altered = dict(self.reports)
