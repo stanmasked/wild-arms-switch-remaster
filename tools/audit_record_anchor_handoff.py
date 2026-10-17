@@ -139,6 +139,11 @@ def deposit(custodian_db, checkpoint_raw, *, expected_sequence=None,
                 from audit_record_custodian_reservation import (
                     reservation_row, token_hash, ReservationConflict,
                 )
+            from .audit_record_custodian_recovery import audit_history
+            audit_history(con)
+            recovered_before = con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table'"
+                " AND name='custodian_recovery_history'").fetchone() is not None
             reserved = reservation_row(con)
             if reservation_token is not None:
                 offered_token_hash = token_hash(reservation_token)
@@ -150,7 +155,7 @@ def deposit(custodian_db, checkpoint_raw, *, expected_sequence=None,
                 # legacy/unreserved writes permanently, including after
                 # the previous reservation was committed. Otherwise an
                 # older client could silently bypass the active policy.
-                if reserved is not None:
+                if reserved is not None or recovered_before:
                     raise ReservationConflict('custodian requires reserved deposits')
             if conditional:
                 if not prior:

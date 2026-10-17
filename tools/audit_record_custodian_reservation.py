@@ -89,6 +89,8 @@ def reserve(db, expected_sequence, expected_receipt_sha256, token):
     with closing(_connect(db, create=True)) as con:
         con.execute('BEGIN IMMEDIATE')
         try:
+            from .audit_record_custodian_recovery import audit_history
+            audit_history(con)
             history = _history(con)
             if not history or (history[-1][0], history[-1][3]) != (
                     expected_sequence, expected_receipt_sha256):
