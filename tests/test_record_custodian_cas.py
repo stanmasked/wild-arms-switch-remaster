@@ -43,6 +43,8 @@ class CustodianCASTests(unittest.TestCase):
         first, second = self.verifier / 'first.sqlite', self.verifier / 'second.sqlite'
         shutil.copyfile(self.db, first)
         shutil.copyfile(self.db, second)
+        first.chmod(0o600)
+        second.chmod(0o600)
         with patch('tools.audit_record_atomic_verifier.secrets.token_hex',
                    return_value=NONCE_B):
             issue(first, now=FIXED_NOW+1)
