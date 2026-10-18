@@ -12,6 +12,7 @@ external head. Persistent independent head escrow is OPERATOR-ENFORCED, not
 attested by this utility. No OS execution/revocation or fence release proof.
 """
 import argparse
+from contextlib import closing
 import hashlib
 import hmac
 import json
@@ -216,7 +217,7 @@ def _status(count, head, *, initialized=False, enrolled=False):
 def inspect(path, expected_count, expected_head):
     """Read-only inspection, checked against the operator's external pin."""
     path = _private_path(path, exists=True)
-    with _connect(path) as con:
+    with closing(_connect(path)) as con:
         con.execute('BEGIN IMMEDIATE')
         count,head,_,_ = _audit(con)
         _check_expected(count,head,expected_count,expected_head)
