@@ -69,11 +69,15 @@ class DetachedMirrorAckEvidenceTests(unittest.TestCase):
 
     def test_inspect_without_original_sqlite_sources(self):
         saved=self.make_archive()
+        independent_pins=self.context()
         self.ack_registry.unlink()
         self.secondary_ack.unlink()
         self.guard_path.unlink()
         self.mirror.unlink()
-        review=self.verify_archive(archive_pin=saved['private_evidence_archive_sha256'])
+        review=archive.inspect(
+            self.archive_path,
+            archive_pin=saved['private_evidence_archive_sha256'],
+            **independent_pins)
         self.assertEqual(review['completed_signed_acknowledgment_count'],1)
         self.assertFalse(review['actual_source_mirror_inspections_replayed_proved'])
         self.assertFalse(review['exclusive_archive_creation_and_readback_verified'])
@@ -294,10 +298,11 @@ class DetachedMirrorAckEvidenceTests(unittest.TestCase):
         with contextlib.redirect_stdout(out:=io.StringIO()):
             code=archive.main(self.cli_arguments('create'))
         self.assertEqual(code,0,out.getvalue())
+        independently_pinned_cli=self.cli_arguments('inspect')
         self.ack_registry.unlink()
         self.secondary_ack.unlink()
         with contextlib.redirect_stdout(checked:=io.StringIO()):
-            code=archive.main(self.cli_arguments('inspect'))
+            code=archive.main(independently_pinned_cli)
         self.assertEqual(code,0,checked.getvalue())
         self.assertTrue(json.loads(checked.getvalue())[
             'every_completed_attestation_signature_reverified_offline'])
