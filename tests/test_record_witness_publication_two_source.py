@@ -307,11 +307,13 @@ class DualAuthorityTests(unittest.TestCase):
                 argv+=['--'+name+'-'+key+'-sha256',state[key]]
         argv+=['--scope',self.scope,
                '--old-checkpoint-sha256',self.pin]
-        with mock.patch.object(live,'fetch_live_receipt',
-                side_effect=live.LiveSourceUnavailable('offline')):
-            with contextlib.redirect_stdout(output:=io.StringIO()):
-                code=dual.main(argv)
-        self.assertEqual(code,2)
+        with mock.patch.object(dual.secrets,'token_hex',
+                side_effect=['c'*32,'d'*32]):
+            with mock.patch.object(live,'fetch_live_receipt',
+                    side_effect=live.LiveSourceUnavailable('offline')):
+                with contextlib.redirect_stdout(output:=io.StringIO()):
+                    code=dual.main(argv)
+        self.assertEqual(code,2,output.getvalue())
         result=json.loads(output.getvalue())
         self.assertTrue(result['authority_unavailable'])
         self.assertFalse(result['witness_fence_retired'])
