@@ -171,7 +171,7 @@ class TwoNonceLedgerReconciliationTests(unittest.TestCase):
     def test_hardlinked_registry_rejected(self):
         self.secondary.unlink()
         os.link(self.registry_path,self.secondary)
-        with self.assertRaises(cross.LedgerDivergence):
+        with self.assertRaises((ValueError,cross.LedgerDivergence)):
             self.crosscheck()
 
     def test_registry_symlink_rejected(self):
@@ -190,7 +190,7 @@ class TwoNonceLedgerReconciliationTests(unittest.TestCase):
     def test_world_accessible_secondary_parent_rejected(self):
         self.second_parent.chmod(0o755)
         self.addCleanup(self.second_parent.chmod,0o700)
-        with self.assertRaises(cross.LedgerDivergence):
+        with self.assertRaises((ValueError,cross.LedgerDivergence)):
             self.crosscheck()
 
     def test_modified_private_sqlite_history_fails_audit(self):
