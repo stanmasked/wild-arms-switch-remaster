@@ -72,9 +72,10 @@ def make_body(role, count, head, prior, nonce, tag):
     _hex(nonce, HEX32)
     if type(tag) is not str or not TAG.fullmatch(tag):
         raise CheckpointConflict('invalid trusted checkpoint scope tag')
-    if count == 0 and head != hashlib.sha256(
-            b'wild-arms-ps1-observer-run-replay-ledger-v1\x00genesis').hexdigest():
-        raise CheckpointConflict('incorrect signed genesis ledger head')
+    if count == 0 and (head != hashlib.sha256(
+            b'wild-arms-ps1-observer-run-replay-ledger-v1\x00genesis').hexdigest()
+            or prior != ANCHOR_GENESIS):
+        raise CheckpointConflict('incorrect signed genesis journal or anchor')
     return {
         'schema': SCHEMA,
         'admin_role': role,
