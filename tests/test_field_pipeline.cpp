@@ -103,6 +103,7 @@ void deterministic_replay_across_event_and_exit() {
     same(a, b);
   }
   check(a.events == 1);
+  check(a.exits == 1);
   check(a.state.successful_moves == a.moves);
   check(a.frame.ready);
 }
