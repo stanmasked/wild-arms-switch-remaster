@@ -39,6 +39,11 @@ use the wrong private key can leave a no-clobber receipt artifact that is
 later rejected at readback. Never automatically overwrite or retry such
 ambiguous outputs.
 
+As of Stage 264J, the signing CLI refuses to sign unless a separately
+initialized local nonce registry first commits the nonce reservation.
+See `docs/ps1-witness-publication-receipt-nonce-ledger.md` for enrollment,
+independent head pinning and ambiguous pending-reservation handling.
+
 The reference operator-side command is also exposed as
 \`tools/audit_record_witness_publication_replica_receipt_sign.py\`.
 It refuses to replace an existing output, and requires a private signing key:
@@ -59,6 +64,8 @@ It refuses to replace an existing output, and requires a private signing key:
       --signing-private /operator-a/private/signing-key.pem \
       --signing-public /enrolled/operator-a.pem \
       --signing-public-pin ENROLLED_OPERATOR_A_PEM_SHA256
+      --nonce-registry /operator-private/receipt-nonces.db \
+      --expected-registry-head TRUSTED_CURRENT_NONCE_LEDGER_SHA256
 
 It emits a proposed receipt envelope SHA-256 for separate operator retention.
 It never reports that external retention was carried out.
