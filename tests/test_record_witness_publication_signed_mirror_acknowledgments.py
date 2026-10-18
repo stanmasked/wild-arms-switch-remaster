@@ -109,7 +109,7 @@ class SignedMirrorAcknowledgmentTests(unittest.TestCase):
             operator_id=self.enrolled['operator-a']['operator_id'],
             storage_id=self.storages[0],
             operator_public_pin=self.observers[0][2],
-            nonce='e'*32,seq=2,previous=self.pins[0],
+            nonce='e'*32,seq=2,previous=self.complete['operator-a'][0][1],
             archive_pin=self.archive_pin,evidence_pin='f'*64)
         with self.assertRaises((ValueError,bound.SignedLedgerConflict)):
             self.verify()
