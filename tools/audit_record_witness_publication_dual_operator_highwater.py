@@ -174,9 +174,36 @@ def verify_with_live_sources(path, raw_a, raw_b, *,
     A successful result is still conditional on out-of-band trust of the
     enrolled certificate hash pins and both independent signing authorities.
     """
-    prior=verify(path,raw_a,raw_b,**highwater_args)
+    if type(highwater_args) is not dict or type(reconnect_args) is not dict:
+        raise HighwaterConflict('missing independent live/high-watermark inputs')
+    # Always bind the two additional observer keys to ALL four live roles.
+    # The caller must not be able to silently omit cross-role independence.
+    try:
+        four = tuple((item['authority_public'],item['authority_pin'])
+                     for item in (reconnect_args['source_a'],
+                                  reconnect_args['source_b'])) + (
+            (reconnect_args['notaries']['notary_a_public'],
+             reconnect_args['notaries']['notary_a_pin']),
+            (reconnect_args['notaries']['notary_b_public'],
+             reconnect_args['notaries']['notary_b_pin']),
+        )
+        declared=tuple(highwater_args.get('excluded_pinned_public_keys',()))
+        if declared and declared != four:
+            raise HighwaterConflict('combined verifier enrolled roles differ')
+        if (highwater_args['scope'] != reconnect_args['scope']
+                or highwater_args['expected_generation'] !=
+                   reconnect_args['expected_generation']
+                or highwater_args['expected_pair_pin'] !=
+                   reconnect_args['expected_pair_pin']
+                or highwater_args['expected_event_head'] !=
+                   reconnect_args['expected_event_head']):
+            raise HighwaterConflict('independent high-watermark and live pins differ')
+    except (KeyError,TypeError) as exc:
+        raise HighwaterConflict('missing combined verifier enrollment') from exc
+    bound=dict(highwater_args,excluded_pinned_public_keys=four)
+    prior=verify(path,raw_a,raw_b,**bound)
     current=reconnect.recheck(path,**reconnect_args)
-    after=verify(path,raw_a,raw_b,**highwater_args)
+    after=verify(path,raw_a,raw_b,**bound)
     if prior != after:
         raise HighwaterConflict('historical floor changed during dual-source crosscheck')
     if current['checkpoint_generation'] != after['observed_head_generation']:
