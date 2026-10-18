@@ -248,7 +248,7 @@ class ReportOriginTests(unittest.TestCase):
         obj=json.loads(self.reports['activation'])
         obj['witness_fence_retired']=True
         changed={**self.reports,'activation':_canonical(obj)}
-        with self.assertRaises(composite.CompositeConflict):
+        with self.assertRaises(provenance.OriginConflict):
             self.check(reports=changed)
 
 
