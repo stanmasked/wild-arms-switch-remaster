@@ -17,6 +17,8 @@ on:
       - 'tools/test_audit_nexium_checkpoints.py'
       - 'tools/audit_nexium_pixel_parity.py'
       - 'tools/test_audit_nexium_pixel_parity.py'
+      - 'tools/audit_nexium_manual_snapshot.py'
+      - 'tools/test_audit_nexium_manual_snapshot.py'
       - 'tests/field_capture.cpp'
       - 'include/field_pixels.hpp'
   workflow_dispatch:
@@ -96,6 +98,8 @@ jobs:
           ldconfig -p | grep 'libxkbcommon-x11.so'
       - name: Unit-test NeXium exact projected RGB parity
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_pixel_parity.py' -v
+      - name: Unit-test manual quicksave and event restore desktop audit
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_manual_snapshot.py' -v
       - name: Unit-test ordered five-checkpoint reference matcher
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_checkpoints.py' -v
       - name: Verify synthetic frame evidence classifier
@@ -202,6 +206,53 @@ jobs:
             sleep 0.22
           done
 
+          # Stage 292: after the unchanged 80-frame autoplay evidence,
+          # switch to MANUAL via Switch B (host X) and test quicksave.
+          # Actual default NeXium keyboard mappings (controller_config.rs):
+          # Switch B=X, Y=Z, Minus=N, A=C, DRight=ArrowRight.
+          # Independent Xvfb evidence is kept separate from autoplay PNGs.
+          mkdir -p nexium-probe/manual-snapshot
+          if test -n "${window_id:-}"; then
+            xdotool windowfocus "$window_id" || true
+            send_manual_key() {
+              printf 'host keyboard %s at %s\\n' "$1" "$(date -u +%FT%TZ)" \\
+                >> nexium-probe/manual-snapshot/key-events.log
+              xdotool keydown --clearmodifiers "$1"
+              sleep 0.22
+              xdotool keyup "$1"
+              sleep 0.4
+            }
+            capture_manual() {
+              import -display :99 -window root \\
+                "nexium-probe/manual-snapshot/$1.png"
+            }
+            walk_to_event() {
+              xdotool keydown --clearmodifiers Right
+              sleep 2.4
+              xdotool keyup Right
+              sleep 0.45
+            }
+            send_manual_key x     # Switch B ends completed demo and resets manual
+            capture_manual 00_manual_start
+            send_manual_key z     # Switch Y quicksave at x1
+            capture_manual 01_start_saved
+            walk_to_event        # x1 -> x4; '!' waits for A
+            capture_manual 02_event_after_walk
+            send_manual_key n     # Switch Minus restores x1 / no event
+            capture_manual 03_start_restored
+            walk_to_event
+            capture_manual 04_event_again
+            send_manual_key z     # Store pending event in quicksave slot
+            capture_manual 05_event_saved
+            send_manual_key c     # Switch A acknowledges; bar becomes green
+            capture_manual 06_event_acknowledged
+            send_manual_key n     # Restores pending event + yellow status
+            capture_manual 07_event_restored
+          else
+            printf '%s\\n' 'No NeXium guest window; manual test not performed' \\
+              > nexium-probe/manual-snapshot/input-error.txt
+          fi
+
           set +e
           wait "$emulator_pid"
           result=$?
@@ -284,6 +335,13 @@ jobs:
             --reference same-commit-host-references \
             --observed nexium-probe/verified-checkpoints \
             --report nexium-probe/pixel-parity.json
+      - name: Audit real Switch Y/Minus and pending event restore screenshots
+        if: always()
+        run: |
+          /usr/bin/python3 tools/audit_nexium_manual_snapshot.py \\
+            --reference same-commit-host-references \\
+            --screenshots nexium-probe/manual-snapshot \\
+            --report nexium-probe/manual-snapshot-audit.json
       - name: Verify intended Switch X triggers visible world changes
         if: always()
         run: |
@@ -324,6 +382,10 @@ jobs:
           if test -f nexium-probe/five-checkpoints.json; then
             echo "Five-scene structural evidence:" >> "$GITHUB_STEP_SUMMARY"
             /usr/bin/python3 -c 'import json; x=json.load(open("nexium-probe/five-checkpoints.json")); print("validated scenes:",len(x["verified_scenes"]),"complete:",x["full_five_checkpoint_sequence_observed"] )' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/manual-snapshot-audit.json; then
+            echo "Manual Y/Minus + event restoration audit:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; d=json.load(open("nexium-probe/manual-snapshot-audit.json")); print("manual quicksave and event restore confirmed:",d["manual_quicksave_and_event_restore_confirmed"])' >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "No firmware, ROM, BIOS or commercial assets used." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4

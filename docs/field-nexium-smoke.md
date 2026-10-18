@@ -274,3 +274,30 @@ never claims direct native framebuffer capture. This geometry is
 specific to the verified 1600×900 Xvfb + 1280×720 NeXium view; if the
 window layout or scaling changes, the audit should fail until a new
 layout is independently established.
+
+## Stage 292 — real manual Y/Minus quicksave audit (pending new CI)
+
+After preserving the existing 80-image five-scene autoplay timeline, the
+experimental NeXium workflow uses the emulator's **default** physical
+keyboard mappings: X = Switch B, Z = Switch Y, N = Switch Minus,
+C = Switch A, Right = Switch D-pad right. It runs a separate manual
+input sequence, capturing eight Xvfb desktop screenshots: initial manual
+state, saved start, walked event, restored start, event again, saved
+event, acknowledged event and restored pending event.
+
+The audit uses *same-commit* authentic host PNG references and
+`audit_nexium_pixel_parity.compare_scene` for seven screenshots, requiring
+zero visible RGB differences after the known NeXium nearest-neighbour
+projection and fixed HUD exclusion. The acknowledged-event screenshot
+requires the green bar and red player on the event tile; its visible
+game-field pixels must differ from the paused event. Any missing
+screen, wrong phase, changed game pixel or wrong unpaused-event state
+fails the experimental NeXium job. The untouched autoplay audit also
+remains mandatory. Synthetic fixture tests cover failures.
+
+This test proves guest-visible behaviour when its CI job passes, not
+the native GPU framebuffer, persistent disk saves, physical Switch
+hardware, or extraction of original Wild Arms assets. The +16-byte
+nonstandard emulator loader probe is still strictly diagnostic; the
+production NRO remains unmodified. Do not claim successful execution
+until the new CI run is green.
