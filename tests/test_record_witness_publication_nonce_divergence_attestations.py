@@ -157,13 +157,13 @@ class TwoSignedDivergenceAttestationsTests(unittest.TestCase):
         self.assertFalse(self.receipt_paths[0].exists())
 
     def test_sign_wrong_archive_pin_fails_before_output(self):
-        with self.assertRaises((ValueError,att.AttestationConflict)):
+        with self.assertRaises(cas.CheckpointCASConflict):
             self.issue(0,archive_pin='f'*64)
         self.assertFalse(self.receipt_paths[0].exists())
 
     def test_modified_archive_refused_despite_signed_attestations(self):
         self.witness_path.write_bytes(self.witness_path.read_bytes()+b' ')
-        with self.assertRaises((ValueError,att.AttestationConflict)):
+        with self.assertRaises(cas.CheckpointCASConflict):
             self.checked()
 
     def test_missing_archive_refused_with_valid_signed_receipts(self):
@@ -197,7 +197,7 @@ class TwoSignedDivergenceAttestationsTests(unittest.TestCase):
             self.checked(audit_id='another-audit')
 
     def test_wrong_scope_rejected(self):
-        with self.assertRaises((ValueError,att.AttestationConflict)):
+        with self.assertRaises(cas.CheckpointCASConflict):
             self.checked(scope='unexpected-scope')
 
     def test_wrong_external_envelope_hash_rejected(self):
@@ -221,11 +221,11 @@ class TwoSignedDivergenceAttestationsTests(unittest.TestCase):
             self.checked(sequence_a=True)
 
     def test_wrong_primary_genesis_rejected(self):
-        with self.assertRaises((ValueError,att.AttestationConflict)):
+        with self.assertRaises(cas.CheckpointCASConflict):
             self.checked(genesis_a='f'*64)
 
     def test_wrong_secondary_head_rejected(self):
-        with self.assertRaises((ValueError,att.AttestationConflict)):
+        with self.assertRaises(cas.CheckpointCASConflict):
             self.checked(head_b='f'*64)
 
     def test_replaying_other_role_signature_rejected(self):
