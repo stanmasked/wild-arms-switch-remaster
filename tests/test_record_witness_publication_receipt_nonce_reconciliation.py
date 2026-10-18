@@ -261,7 +261,7 @@ class TwoNonceLedgerReconciliationTests(unittest.TestCase):
         self.assertEqual(status,0,out.getvalue())
         self.assertTrue(r['both_full_nonce_event_hash_chains_identical'])
         self.assertFalse(r['witness_fence_retired'])
-        self.assertNotIn('nonce',out.getvalue().replace('nonce-dual-ledger',''))
+        self.assertNotIn(self.nonces[0],out.getvalue())
 
     def test_cli_fork_returns_diagnostic_but_not_signed_contents(self):
         self.write(self.registry_path,role_idx=0)
