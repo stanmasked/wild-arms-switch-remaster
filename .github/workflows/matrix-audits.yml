@@ -80,6 +80,7 @@ on:
       - 'tools/audit_record_witness_escrow_quorum.py'
       - 'tools/audit_record_witness_escrow_history.py'
       - 'tools/audit_record_witness_publication_intake.py'
+      - 'tools/audit_record_witness_publication_replica_compare.py'
       - 'tools/audit_record_remote_witness_fence.py'
       - 'tools/audit_record_remote_reserved_issue.py'
       - 'tools/audit_record_remote_reserved_accept.py'
@@ -117,6 +118,7 @@ on:
       - 'tests/test_record_witness_escrow_quorum.py'
       - 'tests/test_record_witness_escrow_history.py'
       - 'tests/test_record_witness_publication_intake.py'
+      - 'tests/test_record_witness_publication_replica_compare.py'
       - 'tests/test_record_witness_gated_recovery.py'
       - 'tests/test_record_witness_gated_custody.py'
       - 'tests/test_record_reserved_accept.py'
@@ -141,6 +143,7 @@ on:
       - 'docs/ps1-witness-escrow-quorum.md'
       - 'docs/ps1-witness-escrow-history.md'
       - 'docs/ps1-witness-publication-intake.md'
+      - 'docs/ps1-witness-publication-replica-comparison.md'
       - 'docs/ps1-witness-gated-recovery.md'
       - 'docs/ps1-witness-gated-custody-writes.md'
       - 'docs/ps1-reserved-capture-acceptance.md'
@@ -304,6 +307,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_record_witness_escrow_quorum.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_escrow_history.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_publication_intake.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_replica_compare.py' -v
           python -m unittest discover -s tests -p 'test_record_reserved_accept.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
           python -m unittest discover -s tests -p 'test_gp0_matrix_*.py' -v
