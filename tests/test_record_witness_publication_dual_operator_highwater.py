@@ -315,6 +315,43 @@ class DualOperatorHighwaterTests(unittest.TestCase):
                 highwater_args=self.inputs(),reconnect_args=args)
         self.assertEqual(self.calls,[])
 
+    def test_integrated_combined_inputs_cannot_change_head_binding(self):
+        live_args=dict(
+            archived_signed_a=self.old_raw_a,
+            archived_signed_b=self.old_raw_b,
+            archived_nonce_a=self.old['challenge_a'],
+            archived_nonce_b=self.old['challenge_b'],
+            source_a=self.source_a,source_b=self.source_b,
+            notaries=self.notaries,scope=self.scope,
+            expected=self.expected,
+            expected_generation=0,expected_pair_pin='f'*64,
+            expected_event_head=self.initial['event_head_sha256'],
+            fetcher=self.fetch,challenges=self.nonces)
+        with self.assertRaises(high.HighwaterConflict):
+            high.verify_with_live_sources(self.db,self.cert_a,self.cert_b,
+                highwater_args=self.inputs(),reconnect_args=live_args)
+        self.assertEqual(self.calls,[])
+
+    def test_integrated_four_live_role_keys_always_cross_pinned(self):
+        args=dict(
+            archived_signed_a=self.old_raw_a,
+            archived_signed_b=self.old_raw_b,
+            archived_nonce_a=self.old['challenge_a'],
+            archived_nonce_b=self.old['challenge_b'],
+            source_a=self.source_a,source_b=self.source_b,
+            notaries=self.notaries,scope=self.scope,
+            expected=self.expected,
+            expected_generation=0,expected_pair_pin=self.pin,
+            expected_event_head=self.initial['event_head_sha256'],
+            fetcher=self.fetch,challenges=self.nonces)
+        high_args=self.inputs()
+        high_args.pop('excluded_pinned_public_keys')
+        accepted=high.verify_with_live_sources(
+            self.db,self.cert_a,self.cert_b,
+            highwater_args=high_args,reconnect_args=args)
+        self.assertTrue(accepted[
+            'fresh_dual_source_checkpoint_agrees_with_signed_historical_floor'])
+
     def test_cli_conflict_redacted_and_no_fence_release(self):
         a=Path(self.temp.name)/'operator-a.json'
         b=Path(self.temp.name)/'operator-b.json'
