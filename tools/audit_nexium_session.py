@@ -18,14 +18,24 @@ def read_log(path):
 
 def analyze(guest_path, control_path):
     guest, control = read_log(guest_path), read_log(control_path)
+    boot_request = guest is not None and (
+        "Booting NRO:" in guest or "Boot: NRO=" in guest)
+    boot_failed = guest is not None and "Boot failed:" in guest
+    frontend_rejected = guest is not None and "Failed to load NRO:" in guest
+    frontend_requested = guest is not None and "Auto-loaded NRO:" in guest
+
+    # Most meaningful blocker takes precedence. A frontend request can
+    # coexist with a later, fatal guest BootContext loader failure.
     if guest is None:
         outcome = "internal_log_missing"
-    elif "Failed to load NRO:" in guest:
-        outcome = "load_failed_reported"
-    elif "Auto-loaded NRO:" in guest:
-        outcome = "auto_load_accepted"
-    elif "Boot: NRO=" in guest:
-        outcome = "boot_request_logged"
+    elif boot_failed:
+        outcome = "guest_boot_failed"
+    elif frontend_rejected:
+        outcome = "frontend_load_request_failed"
+    elif boot_request:
+        outcome = "guest_boot_requested"
+    elif frontend_requested:
+        outcome = "frontend_autoload_requested"
     else:
         outcome = "no_guest_boot_marker"
     return {
@@ -33,12 +43,13 @@ def analyze(guest_path, control_path):
         "guest_session_log_found": guest is not None,
         "control_session_log_found": control is not None,
         "guest_boot_outcome": outcome,
-        "guest_boot_request_seen": guest is not None and "Boot: NRO=" in guest,
-        "guest_autoload_accepted": guest is not None and "Auto-loaded NRO:" in guest,
-        "guest_load_failure_reported": guest is not None and "Failed to load NRO:" in guest,
+        "guest_boot_request_seen": boot_request,
+        "guest_boot_failure_reported": boot_failed,
+        "frontend_autoload_request_seen": frontend_requested,
+        "frontend_load_request_failure_seen": frontend_rejected,
         "control_has_autoload_marker": control is not None and "Auto-loaded NRO:" in control,
         "guest_rendered_frame_confirmed": False,
-        "note": "An internal log entry never confirms that a guest frame rendered.",
+        "note": "GUI accepted request or guest Booting NRO log is not proof of successful loader or guest frame.",
     }
 
 
