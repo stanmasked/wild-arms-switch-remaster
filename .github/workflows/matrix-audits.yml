@@ -106,6 +106,7 @@ on:
       - 'tools/audit_record_witness_publication_attestation_nonce_guard.py'
       - 'tools/audit_record_witness_publication_attestation_registry_binding.py'
       - 'tools/audit_record_witness_publication_signed_mirror_acknowledgments.py'
+      - 'tools/audit_record_witness_publication_signed_mirror_double_claim.py'
       - 'tools/audit_record_witness_publication_replica_receipt_sign.py'
       - 'tools/audit_record_witness_publication_replica_compare.py'
       - 'tools/audit_record_remote_witness_fence.py'
@@ -171,6 +172,7 @@ on:
       - 'tests/test_record_witness_publication_attestation_nonce_guard.py'
       - 'tests/test_record_witness_publication_attestation_registry_binding.py'
       - 'tests/test_record_witness_publication_signed_mirror_acknowledgments.py'
+      - 'tests/test_record_witness_publication_signed_mirror_double_claim.py'
       - 'tests/test_record_witness_publication_replica_compare.py'
       - 'tests/test_record_witness_gated_recovery.py'
       - 'tests/test_record_witness_gated_custody.py'
@@ -222,6 +224,7 @@ on:
       - 'docs/ps1-witness-publication-attestation-nonce-guard.md'
       - 'docs/ps1-witness-publication-attestation-registry-binding.md'
       - 'docs/ps1-witness-publication-signed-mirror-acknowledgments.md'
+      - 'docs/ps1-witness-publication-signed-mirror-double-claim.md'
       - 'docs/ps1-witness-publication-replica-comparison.md'
       - 'docs/ps1-witness-gated-recovery.md'
       - 'docs/ps1-witness-gated-custody-writes.md'
@@ -412,6 +415,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_record_witness_publication_attestation_nonce_guard.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_publication_attestation_registry_binding.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_publication_signed_mirror_acknowledgments.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_signed_mirror_double_claim.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_publication_replica_compare.py' -v
           python -m unittest discover -s tests -p 'test_record_reserved_accept.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
