@@ -276,8 +276,8 @@ class CompositeEvidenceTests(unittest.TestCase):
         private = {
             'original': self.original,
             'stop': self.stop_raw,
-            'cgroup': self.cgroup,
-            **{name: raw for name, raw in self.reports.items()},
+            'raw-cgroup': self.cgroup,
+            **{'report-'+name: raw for name, raw in self.reports.items()},
         }
         for name, raw in private.items():
             target = self.path('composite-'+name+'-')
@@ -287,11 +287,11 @@ class CompositeEvidenceTests(unittest.TestCase):
         output = self.path('composite-output-')
         argv = [
             'publish', str(targets['original']), str(targets['stop']),
-            str(targets['cgroup']), str(self.public), self.pin,
+            str(targets['raw-cgroup']), str(self.public), self.pin,
             str(output), '--supervisor-tag', 'independent-supervisor',
         ]
         for name in composite.SPECS:
-            argv.extend(('--'+name+'-report', str(targets[name])))
+            argv.extend(('--'+name+'-report', str(targets['report-'+name])))
         return argv, output
 
     def test_cli_private_publish_then_pinned_verify(self):
