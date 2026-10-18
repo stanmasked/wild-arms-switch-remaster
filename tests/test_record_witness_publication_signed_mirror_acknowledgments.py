@@ -31,7 +31,7 @@ class SignedMirrorAcknowledgmentTests(unittest.TestCase):
         self.acks=[self.signed_ack(0),self.signed_ack(1)]
         self.pins=[hashlib.sha256(raw).hexdigest() for raw in self.acks]
 
-    def expected(self,i,**changes):
+    def expected_ack_body(self,i,**changes):
         p=self.params()
         audited=bound.verify(self.guard_path,self.mirror,**p)
         data=q.expected_body(audited,scope=self.scope,audit_id=self.audit_id,
@@ -48,7 +48,7 @@ class SignedMirrorAcknowledgmentTests(unittest.TestCase):
     def signed_ack(self,i,**changes):
         path=Path(self.temp.name)/('ack-temp-%s-%d.json'%(
             i,len(list(Path(self.temp.name).glob('ack-temp-*')))))
-        _sign(self.expected(i,**changes),q.SCHEMA,q.DOMAIN,
+        _sign(self.expected_ack_body(i,**changes),q.SCHEMA,q.DOMAIN,
               self.observers[i][0],path)
         return path.read_bytes()
 
