@@ -85,7 +85,10 @@ class PublicationMirrorTests(prior.SignedPublicationIntakeTests):
         original=self.intake_path
         self.intake_path=other
         try:
-            branch=self.submit(0,'escrow-a',variant)
+            branch=self.submit(0,'escrow-a',variant,
+                               expected_count=0,
+                               expected_head=intake.GENESIS,
+                               advance=False)
         finally:
             self.intake_path=original
         with self.assertRaises(mirror.MirrorConflict):
