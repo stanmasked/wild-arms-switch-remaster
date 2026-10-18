@@ -138,7 +138,10 @@ def verify(composite_raw, composite_pin, index_raw, index_pin, reports,
     observed_nonces = set()
     for kind in SPECS:
         raw_report = reports[kind]
-        _report(kind, raw_report)  # Recheck exact Stage 263J report semantics.
+        try:
+            _report(kind, raw_report)  # Exact Stage 263J report semantics.
+        except CompositeConflict as exc:
+            raise OriginConflict('report violates Stage 263J invariants') from exc
         if type(raw_report) is not bytes or len(raw_report) > MAX_REPORT:
             raise OriginConflict('oversized provenance report')
         bound = composite['report_bindings'][kind]
