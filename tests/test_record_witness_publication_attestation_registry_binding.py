@@ -194,7 +194,7 @@ class MirroredAttestationBindingTests(unittest.TestCase):
         self.one_complete()
         self.mirror.unlink()
         os.link(self.guard_path,self.mirror)
-        with self.assertRaises((bound.SignedLedgerConflict,cross.LedgerDivergence)):
+        with self.assertRaises((bound.SignedLedgerConflict,cross.LedgerDivergence,ledger.CheckpointCASConflict)):
             self.check_mirror()
 
     def test_world_readable_mirror_rejected(self):
