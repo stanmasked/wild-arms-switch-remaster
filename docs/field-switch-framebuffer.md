@@ -89,3 +89,36 @@ five-scene reference PNGs, known NeXium guest visuals and valid NRO layout
 remain unchanged.
 
 \`wa_field_save_codec_tests\` is included in Host/Matrix CTest coverage.
+
+## Stage 294 — experimental SD save integration
+
+The Nintendo Switch homebrew build now attempts an SDMC mount with
+`fsdevMountSdmc` (reuses an existing `sdmc` device), and creates its own
+`sdmc:/switch/wild_arms_field/` directory. The synthetic game uses two
+generational files, `field-save.a` and `field-save.b`. **Y** still creates
+its normal in-RAM snapshot; after the gameplay frame succeeds, it also
+writes a generation to SD when the directory is accessible. The writer
+generates a verified 56-byte record containing the Stage-293 40-byte
+versioned state, and updates the *other* slot using a temporary file,
+flush, `fsync`, close, read-back verification, and rename. It does not
+unlink the currently newest validated save. **Minus** uses the same
+original RAM quickload; if RAM has no snapshot (e.g. a new app launch),
+it imports the most recent validated SD generation before drawing.
+A corrupt latest slot may fall back to a valid older generation.
+
+**Important limitations:** SDMC may be unavailable (notably in
+emulators). If it is unavailable or a file write fails, RAM quicksave
+continues but there is **not yet a user-visible disk-write success/failure
+indicator**. There is no claim of full SD FAT/exFAT power-loss atomicity,
+durable directory metadata, concurrent-process writer protection, or
+tested persistence across two native Switch hardware sessions. The
+journal provides recoverable independent generations in normal tested
+file-system failure scenarios, not a guarantee for sudden hardware
+power loss. No original game content is written. The existing five
+autoplay and eight NeXium manual screenshots are unchanged.
+
+Host `wa_field_save_file_tests` exercises normal load, journal generations,
+corrupt-latest fallback, stale temporary files, blocked replacement,
+world mismatches, and generation exhaustion. The Switch NRO must be
+cross-compiled separately and manual SD persistence must be verified
+on an actual console before being called hardware-confirmed.
