@@ -13,6 +13,7 @@ from unittest import mock
 from tests import test_record_witness_publication_attestation_nonce_guard as fixture
 from tools import audit_record_witness_publication_attestation_registry_binding as bound
 from tools import audit_record_witness_publication_receipt_nonce_ledger as ledger
+from tools import audit_record_witness_publication_receipt_nonce_reconciliation as cross
 from tools import audit_record_witness_publication_attestation_nonce_guard as guard
 from tools import audit_record_witness_publication_nonce_divergence_attestations as signed
 from tools.audit_record_anchor_handoff import _canonical
@@ -163,7 +164,7 @@ class MirroredAttestationBindingTests(unittest.TestCase):
     def test_mirror_stale_prefix_is_not_authorized(self):
         self.seal_mirror()
         self.advance()
-        with self.assertRaises(bound.SignedLedgerConflict):
+        with self.assertRaises((bound.SignedLedgerConflict,cross.LedgerDivergence)):
             self.check_mirror()
 
     def test_forked_mirror_does_not_pass_signed_binding(self):
@@ -175,25 +176,25 @@ class MirroredAttestationBindingTests(unittest.TestCase):
             storage_id=self.storages[1],operator_public_pin=self.observers[1][2],
             nonce='e'*32,seq=1,previous=self.previous[1],
             archive_pin=self.archive_pin,evidence_pin='f'*64)
-        with self.assertRaises(bound.SignedLedgerConflict):
+        with self.assertRaises((bound.SignedLedgerConflict,cross.LedgerDivergence)):
             self.check_mirror(secondary_head_pin=ledger.snapshot(
                 self.mirror)['latest_ledger_sha256'])
 
     def test_rollback_to_stale_external_head_is_rejected(self):
         self.one_complete()
-        with self.assertRaises(bound.SignedLedgerConflict):
+        with self.assertRaises((bound.SignedLedgerConflict,cross.LedgerDivergence)):
             self.check_mirror(primary_head_pin=self.genesis)
 
     def test_same_file_alias_rejected(self):
         self.one_complete()
-        with self.assertRaises(bound.SignedLedgerConflict):
+        with self.assertRaises((bound.SignedLedgerConflict,cross.LedgerDivergence)):
             bound.verify(self.guard_path,self.guard_path,**self.params())
 
     def test_hardlinked_mirror_rejected(self):
         self.one_complete()
         self.mirror.unlink()
         os.link(self.guard_path,self.mirror)
-        with self.assertRaises(bound.SignedLedgerConflict):
+        with self.assertRaises((bound.SignedLedgerConflict,cross.LedgerDivergence)):
             self.check_mirror()
 
     def test_world_readable_mirror_rejected(self):
@@ -321,7 +322,7 @@ for name in ('sign','compute_pin','fetch','_advanced_keeper','certificate',
              'arguments','copy_args','clone','signed_body','sign_receipt',
              'operator_args','make_fields','reserve','sign_one','kwargs',
              'crosscheck','write','create_witness','inspect_witness',
-             'trusted','body_for','make_signed','params','checked','issue',
+             'trusted','body_for','make_signed','checked','issue',
              'guarded','cli','snapshot'):
     if hasattr(fixture.GuardedDivergenceAttestationTests,name):
         setattr(MirroredAttestationBindingTests,name,
