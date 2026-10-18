@@ -5,6 +5,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(wa_core src/core.cpp)
 target_include_directories(wa_core PUBLIC include)
 enable_testing()
+add_library(wa_field_core src/field.cpp)
+target_include_directories(wa_field_core PUBLIC include)
+add_executable(wa_field_core_tests tests/test_field.cpp)
+target_link_libraries(wa_field_core_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_core_tests COMMAND wa_field_core_tests)
+
+# Asset-free terminal exploration demo: host-only, NOT a Switch NRO.
+add_executable(wa_field_demo src/field_demo.cpp)
+target_link_libraries(wa_field_demo PRIVATE wa_field_core)
+
 add_executable(wa_core_tests tests/test_core.cpp)
 target_link_libraries(wa_core_tests PRIVATE wa_core)
 add_test(NAME wa_core_tests COMMAND wa_core_tests)
