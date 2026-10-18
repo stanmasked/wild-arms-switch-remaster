@@ -14,6 +14,8 @@ from tools import audit_record_witness_checkpoint_registry as registry
 from tools import audit_record_witness_replay_head_checkpoint as checkpoint
 from tools.audit_record_witness_fence_reconciliation import _sign
 
+TAG = 'private-wild-arms-ledger'
+
 
 class SignedPublicationIntakeTests(unittest.TestCase):
     setUp = fixture.EscrowHistoryTests.setUp
@@ -62,7 +64,7 @@ class SignedPublicationIntakeTests(unittest.TestCase):
     def submit(self, round_number,role,raw=None, *,
                expected_count=None,expected_head=None,
                registry_count=None,registry_head=None,
-               registry_checkpoint=None,key_role=None,scope=fixture.TAG,
+               registry_checkpoint=None,key_role=None,scope=TAG,
                advance=True):
         key_role = role if key_role is None else key_role
         src = self.rounds[round_number][role] if raw is None else raw
