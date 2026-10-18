@@ -1,0 +1,134 @@
+name: NeXium Linux NRO smoke (experimental)
+on:
+  push:
+    paths:
+      - '.github/workflows/nexium-smoke.yml'
+      - 'tools/audit_nexium_probe.py'
+      - 'tools/test_audit_nexium_probe.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-homebrew:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build actual asset-free Switch NRO
+        run: make -C switch -j2
+      - name: Check NRO0 format and manifest
+        run: |
+          python3 tools/audit_switch_nro.py switch/wild_arms_field.nro --json switch/wild_arms_field.nro.audit.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexium-smoke-nro
+          path: |
+            switch/wild_arms_field.nro
+            switch/wild_arms_field.nro.audit.json
+          if-no-files-found: error
+
+  nexium-smoke:
+    needs: build-homebrew
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      NEXIUM_URL: https://github.com/nexium-emu/nexium-nightly/releases/download/nightly/nexium-linux-x86_64.tar.gz
+      # Official GitHub release archive digest observed 2026-10-18.
+      # Fail closed if the rolling nightly changes; re-verify before updating.
+      NEXIUM_ARCHIVE_SHA256: 0ec2da5d58b6b362a9f0a4c927af0e55d36a0b50d1ab3f035dd075ea12d76761
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: nexium-smoke-nro
+          path: native-artifact
+      - name: Install Mesa Vulkan software renderer and screen tools
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            mesa-vulkan-drivers vulkan-tools xvfb xdotool imagemagick python3-pil \
+            libgtk-3-0 libasound2t64 libudev1 libxkbcommon0 libvulkan1
+      - name: Verify synthetic frame evidence classifier
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_probe.py' -v
+      - name: Download exact verified official NeXium Linux archive
+        run: |
+          set -euo pipefail
+          mkdir -p nexium-dist nexium-probe
+          curl -fL --retry 3 --connect-timeout 20 --max-time 240 \
+            "$NEXIUM_URL" -o nexium-dist/nexium.tar.gz
+          echo "$NEXIUM_ARCHIVE_SHA256  nexium-dist/nexium.tar.gz" | sha256sum -c -
+          tar -xzf nexium-dist/nexium.tar.gz -C nexium-dist/
+          test -x nexium-dist/NeXium/nexium
+          file nexium-dist/NeXium/nexium
+          ldd nexium-dist/NeXium/nexium > nexium-probe/ldd.txt || true
+          /usr/bin/vulkaninfo --summary > nexium-probe/vulkan.txt 2>&1 || true
+      - name: Attempt real NeXium guest execution under Xvfb
+        id: attempt
+        continue-on-error: true
+        timeout-minutes: 4
+        run: |
+          set -u
+          mkdir -p nexium-probe
+          Xvfb :99 -screen 0 1600x900x24 -nolisten tcp \
+            > nexium-probe/xvfb.log 2>&1 &
+          echo $! > nexium-probe/xvfb.pid
+          sleep 4
+          export DISPLAY=:99
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-wild-arms-data"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          timeout --signal=INT --kill-after=5 75s \
+            ./nexium-dist/NeXium/nexium \
+            "$PWD/native-artifact/wild_arms_field.nro" \
+            > nexium-probe/nexium.log 2>&1 &
+          emulator_pid=$!
+          sleep 15
+          xdotool search --onlyvisible --class 'nexium' windowactivate \
+            > nexium-probe/window-search.log 2>&1 || true
+          import -display :99 -window root nexium-probe/screen-initial.png || true
+          xdotool key x || true
+          sleep 12
+          import -display :99 -window root nexium-probe/screen-after-x.png || true
+          sleep 13
+          import -display :99 -window root nexium-probe/screen-later.png || true
+          wait "$emulator_pid"
+          result=$?
+          echo "$result" > nexium-probe/process-exit-code.txt
+          exit 0
+      - name: Classify pixel evidence; do not confuse GUI launch with game execution
+        id: evidence
+        continue-on-error: true
+        if: always()
+        run: |
+          /usr/bin/python3 tools/audit_nexium_probe.py \
+            nexium-probe/screen-initial.png \
+            nexium-probe/screen-after-x.png \
+            nexium-probe/screen-later.png \
+            --commit "$GITHUB_SHA" \
+            --nexium-archive-sha256 "$NEXIUM_ARCHIVE_SHA256" \
+            --report nexium-probe/evidence.json
+      - name: Record explicit verification status in workflow summary
+        if: always()
+        run: |
+          echo "## NeXium smoke / experimental" >> "$GITHUB_STEP_SUMMARY"
+          echo "Native build succeeded; NeXium guest execution is **not assumed**." >> "$GITHUB_STEP_SUMMARY"
+          if test -f nexium-probe/evidence.json; then
+            cat nexium-probe/evidence.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No classifiable emulator frame evidence was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "No firmware, ROM, BIOS or commercial assets used." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nexium-experimental-probe-evidence
+          path: nexium-probe/
+          if-no-files-found: warn
