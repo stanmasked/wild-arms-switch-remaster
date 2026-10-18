@@ -89,7 +89,10 @@ class StableDetachedMirrorAckTests(unittest.TestCase):
             alternate.chmod(0o600)
             self.archive_path.unlink()
             self.archive_path.symlink_to(alternate)
-        with self.assertRaises(archive.OfflineMirrorEvidenceConflict):
+        # The original secure parent guard may reject a symlink before
+        # the detached layer wraps the exception. Either is fail-closed.
+        with self.assertRaises((archive.OfflineMirrorEvidenceConflict,
+                                archive.private.EvidenceArchiveConflict)):
             self._interrupt_replay(symlink_swap)
 
     def test_archive_becomes_hardlinked_during_replay_refused(self):
