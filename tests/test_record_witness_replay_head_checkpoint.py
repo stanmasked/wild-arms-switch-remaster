@@ -1,6 +1,7 @@
 """Synthetic Stage 263M independently endorsed ledger head regressions."""
 import contextlib
 import hashlib
+import hashlib
 import io
 import json
 import sqlite3
@@ -117,6 +118,23 @@ class SignedReplayHeadTests(unittest.TestCase):
         self.sign_heads(alternate_b=self.admins[0])
         with self.assertRaises(head.CheckpointConflict):
             self.verify()
+
+    def test_same_key_with_reformatted_pem_cannot_fake_two_signers(self):
+        self.init_journal()
+        self.sign_heads(alternate_b=self.admins[0])
+        public = self.admin_a[2].read_text()
+        lines = public.splitlines()
+        self.assertGreater(len(lines[1]), 12)
+        # DER material is identical; the SHA-256 of the PEM file differs.
+        lines[1:2] = [lines[1][:12], lines[1][12:]]
+        reformatted = self.path('same-key-alternate-pem-')
+        reformatted.write_text('\\n'.join(lines) + '\\n')
+        reformatted.chmod(0o600)
+        other = ('bob', self.admin_a[1], reformatted,
+                 hashlib.sha256(reformatted.read_bytes()).hexdigest())
+        self.assertNotEqual(other[3], self.admin_a[3])
+        with self.assertRaises(head.CheckpointConflict):
+            self.verify(key_b=other)
 
     def test_wrong_signer_public_pin_or_signature_refused(self):
         self.init_journal()
