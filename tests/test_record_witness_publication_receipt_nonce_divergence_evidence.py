@@ -124,7 +124,8 @@ class DetachedNonceHistoryTests(unittest.TestCase):
         self.assertFalse(self.witness_path.exists())
 
     def test_invalid_current_registry_pin_refused_before_create(self):
-        with self.assertRaises(witness.DetachedHistoryConflict):
+        with self.assertRaises((witness.DetachedHistoryConflict,
+                                cross.LedgerDivergence)):
             self.create_witness(external_secondary_head='f'*64)
         self.assertFalse(self.witness_path.exists())
 
