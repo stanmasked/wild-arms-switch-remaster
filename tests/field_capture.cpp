@@ -1,5 +1,5 @@
 #include "field_pixels.hpp"
-#include "field_world.hpp"
+#include "field_scenario.hpp"
 
 #include <array>
 #include <cstddef>
@@ -68,65 +68,32 @@ void snapshot(const FieldWorld& world, const WorldState& state,
   if (write) save_ppm(destination / (std::string{name} + ".ppm"), pixels);
 }
 
-void move(WorldState& world_state, const FieldWorld& world,
-          const PadSample& sample, int steps,
-          Trigger final_trigger = Trigger::None) {
-  for (int n = 0; n < steps; ++n) {
-    const WorldFrameResult frame =
-        advance_world_frame(world, world_state, sample, 160);
-    const Trigger expected = n == steps - 1 ? final_trigger : Trigger::None;
-    require(frame.controller.movement.trigger == expected);
-    require(frame.controller.movement.status ==
-            (expected == Trigger::None ? TimedStatus::Moved
-                                       : TimedStatus::Triggered));
-    require(frame.controller.movement.successful_steps == 1);
-    require(!frame.area_changed);
-  }
-}
-
-void confirm(WorldState& state, const FieldWorld& world, bool should_move_area) {
-  const WorldFrameResult frame =
-      advance_world_frame(world, state, PadSample{.confirm = true}, 160);
-  require(frame.controller.outcome == PadFrameOutcome::Acknowledged);
-  require(frame.area_changed == should_move_area);
-  require(!state.clock.paused_for_trigger && state.pending == Trigger::None);
-}
-
 void playback(const std::filesystem::path& destination, bool write) {
   const FieldWorld world = make_demo_world();
   require(world.valid());
   if (write) std::filesystem::create_directories(destination);
-  WorldState game = start_world(world);
-
-  snapshot(world, game, write, destination, kNames[0]);
-
-  const PadSample right{.dpad_right = true};
-  const PadSample left{.dpad_left = true};
-  const PadSample down{.dpad_down = true};
-
-  move(game, world, right, 3, Trigger::Event);
-  require(game.area == 0 && game.player.x == 4 && game.player.y == 1);
-  snapshot(world, game, write, destination, kNames[1]);
-
-  confirm(game, world, false);
-  move(game, world, left, 1);
-  move(game, world, down, 4);
-  move(game, world, right, 3, Trigger::Exit);
-  require(game.area == 0 && game.player.x == 6 && game.player.y == 5);
-  snapshot(world, game, write, destination, kNames[2]);
-
-  confirm(game, world, true);
-  require(game.area == 1 && game.player.x == 1 && game.player.y == 1);
-  require(game.player.successful_moves == 11);
-  snapshot(world, game, write, destination, kNames[3]);
-
-  move(game, world, down, 4);
-  move(game, world, right, 5, Trigger::Exit);
-  require(game.area == 1 && game.player.x == 6 && game.player.y == 5);
-  confirm(game, world, true);
-  require(game.area == 0 && game.player.x == 1 && game.player.y == 1);
-  require(game.player.successful_moves == 20);
-  snapshot(world, game, write, destination, kNames[4]);
+  ScenarioTrack scenario = start_field_scenario(world);
+  require(!scenario.invalid);
+  snapshot(world, scenario.world, write, destination, kNames[0]);
+  int next_checkpoint = 1;
+  int ticks = 0;
+  while (!scenario.complete) {
+    require(ticks < 23);
+    const ScenarioResult step = advance_field_scenario(world, scenario);
+    require(step.status != ScenarioStatus::Invalid &&
+            step.status != ScenarioStatus::Finished);
+    if (step.status == ScenarioStatus::Checkpoint) {
+      require(step.checkpoint == next_checkpoint);
+      snapshot(world, scenario.world, write, destination,
+               kNames[static_cast<std::size_t>(next_checkpoint)]);
+      ++next_checkpoint;
+    }
+    ++ticks;
+  }
+  require(ticks == 23 && next_checkpoint == 5);
+  require(matches_checkpoint(scenario.world, 4));
+  require(advance_field_scenario(world, scenario).status ==
+          ScenarioStatus::Finished);
 }
 
 }  // namespace

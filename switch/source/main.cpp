@@ -4,6 +4,7 @@
 #include "field_world.hpp"
 #include "field_view.hpp"
 #include "field_pixels.hpp"
+#include "field_scenario.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -58,6 +59,9 @@ int main() {
   padInitializeDefault(&pad);
 
   WorldState game = start_world(world);
+  ScenarioTrack demo = start_field_scenario(world);
+  bool autoplay = false;
+  std::uint32_t demo_wait_ms = 0;
   RenderFrame view{};
   const u64 tick_frequency = armGetSystemTickFreq();
   u64 previous_tick = armGetSystemTick();
@@ -76,11 +80,34 @@ int main() {
     const u32 delta = static_cast<u32>(std::min<u64>(
         elapsed_ms, kMaximumMovementDeltaMs));
 
-    const WorldFrameResult result =
-        advance_world_frame(world, game, read_pad(pad), delta);
-    (void)result;
-    const Map& current_map = world.areas[game.area].map;
-    if (build_view(view, current_map, game.player, kViewport) !=
+    const u64 pressed = padGetButtonsDown(&pad);
+    if (pressed & HidNpadButton_X) {
+      demo = start_field_scenario(world);
+      if (demo.invalid) break;
+      autoplay = true;
+      demo_wait_ms = 2500; // Initial reference remains visible for capture.
+    } else if (autoplay && (pressed & HidNpadButton_B)) {
+      autoplay = false;
+      game = start_world(world);
+    }
+
+    if (autoplay) {
+      if (demo_wait_ms > delta) {
+        demo_wait_ms -= delta;
+      } else if (!demo.complete) {
+        const ScenarioResult tick = advance_field_scenario(world, demo);
+        if (tick.status == ScenarioStatus::Invalid) break;
+        demo_wait_ms = tick.status == ScenarioStatus::Checkpoint ?
+                           2500u : 350u;
+      }
+    } else {
+      const WorldFrameResult manual =
+          advance_world_frame(world, game, read_pad(pad), delta);
+      (void)manual;
+    }
+    const WorldState& displayed = autoplay ? demo.world : game;
+    const Map& current_map = world.areas[displayed.area].map;
+    if (build_view(view, current_map, displayed.player, kViewport) !=
         RenderOutcome::Ready)
       break;
 
@@ -90,7 +117,7 @@ int main() {
     const PixelTarget output{pixels, kWidth, kHeight,
                              static_cast<int>(stride_bytes / sizeof(u32))};
     const RasterOutcome drawn = draw_field_pixels(
-        output, view, game.clock.paused_for_trigger, game.area);
+        output, view, displayed.clock.paused_for_trigger, displayed.area);
     framebufferEnd(&fb);
     if (drawn != RasterOutcome::Ready) break;
   }
