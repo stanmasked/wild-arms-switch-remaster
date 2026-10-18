@@ -142,7 +142,7 @@ def _validate_archived(meta, branches, *,
 def _secure_parent(path):
     path=Path(path)
     parent=path.parent
-    st=parent.stat()
+    st=parent.lstat()
     if (not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid()
             or st.st_mode & 0o077):
         raise EvidenceArchiveConflict('archive parent must be private and owned')
@@ -174,8 +174,34 @@ def _write_exclusive(path, raw):
 
 
 def _read(path):
+    """Read the exact private inode once, rejecting links and path swaps."""
     path=_secure_parent(path)
-    return _read_limited(_private_regular_file(path),MAX_ARCHIVE)
+    _private_regular_file(path)
+    flags=os.O_RDONLY|getattr(os,'O_NOFOLLOW',0)
+    fd=os.open(path,flags)
+    try:
+        before=os.fstat(fd)
+        current=os.lstat(path)
+        if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+                or before.st_uid != os.getuid() or before.st_mode & 0o077
+                or before.st_dev != current.st_dev
+                or before.st_ino != current.st_ino or current.st_nlink != 1):
+            raise EvidenceArchiveConflict('archive hardlink or inode identity conflict')
+        with os.fdopen(fd,'rb',closefd=False) as source:
+            raw=source.read(MAX_ARCHIVE+1)
+        after=os.fstat(fd)
+        current=os.lstat(path)
+        if (len(raw)>MAX_ARCHIVE or not raw
+                or before.st_dev != after.st_dev
+                or before.st_ino != after.st_ino
+                or before.st_size != after.st_size
+                or after.st_size != len(raw)
+                or current.st_dev != after.st_dev
+                or current.st_ino != after.st_ino or current.st_nlink != 1):
+            raise EvidenceArchiveConflict('archive changed or exceeded size bound')
+        return raw
+    finally:
+        os.close(fd)
 
 
 def inspect(path, *, expected_archive_sha256,expected_evidence_sha256,
