@@ -165,3 +165,30 @@ binary is unmodified and reject reuse or other file shapes.
 
 A long-term fix belongs in NeXium's own loader code; the emulator-only
 padding is NOT an acceptable change to the production NRO.
+
+## Stage 288 — first real guest rendering and corrected X key capture
+
+Commit `78f0408c` and NeXium experimental workflow `39170237497`
+produced the first actual guest field framebuffer from the synthetic
+game in NeXium, on Mesa llvmpipe. The internal emulator log confirms
+`FIRST NON-BLACK FRAME`, `Starting emulation loop`, and thousands of
+guest presentations; five screenshots contain expected wall/floor/exit
+and player pixels. The emulator used a clearly nonstandard padded copy
+only to isolate the upstream 16-byte NRO bounds-check bug. The
+valid Nintendo Switch NRO was not changed.
+
+A visual comparison of the five game regions found them identical:
+autoplay had NOT been verified. The upstream official NeXium controller
+defaults in `nexium-gui/src/controller_config.rs` map
+Switch **X** to physical keyboard **V**, while physical X maps Switch
+**B**. The previous smoke sent the wrong key, and waited 20 seconds
+before its first screenshot, around the entire round-trip duration.
+
+The corrected experimental workflow sends a deliberate V key-down and
+key-up, samples at 5, 10, 17 and 29 seconds from the press, and uses a
+new host desktop screenshot comparator to distinguish true changes in
+the central game field from fluctuating FPS overlays. The comparator's
+ROI is specific to Xvfb 1600x900 and must not be used for arbitrary
+display sizes. No result is called successful full checkpoint parity:
+even a visible change establishes only a possible response to input,
+not all 23 scripted actions. The NRO padding remains diagnostic only.

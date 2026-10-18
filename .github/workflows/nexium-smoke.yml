@@ -11,6 +11,8 @@ on:
       - 'tools/test_audit_nexium_session.py'
       - 'tools/prepare_nexium_nro_probe.py'
       - 'tools/test_prepare_nexium_nro_probe.py'
+      - 'tools/audit_nexium_autoplay.py'
+      - 'tools/test_audit_nexium_autoplay.py'
   workflow_dispatch:
 
 permissions:
@@ -70,6 +72,8 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_launch_control.py' -v
       - name: Verify internal NeXium session-log parser with synthetic logs
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_session.py' -v
+      - name: Verify visual movement audit using invented screenshots
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_autoplay.py' -v
       - name: Download exact verified official NeXium Linux archive
         run: |
           set -euo pipefail
@@ -145,17 +149,26 @@ jobs:
               > nexium-probe/window-geometry.txt 2>&1 || true
             xdotool windowfocus "$window_id" \
               > nexium-probe/window-focus.log 2>&1 || true
-            xdotool key --clearmodifiers x \
+            # NeXium default keyboard bindings map Switch X to V.
+            # Host X maps Switch B, so it previously cancelled nothing.
+            printf 'Switch X -> host V at %s\n' "$(date -u +%FT%TZ)" \
+              >> nexium-probe/window-focus.log
+            xdotool keydown --clearmodifiers v \
+              >> nexium-probe/window-focus.log 2>&1 || true
+            sleep 0.18
+            xdotool keyup --clearmodifiers v \
               >> nexium-probe/window-focus.log 2>&1 || true
           fi
 
-          sleep 20
+          # Capture during the scripted route, BEFORE its final area0
+          # snapshot becomes identical to the initial screenshot.
+          sleep 5
           import -display :99 -window root nexium-probe/screen-after-x.png || true
-          sleep 20
+          sleep 5
           import -display :99 -window root nexium-probe/screen-middle.png || true
-          sleep 20
+          sleep 7
           import -display :99 -window root nexium-probe/screen-later.png || true
-          sleep 20
+          sleep 12
           import -display :99 -window root nexium-probe/screen-final.png || true
           set +e
           wait "$emulator_pid"
@@ -219,6 +232,16 @@ jobs:
             --guest nexium-probe/guest-internal.log \
             --control nexium-probe/control-internal.log \
             --report nexium-probe/session-audit.json
+      - name: Verify intended Switch X triggers visible world changes
+        if: always()
+        run: |
+          /usr/bin/python3 tools/audit_nexium_autoplay.py \
+            --initial nexium-probe/screen-initial.png \
+            --intermediate nexium-probe/screen-after-x.png \
+              nexium-probe/screen-middle.png \
+              nexium-probe/screen-later.png \
+              nexium-probe/screen-final.png \
+            --report nexium-probe/autoplay-evidence.json
       - name: Classify pixel evidence; require guest pixels for success
         id: evidence
         if: always()
