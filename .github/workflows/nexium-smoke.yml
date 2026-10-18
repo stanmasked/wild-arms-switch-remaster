@@ -33,6 +33,10 @@ jobs:
   nexium-smoke:
     needs: build-homebrew
     runs-on: ubuntu-24.04
+    # Official Oct-2026 Linux NeXium binary needs GLIBC_2.43.
+    # Fedora 44 supplies 2.43; Ubuntu 24.04's libc cannot start it.
+    container:
+      image: fedora:44
     timeout-minutes: 15
     env:
       NEXIUM_URL: https://github.com/nexium-emu/nexium-nightly/releases/download/nightly/nexium-linux-x86_64.tar.gz
@@ -45,12 +49,13 @@ jobs:
         with:
           name: nexium-smoke-nro
           path: native-artifact
-      - name: Install Mesa Vulkan software renderer and screen tools
+      - name: Install Fedora 44 GLIBC 2.43 and software Vulkan tools
         run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            mesa-vulkan-drivers vulkan-tools xvfb xdotool imagemagick python3-pil \
-            libgtk-3-0 libasound2t64 libudev1 libxkbcommon0 libvulkan1
+          dnf install -y --setopt=install_weak_deps=False \
+            mesa-vulkan-drivers vulkan-tools xorg-x11-server-Xvfb \
+            xdotool ImageMagick python3-pillow gtk3 alsa-lib systemd-libs \
+            libxkbcommon vulkan-loader file curl tar gzip coreutils procps-ng
+          ldd --version | head -n 1
       - name: Verify synthetic frame evidence classifier
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_probe.py' -v
       - name: Download exact verified official NeXium Linux archive
@@ -99,8 +104,12 @@ jobs:
           import -display :99 -window root nexium-probe/screen-after-x.png || true
           sleep 13
           import -display :99 -window root nexium-probe/screen-later.png || true
+          # The runner shell inherits -e, so allow a nonzero exit here
+          # to ensure every crash is recorded in the exported evidence.
+          set +e
           wait "$emulator_pid"
           result=$?
+          set -e
           echo "$result" > nexium-probe/process-exit-code.txt
           exit 0
       - name: Classify pixel evidence; do not confuse GUI launch with game execution
@@ -124,6 +133,9 @@ jobs:
             cat nexium-probe/evidence.json >> "$GITHUB_STEP_SUMMARY"
           else
             echo "No classifiable emulator frame evidence was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/process-exit-code.txt; then
+            echo "NeXium process exit code: $(cat nexium-probe/process-exit-code.txt)" >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "No firmware, ROM, BIOS or commercial assets used." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4

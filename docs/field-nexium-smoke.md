@@ -37,3 +37,24 @@ metadata. These tests alone are not emulator verification.
 
 Official emulator homepage: https://nexium-emu.org/
 Official nightly archive: https://github.com/nexium-emu/nexium-nightly/releases
+
+## Initial NeXium attempt — runtime blocker found
+
+The first Linux emulator probe for commit `75013284` **did run the
+CI setup and downloaded the verified official NeXium archive**, but
+NeXium exited before loading the NRO:
+
+```
+/lib/x86_64-linux-gnu/libm.so.6: version 'GLIBC_2.43' not found
+```
+
+GitHub Actions run `39166644123` captured three black Xvfb screenshots.
+`evidence.json` states `runtime_not_confirmed` and all synthetic
+field palette counts are zero. The workflow conclusion was green
+**only because the emulator experiment was marked continue-on-error**,
+not because the game ran.
+
+The correction switches only this experimental job to `fedora:44`,
+which provides GNU libc 2.43, retains the exact pinned NeXium archive,
+and records the emulator process exit code even on failure. Subsequent
+results must still be checked for an actual guest framebuffer.
