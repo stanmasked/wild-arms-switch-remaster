@@ -179,6 +179,7 @@ on:
       - 'tests/test_record_witness_publication_mirror_ack_nonce_guard.py'
       - 'tests/test_record_witness_publication_mirror_ack_registry_binding.py'
       - 'tests/test_record_witness_publication_mirror_ack_detached_evidence.py'
+      - 'tests/test_record_witness_publication_mirror_ack_archive_stability.py'
       - 'tests/test_record_witness_publication_replica_compare.py'
       - 'tests/test_record_witness_gated_recovery.py'
       - 'tests/test_record_witness_gated_custody.py'
@@ -234,6 +235,7 @@ on:
       - 'docs/ps1-witness-publication-mirror-ack-nonce-guard.md'
       - 'docs/ps1-witness-publication-mirror-ack-registry-binding.md'
       - 'docs/ps1-witness-publication-mirror-ack-detached-evidence.md'
+      - 'docs/ps1-witness-publication-mirror-ack-archive-stability.md'
       - 'docs/ps1-witness-publication-replica-comparison.md'
       - 'docs/ps1-witness-gated-recovery.md'
       - 'docs/ps1-witness-gated-custody-writes.md'
@@ -428,6 +430,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_record_witness_publication_mirror_ack_nonce_guard.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_publication_mirror_ack_registry_binding.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_publication_mirror_ack_detached_evidence.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_mirror_ack_archive_stability.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_publication_replica_compare.py' -v
           python -m unittest discover -s tests -p 'test_record_reserved_accept.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
