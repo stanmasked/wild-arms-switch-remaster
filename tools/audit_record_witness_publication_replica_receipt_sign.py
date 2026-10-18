@@ -1,4 +1,4 @@
-"""Reference operator-side CLI: inspect and sign ONE local archive copy.
+"""Stage 264J operator-side CLI: consume nonce in local SQLite BEFORE signing.
 
 No network transfer and no remotely trusted signing infrastructure.
 The receipt is a signed observation, not a physical custody certificate.
@@ -10,9 +10,11 @@ from pathlib import Path
 try:
     from . import audit_record_witness_publication_replica_receipts as receipts
     from . import audit_record_witness_publication_checkpoint_cas as cas
+    from . import audit_record_witness_publication_receipt_nonce_ledger as nonce_ledger
 except ImportError:
     import audit_record_witness_publication_replica_receipts as receipts
     import audit_record_witness_publication_checkpoint_cas as cas
+    import audit_record_witness_publication_receipt_nonce_ledger as nonce_ledger
 
 
 def main(argv=None):
@@ -33,6 +35,8 @@ def main(argv=None):
         p.add_argument('--evidence-operator-'+label+'-public',
                        type=Path,required=True)
         p.add_argument('--evidence-operator-'+label+'-pin',required=True)
+    p.add_argument('--nonce-registry',type=Path,required=True)
+    p.add_argument('--expected-registry-head',required=True)
     p.add_argument('--signing-private',type=Path,required=True)
     p.add_argument('--signing-public',type=Path,required=True)
     p.add_argument('--signing-public-pin',required=True)
@@ -42,8 +46,9 @@ def main(argv=None):
             'witness_fence_retired':False,
             'automatic_cas_retry_authorized':False}
     try:
-        result.update(receipts.attest(
-            a.archive,role=a.role,
+        result.update(nonce_ledger.guarded_attest(
+            a.archive,a.nonce_registry,
+            expected_registry_head=a.expected_registry_head,role=a.role,
             operator_id=a.operator_id,storage_id=a.storage_id,
             scope=a.scope,audit_id=a.audit_id,nonce=a.challenge,
             receipt_sequence=a.receipt_sequence,
@@ -59,7 +64,8 @@ def main(argv=None):
             receipt_public_pin=a.signing_public_pin,
             output=a.output))
         status=0
-    except (receipts.ReceiptConflict,cas.CheckpointCASConflict,ValueError,
+    except (nonce_ledger.NonceLedgerConflict,receipts.ReceiptConflict,
+            cas.CheckpointCASConflict,ValueError,
             OSError,TypeError,KeyError,IndexError):
         result['receipt_conflict']=True
         status=1
