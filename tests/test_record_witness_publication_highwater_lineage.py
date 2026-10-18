@@ -317,6 +317,16 @@ class HighwaterLineageTests(unittest.TestCase):
         self.assertFalse(obj['witness_fence_retired'])
         self.assertFalse(obj['automatic_cas_retry_authorized'])
         self.assertNotIn('signature_hex',out.getvalue())
+        # Also exercise the missing-input-file path after file opening moved
+        # into the fail-closed CLI exception handler.
+        files['old_a'].unlink()
+        with contextlib.redirect_stdout(missing:=io.StringIO()):
+            missing_status=lineage.main(args)
+        missing_result=json.loads(missing.getvalue())
+        self.assertEqual(missing_status,1)
+        self.assertTrue(missing_result['highwater_transition_conflict'])
+        self.assertFalse(missing_result['witness_fence_retired'])
+        self.assertFalse(missing_result['automatic_cas_retry_authorized'])
 
 
 if __name__=='__main__':
