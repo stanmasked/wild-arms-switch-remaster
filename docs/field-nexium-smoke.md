@@ -95,3 +95,26 @@ appear, rather than presenting a misleading green workflow when
 `continue-on-error` allowed a GUI-only attempt to pass. Artifacts and
 summary are uploaded on failure. This workflow remains separate from
 regular project CI and uses no proprietary firmware or game dumps.
+
+## Stage 285 — host frontend vs guest startup isolation
+
+The Stage-284 extended NeXium probe `39168069968` failed the actual
+guest-pixel classifier: five virtual display captures remained at the
+NeXium splash, with no Wild Arms synthetic tile colours. The process
+consumed roughly 62% of one CPU core and stayed at 168 MB RSS for
+130 seconds; cgroup memory stayed near 1.46 GB rather than growing.
+Exit code 137 followed `timeout` signal escalation, **not independently
+verified OOM**.
+
+The next experimental run starts NeXium **without** an NRO after the
+failed/successful guest launch, on the same Fedora 44 Mesa Vulkan/Xvfb
+environment but with an isolated empty data directory. It captures the
+control window and compares RGB channels to the last guest-attempt
+screenshot using `tools/audit_nexium_launch_control.py`. The report
+records the fraction of desktop RGB channels differing by at most 16.
+A high similarity only suggests that both runs show the same GUI
+state; it cannot prove guest execution or pinpoint a CPU/JIT bug.
+
+The no-NRO control test is intentionally nonblocking to retain logs on
+failure, while the main guest-pixel verification remains a strict CI gate.
+Unit tests use invented desktop images, not an actual emulator.
