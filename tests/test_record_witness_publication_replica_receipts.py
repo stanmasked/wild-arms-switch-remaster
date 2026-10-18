@@ -8,6 +8,7 @@ import unittest
 
 from tests import test_record_witness_publication_equivocation_replica as previous
 from tools import audit_record_witness_publication_replica_receipts as receipts
+from tools import audit_record_witness_publication_replica_receipt_sign as signer
 from tools import audit_record_witness_publication_equivocation_archive as archive
 from tools import audit_record_witness_publication_equivocation_replica as replica
 from tools import audit_record_witness_publication_checkpoint_cas as cas
@@ -274,6 +275,60 @@ class ReplicaReceiptTests(unittest.TestCase):
             'automatic_cas_retry_authorized',
             'native_switch_game_build_verified'):
             self.assertFalse(observed[field])
+
+    def test_signed_fake_scope_rejected_even_with_two_agreeing_receipts(self):
+        a=self.sign_receipt(0,checkpoint_scope='not-original-scope')
+        b=self.sign_receipt(1,checkpoint_scope='not-original-scope')
+        with self.assertRaises(receipts.ReceiptConflict):
+            self.verify(raw_a=a,raw_b=b,expected_scope='not-original-scope',
+                receipt_a_envelope_pin=hashlib.sha256(a).hexdigest(),
+                receipt_b_envelope_pin=hashlib.sha256(b).hexdigest())
+
+    def operator_args(self,idx):
+        letter=('a','b')[idx]
+        return [
+            str(self.archive if idx==0 else self.secondary),
+            str(self.receipt_paths[idx]),
+            '--role','operator-'+letter,
+            '--operator-id','private-operator-'+letter,
+            '--storage-id','private-store-'+letter,
+            '--scope',self.scope,
+            '--audit-id',self.id,
+            '--challenge',self.nonces[idx],
+            '--receipt-sequence','1',
+            '--previous-receipt-sha256',self.previous_receipts[idx],
+            '--archive-sha256',self.primary_pin,
+            '--evidence-sha256',self.evidence_sha,
+            '--evidence-operator-a-public',str(self.observers[0][1]),
+            '--evidence-operator-a-pin',self.observers[0][2],
+            '--evidence-operator-b-public',str(self.observers[1][1]),
+            '--evidence-operator-b-pin',self.observers[1][2],
+            '--signing-private',str(self.observers[idx][0]),
+            '--signing-public',str(self.observers[idx][1]),
+            '--signing-public-pin',self.observers[idx][2],
+        ]
+
+    def test_operator_signing_cli_redacted_and_verifiable(self):
+        with contextlib.redirect_stdout(out:=io.StringIO()):
+            status=signer.main(self.operator_args(0))
+        self.assertEqual(status,0,out.getvalue())
+        result=json.loads(out.getvalue())
+        self.assertTrue(result['signed_local_inspection_revalidated'])
+        self.assertFalse(result['witness_fence_retired'])
+        self.assertNotIn('signature_hex',out.getvalue())
+        self.assertEqual(result['receipt_envelope_sha256'],hashlib.sha256(
+            self.receipt_paths[0].read_bytes()).hexdigest())
+
+    def test_operator_signing_cli_wrong_evidence_pin_no_file(self):
+        argv=self.operator_args(1)
+        i=argv.index('--evidence-sha256')
+        argv[i+1]='f'*64
+        with contextlib.redirect_stdout(out:=io.StringIO()):
+            status=signer.main(argv)
+        self.assertEqual(status,1)
+        self.assertTrue(json.loads(out.getvalue())['receipt_conflict'])
+        self.assertFalse(self.receipt_paths[1].exists())
+        self.assertNotIn('signature_hex',out.getvalue())
 
     def test_cli_redacted_conflict_when_receipt_missing(self):
         f=Path(self.temp.name)/'valid-a.json'
