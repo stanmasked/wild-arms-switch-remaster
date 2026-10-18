@@ -233,23 +233,23 @@ def main(argv=None):
     p.add_argument('--expected-event-head',required=True)
     p.add_argument('--expected-successor-bundle-sha256')
     a=p.parse_args(argv)
-    raw={}
-    pinned={}
-    for moment in ('old','new'):
-        for letter in ('a','b'):
-            label=moment+'_'+letter
-            path=getattr(a,moment+'_'+letter+'_certificate')
-            raw[label]=_read_limited(_private_regular_file(path),high.MAX_CERT)
-            pinned[label]=getattr(a,moment+'_'+letter+'_sha256')
-    for letter in ('a','b'):
-        raw['endorsement_'+letter]=_read_limited(
-            _private_regular_file(getattr(a,'endorsement_'+letter)),MAX_ENDORSEMENT)
-        pinned['endorsement_'+letter]=getattr(a,'endorsement_'+letter+'_sha256')
     report={'schema':REPORT_SCHEMA,
             'witness_fence_retirement_authorized':False,
             'witness_fence_retired':False,
             'automatic_cas_retry_authorized':False}
     try:
+        raw={}
+        pinned={}
+        for moment in ('old','new'):
+            for letter in ('a','b'):
+                label=moment+'_'+letter
+                path=getattr(a,moment+'_'+letter+'_certificate')
+                raw[label]=_read_limited(_private_regular_file(path),high.MAX_CERT)
+                pinned[label]=getattr(a,moment+'_'+letter+'_sha256')
+        for letter in ('a','b'):
+            raw['endorsement_'+letter]=_read_limited(
+                _private_regular_file(getattr(a,'endorsement_'+letter)),MAX_ENDORSEMENT)
+            pinned['endorsement_'+letter]=getattr(a,'endorsement_'+letter+'_sha256')
         report.update(verify(a.database,raw['old_a'],raw['old_b'],
             raw['new_a'],raw['new_b'],raw['endorsement_a'],raw['endorsement_b'],
             scope=a.scope,operator_a_id=a.operator_a_id,
