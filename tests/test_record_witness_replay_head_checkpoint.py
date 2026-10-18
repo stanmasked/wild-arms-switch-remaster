@@ -64,7 +64,7 @@ class SignedReplayHeadTests(unittest.TestCase):
         self.signed_b = output_b.read_bytes()
         self.signed_a_path = output_a
         self.signed_b_path = output_b
-        self.pin = head.checkpoint_digest(self.signed_a, self.signed_b)
+        self.checkpoint_pin = head.checkpoint_digest(self.signed_a, self.signed_b)
         self.prior = prior
 
     def verify(self, *, signed_a=None, signed_b=None, pin=None, prior=None,
@@ -78,7 +78,7 @@ class SignedReplayHeadTests(unittest.TestCase):
             a[2],a[3],b[2],b[3], checkpoint_tag=expected_tag,
             prior_checkpoint_pin=self.prior if prior is None else prior,
             independently_pinned_checkpoint_sha256=(
-                self.pin if pin is None else pin))
+                self.checkpoint_pin if pin is None else pin))
 
     def test_two_admin_genesis_checkpoint_is_advisory_only(self):
         self.init_journal()
@@ -110,7 +110,7 @@ class SignedReplayHeadTests(unittest.TestCase):
                 self.admin_a[2],self.admin_a[3],
                 self.admin_b[2],self.admin_b[3],
                 checkpoint_tag=TAG,prior_checkpoint_pin=self.prior,
-                independently_pinned_checkpoint_sha256=self.pin)
+                independently_pinned_checkpoint_sha256=self.checkpoint_pin)
 
     def test_same_signer_used_as_two_admins_refused(self):
         self.init_journal()
@@ -207,7 +207,7 @@ class SignedReplayHeadTests(unittest.TestCase):
             str(self.signed_b_path),str(self.admin_b[2]),self.admin_b[3],
             '--checkpoint-tag',TAG,
             '--prior-checkpoint-sha256',self.prior,
-            '--latest-checkpoint-sha256',self.pin,
+            '--latest-checkpoint-sha256',self.checkpoint_pin,
         ]
         with contextlib.redirect_stdout(stream := io.StringIO()):
             code=head.main(args)
