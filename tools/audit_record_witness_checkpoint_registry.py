@@ -109,11 +109,13 @@ def _connect(path):
 def _audit(con):
     if con.execute('PRAGMA user_version').fetchone()[0] != MARKER:
         raise RegistryConflict('accepted checkpoint registry seal changed')
-    tables = con.execute(
-        "SELECT name,sql FROM sqlite_master WHERE type='table' "
-        "AND name NOT LIKE 'sqlite_%'").fetchall()
-    if tables != [('accepted_replay_checkpoints', CREATE_SQL)]:
-        raise RegistryConflict('unexpected accepted checkpoint registry schema')
+    # Reject all unexpected user-defined triggers, views and indexes:
+    # merely checking table columns would permit silent write side effects.
+    objects = con.execute(
+        "SELECT type,name,sql FROM sqlite_master "
+        "WHERE name NOT LIKE 'sqlite_%'").fetchall()
+    if objects != [('table','accepted_replay_checkpoints', CREATE_SQL)]:
+        raise RegistryConflict('unexpected registry table, trigger, index or view')
     names = tuple(row[1] for row in
                   con.execute('PRAGMA table_info(accepted_replay_checkpoints)'))
     if names != COLUMNS:
