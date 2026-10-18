@@ -36,6 +36,10 @@ operator-a and operator-b PEM keys. Those keys are checked against the
 original registry enrollment by Stage 264P, not selected by the attacker
 solely from the signatures themselves.
 
+Additionally, the verifier reads the independently pinned original operator
+**ID** enrollment before and after signature checks. A genuine enrolled
+Ed25519 key signing a *different, unregistered operator name* is rejected.
+
 A successful check first runs Stage 264P **in full**, verifies the exact
 two signed acknowledgment bodies, then reruns the complete Stage 264P
 audit. If any registered Stage 264M envelope is missing/altered or any
