@@ -146,7 +146,6 @@ class PublicationReplicaTests(unittest.TestCase):
         self.clone()
         self.full_round(0)
         historic=self.i_head
-        self.submit(1,'escrow-a') if False else None
         self.update_copy()
         result=self.cmp(floor_count=3,floor_head=historic)
         self.assertTrue(result['trusted_historical_floor_present_in_both'])
