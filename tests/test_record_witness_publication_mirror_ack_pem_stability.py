@@ -24,7 +24,7 @@ class DetachedOperatorKeyStabilityTests(unittest.TestCase):
     def prepare(self):
         trusted=self.context()
         created=self.make_archive()
-        self.trusted=trusted
+        self.saved_external_trust=trusted
         self.external_archive_pin=created['private_evidence_archive_sha256']
         return created
 
@@ -38,13 +38,13 @@ class DetachedOperatorKeyStabilityTests(unittest.TestCase):
                                side_effect=replay_then_replace):
             return archive.inspect(
                 self.archive_path,archive_pin=self.external_archive_pin,
-                **self.trusted)
+                **self.saved_external_trust)
 
     def test_both_enrolled_keys_remain_stable(self):
         self.prepare()
         result=archive.inspect(
             self.archive_path,archive_pin=self.external_archive_pin,
-            **self.trusted)
+            **self.saved_external_trust)
         self.assertTrue(result['every_completed_attestation_signature_reverified_offline'])
 
     def test_registered_keys_checked_without_source_databases(self):
@@ -53,7 +53,7 @@ class DetachedOperatorKeyStabilityTests(unittest.TestCase):
             path.unlink()
         result=archive.inspect(
             self.archive_path,archive_pin=self.external_archive_pin,
-            **self.trusted)
+            **self.saved_external_trust)
         self.assertTrue(result['full_detached_event_chains_replayed_in_memory'])
 
     def test_swap_operator_a_public_pem_with_same_bytes_rejected(self):
@@ -130,7 +130,7 @@ class DetachedOperatorKeyStabilityTests(unittest.TestCase):
 
     def test_different_other_registered_key_for_a_rejected_at_start(self):
         self.prepare()
-        trusted=dict(self.trusted,
+        trusted=dict(self.saved_external_trust,
             operator_a_public=self.observers[1][1])
         with self.assertRaises(REFUSAL):
             archive.inspect(self.archive_path,
@@ -138,7 +138,7 @@ class DetachedOperatorKeyStabilityTests(unittest.TestCase):
 
     def test_different_other_registered_key_for_b_rejected_at_start(self):
         self.prepare()
-        trusted=dict(self.trusted,
+        trusted=dict(self.saved_external_trust,
             operator_b_public=self.observers[0][1])
         with self.assertRaises(REFUSAL):
             archive.inspect(self.archive_path,
@@ -157,7 +157,7 @@ class DetachedOperatorKeyStabilityTests(unittest.TestCase):
         self.prepare()
         checked=archive.inspect(
             self.archive_path,archive_pin=self.external_archive_pin,
-            **self.trusted)
+            **self.saved_external_trust)
         for field in ('physically_independent_operator_custody_proved',
             'independent_external_archive_sha256_retention_proved',
             'actual_source_mirror_inspections_replayed_proved',
