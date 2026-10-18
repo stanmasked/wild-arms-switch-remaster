@@ -13,6 +13,10 @@ on:
       - 'tools/test_prepare_nexium_nro_probe.py'
       - 'tools/audit_nexium_autoplay.py'
       - 'tools/test_audit_nexium_autoplay.py'
+      - 'tools/audit_nexium_checkpoints.py'
+      - 'tools/test_audit_nexium_checkpoints.py'
+      - 'tests/field_capture.cpp'
+      - 'include/field_pixels.hpp'
   workflow_dispatch:
 
 permissions:
@@ -38,8 +42,26 @@ jobs:
             switch/wild_arms_field.nro.audit.json
           if-no-files-found: error
 
+  host-references:
+    name: Build same-commit host reference PNGs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and execute real portable core reference capture
+        run: |
+          cmake -S . -B build
+          cmake --build build --target wa_field_capture --parallel
+          ./build/wa_field_capture field-host-a
+          ./build/wa_field_capture field-host-b
+          python3 tools/audit_field_capture.py field-host-a field-host-b --output field-host-refs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexium-five-host-checkpoints
+          path: field-host-refs/
+          if-no-files-found: error
+
   nexium-smoke:
-    needs: build-homebrew
+    needs: [build-homebrew, host-references]
     runs-on: ubuntu-24.04
     # Official Oct-2026 Linux NeXium binary needs GLIBC_2.43.
     # Fedora 44 supplies 2.43; Ubuntu 24.04's libc cannot start it.
@@ -57,6 +79,10 @@ jobs:
         with:
           name: nexium-smoke-nro
           path: native-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          name: nexium-five-host-checkpoints
+          path: same-commit-host-references
       - name: Install Fedora 44 GLIBC 2.43 and software Vulkan tools
         run: |
           dnf install -y --setopt=install_weak_deps=False \
@@ -66,6 +92,8 @@ jobs:
             file curl tar gzip coreutils procps-ng
           ldd --version | head -n 1
           ldconfig -p | grep 'libxkbcommon-x11.so'
+      - name: Unit-test ordered five-checkpoint reference matcher
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_checkpoints.py' -v
       - name: Verify synthetic frame evidence classifier
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_probe.py' -v
       - name: Unit-test with/without NRO screenshot comparison
@@ -160,16 +188,16 @@ jobs:
               >> nexium-probe/window-focus.log 2>&1 || true
           fi
 
-          # Capture during the scripted route, BEFORE its final area0
-          # snapshot becomes identical to the initial screenshot.
-          sleep 5
-          import -display :99 -window root nexium-probe/screen-after-x.png || true
-          sleep 5
-          import -display :99 -window root nexium-probe/screen-middle.png || true
-          sleep 7
-          import -display :99 -window root nexium-probe/screen-later.png || true
-          sleep 12
-          import -display :99 -window root nexium-probe/screen-final.png || true
+          # 80 real 1600x900 desktop frames sampled during the short
+          # 23-step autoplay route. Preserve the original screenshots to
+          # reveal missed or unexpected transitions.
+          mkdir -p nexium-probe/timeline
+          for frame in $(seq -w 0 79); do
+            import -display :99 -window root \
+              "nexium-probe/timeline/frame-$frame.png" || true
+            sleep 0.22
+          done
+
           set +e
           wait "$emulator_pid"
           result=$?
@@ -232,6 +260,19 @@ jobs:
             --guest nexium-probe/guest-internal.log \
             --control nexium-probe/control-internal.log \
             --report nexium-probe/session-audit.json
+      - name: Select five real ordered checkpoints against same-commit host PNGs
+        if: always()
+        run: |
+          /usr/bin/python3 tools/audit_nexium_checkpoints.py \
+            --reference same-commit-host-references \
+            --initial nexium-probe/screen-initial.png \
+            --timeline nexium-probe/timeline \
+            --selected nexium-probe/verified-checkpoints \
+            --report nexium-probe/five-checkpoints.json
+          cp nexium-probe/verified-checkpoints/01_area0_event.png nexium-probe/screen-after-x.png
+          cp nexium-probe/verified-checkpoints/02_area0_exit.png nexium-probe/screen-middle.png
+          cp nexium-probe/verified-checkpoints/03_area1_start.png nexium-probe/screen-later.png
+          cp nexium-probe/verified-checkpoints/04_area0_return.png nexium-probe/screen-final.png
       - name: Verify intended Switch X triggers visible world changes
         if: always()
         run: |
@@ -268,6 +309,10 @@ jobs:
           fi
           if test -f nexium-probe/process-exit-code.txt; then
             echo "NeXium process exit code: $(cat nexium-probe/process-exit-code.txt)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/five-checkpoints.json; then
+            echo "Five-scene structural evidence:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; x=json.load(open("nexium-probe/five-checkpoints.json")); print("validated scenes:",len(x["verified_scenes"]),"complete:",x["full_five_checkpoint_sequence_observed"] )' >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "No firmware, ROM, BIOS or commercial assets used." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4

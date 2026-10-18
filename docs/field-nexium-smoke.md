@@ -207,3 +207,38 @@ visible game ROI movement, yellow event status, and byte-identical
 returned ROI. Its test fixtures cover positive and false-positive
 scenarios. These results do not establish all five exact host
 checkpoint images or authenticate keyboard event delivery.
+
+## Stage 289 — five in-order NeXium screenshots vs same-commit host
+
+Experimental CI builds **five canonical 1280x720 host reference PNGs**
+and the Switch homebrew NRO from the exact same git revision. The NeXium
+job downloads both artifacts and launches ONLY the clearly labeled,
+nonstandard +16-byte emulator compatibility probe. The genuine NRO
+continues to be unchanged and valid for actual Switch use.
+
+After sending host keyboard V (mapped to Switch X), the workflow samples
+80 actual Xvfb desktop screenshots about every 220ms plus PNG export
+time. `tools/audit_nexium_checkpoints.py` verifies host reference PNG
+and decoded-RGB SHA-256 checksums and selects images in the correct
+scene order:
+
+0. Area 0 start (initial before X)
+1. Area 0 event (yellow status; player at x=4,y=1)
+2. Area 0 exit (yellow status; player at x=6,y=5)
+3. Area 1 start (blue status, different terrain and player)
+4. Area 0 return (green status; player returns to x=1,y=1)
+
+The method projects 77 terrain samples, expected player colour/centre
+and status colours from each canonical host reference into the fixed
+NeXium 1600x900 desktop layout. It excludes FPS/UI overlays and
+requires exact screen ROI equality between first and last scenes.
+It saves original screenshots under `verified-checkpoints/` with a
+SHA-256 manifest. Missing scenes fail closed, with all raw timeline PNGs
+and diagnostics still uploaded for further debugging.
+
+**This is a structural sample comparison, not complete pixel-by-pixel
+1280x720 parity.** The NeXium frontend rescales the original framebuffer
+into an Xvfb desktop, so an exact full-frame comparator requires a
+separate proven inverse scaling/capture API. The five checks also do not
+prove exact timings for every one of the 23 logical scenario steps.
+No original Wild Arms assets or firmware are used.
