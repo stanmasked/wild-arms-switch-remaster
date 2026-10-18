@@ -1,4 +1,5 @@
 #include "field.hpp"
+#include "field_timing.hpp"
 
 #include <cstdint>
 #include <cstdlib>
@@ -167,6 +168,156 @@ void test_deterministic_replay() {
   require(first.facing == Direction::Down);
 }
 
+
+void test_timed_accumulation_and_released_input() {
+  const auto m = village();
+  State s{1, 1};
+  MovementClock clock;
+  require(advance_timed(clock, s, m, {.right = true}, 100).status ==
+          TimedStatus::Waiting);
+  require(advance_timed(clock, s, m, {.right = true}, 59).status ==
+          TimedStatus::Waiting);
+  require(s.x == 1 && clock.carry_ms == 159);
+  const auto moved = advance_timed(clock, s, m, {.right = true}, 1);
+  require(moved.status == TimedStatus::Moved &&
+          moved.successful_steps == 1 && moved.attempted_steps == 1);
+  require(s.x == 2 && s.successful_moves == 1 && clock.carry_ms == 0);
+  require(advance_timed(clock, s, m, {.right = true}, 120).status ==
+          TimedStatus::Waiting);
+  require(advance_timed(clock, s, m, {}, 100).status == TimedStatus::Idle);
+  require(clock.carry_ms == 0 && clock.held == Direction::None);
+  require(advance_timed(clock, s, m, {.right = true}, 40).status ==
+          TimedStatus::Waiting);
+  require(advance_timed(clock, s, m, {.right = true}, 120).status ==
+          TimedStatus::Triggered);
+  require(s.x == 3 && clock.paused_for_trigger);
+}
+
+void test_timed_partition_invariant_without_trigger() {
+  const Map m{12, 3,
+              "############"
+              "#..........#"
+              "############"};
+  require(m.valid());
+  State large{1, 1};
+  State small{1, 1};
+  MovementClock ca, cb;
+  const auto once = advance_timed(ca, large, m, {.right = true}, 480);
+  require(once.status == TimedStatus::Moved &&
+          once.attempted_steps == 3 && once.successful_steps == 3);
+  for (int i = 0; i < 6; ++i)
+    (void)advance_timed(cb, small, m, {.right = true}, 80);
+  require(large.x == small.x && large.y == small.y);
+  require(large.successful_moves == small.successful_moves);
+  require(large.facing == small.facing);
+  require(ca.carry_ms == cb.carry_ms && ca.held == cb.held);
+  require(large.x == 4 && large.successful_moves == 3);
+}
+
+void test_timed_direction_change_and_blocked_facing() {
+  const auto m = village();
+  State s{1, 1};
+  MovementClock clock;
+  require(advance_timed(clock, s, m, {.right = true}, 120).status ==
+          TimedStatus::Waiting);
+  require(advance_timed(clock, s, m, {.down = true}, 100).status ==
+          TimedStatus::Waiting);
+  require(s.x == 1 && s.y == 1 && clock.carry_ms == 100);
+  require(advance_timed(clock, s, m, {.down = true}, 60).status ==
+          TimedStatus::Moved);
+  require(s.y == 2 && s.facing == Direction::Down);
+  const auto collision = advance_timed(clock, s, m, {.left = true}, 320);
+  require(collision.status == TimedStatus::Blocked &&
+          collision.attempted_steps == 2 && collision.successful_steps == 0);
+  require(s.x == 1 && s.y == 2 && s.facing == Direction::Left);
+}
+
+void test_timed_event_pause_and_resume() {
+  const auto m = village();
+  State s{1, 1};
+  MovementClock clock;
+  const auto event = advance_timed(clock, s, m, {.right = true}, 800);
+  require(event.status == TimedStatus::Triggered &&
+          event.trigger == Trigger::Event);
+  require(event.attempted_steps == 2 && event.successful_steps == 2);
+  require(s.x == 3 && s.successful_moves == 2);
+  require(clock.paused_for_trigger && clock.carry_ms == 0 &&
+          clock.held == Direction::None);
+  const auto paused = advance_timed(clock, s, m, {.right = true}, 1000);
+  require(paused.status == TimedStatus::Paused &&
+          paused.attempted_steps == 0 && s.x == 3);
+  require(acknowledge_trigger(clock));
+  require(!acknowledge_trigger(clock));
+  require(advance_timed(clock, s, m, {.left = true}, 159).status ==
+          TimedStatus::Waiting);
+  require(advance_timed(clock, s, m, {.left = true}, 1).status ==
+          TimedStatus::Moved);
+  require(s.x == 2);
+  const auto repeat = advance_timed(clock, s, m, {.right = true}, 160);
+  require(repeat.status == TimedStatus::Triggered &&
+          repeat.trigger == Trigger::Event && s.x == 3);
+}
+
+void test_timed_exit_pause() {
+  const auto m = village();
+  State s{3, 3};
+  MovementClock clock;
+  const auto exit = advance_timed(clock, s, m, {.right = true}, 160);
+  require(exit.status == TimedStatus::Triggered &&
+          exit.trigger == Trigger::Exit && s.x == 4);
+  require(advance_timed(clock, s, m, {.left = true}, 160).status ==
+          TimedStatus::Paused);
+  require(s.x == 4 && clock.paused_for_trigger);
+}
+
+void test_timed_rejects_malformed_inputs_without_mutation() {
+  const auto m = village();
+  State s{1, 1};
+  MovementClock clock;
+  require(advance_timed(clock, s, m, {.right = true}, 100).status ==
+          TimedStatus::Waiting);
+  const MovementClock before = clock;
+  require(advance_timed(clock, s, m, {.right = true}, 1001).status ==
+          TimedStatus::InvalidDelta);
+  require(advance_timed(clock, s, m,
+                        {.right = true, .down = true}, 60).status ==
+          TimedStatus::AmbiguousInput);
+  require(advance_timed(clock, s, Map{2, 2, "??.."},
+                        {.right = true}, 60).status ==
+          TimedStatus::InvalidMap);
+  require(clock.carry_ms == before.carry_ms && clock.held == before.held);
+  require(s.x == 1 && s.y == 1 && s.successful_moves == 0);
+  State bad{-1, 1};
+  require(advance_timed(clock, bad, m, {.right = true}, 60).status ==
+          TimedStatus::InvalidState);
+  require(bad.x == -1 && clock.carry_ms == before.carry_ms);
+  clock.cadence_ms = 0;
+  require(advance_timed(clock, s, m, {.right = true}, 60).status ==
+          TimedStatus::InvalidClock);
+  clock.cadence_ms = 160;
+  clock.carry_ms = 160;
+  require(advance_timed(clock, s, m, {.right = true}, 60).status ==
+          TimedStatus::InvalidClock);
+  clock.carry_ms = 100;
+  clock.held = static_cast<Direction>(99);
+  require(advance_timed(clock, s, m, {.right = true}, 60).status ==
+          TimedStatus::InvalidClock);
+  require(s.x == 1 && s.successful_moves == 0);
+}
+
+void test_timed_counter_overflow_safety() {
+  const auto m = village();
+  State s{1, 1, Direction::Down,
+          std::numeric_limits<std::uint64_t>::max()};
+  MovementClock clock;
+  const auto result = advance_timed(clock, s, m, {.right = true}, 160);
+  require(result.status == TimedStatus::CounterExhausted &&
+          result.attempted_steps == 1 && result.successful_steps == 0);
+  require(result.trigger == Trigger::None && s.x == 1 && s.y == 1);
+  require(s.facing == Direction::Right &&
+          s.successful_moves == std::numeric_limits<std::uint64_t>::max());
+}
+
 }  // namespace
 
 int main() {
@@ -181,4 +332,11 @@ int main() {
   test_outside_map_boundary_and_no_overflow();
   test_counter_overflow_refused_without_position_change();
   test_deterministic_replay();
+  test_timed_accumulation_and_released_input();
+  test_timed_partition_invariant_without_trigger();
+  test_timed_direction_change_and_blocked_facing();
+  test_timed_event_pause_and_resume();
+  test_timed_exit_pause();
+  test_timed_rejects_malformed_inputs_without_mutation();
+  test_timed_counter_overflow_safety();
 }
