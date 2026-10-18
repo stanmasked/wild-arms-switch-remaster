@@ -81,7 +81,7 @@ void test_event_then_transition_then_return() {
 void test_rejects_bad_world_and_state_without_mutation() {
   FieldWorld world = simple_world();
   WorldState game = start_world(world);
-  const PadSample pressed{.confirm = true, .dpad_right = true};
+  const PadSample pressed{.dpad_right = true, .confirm = true};
   world.areas[1].entrance_x = 0;  // Wall, not a spawn.
   require(advance_world_frame(world, game, pressed, 160)
               .controller.movement.status == TimedStatus::InvalidMap);
