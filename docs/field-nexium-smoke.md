@@ -73,3 +73,25 @@ remained blank, and `runtime_not_confirmed` was correctly recorded.
 The correction installs Fedora package `libxkbcommon-x11` and asserts
 the shared library is visible to the dynamic linker before launching
 NeXium. No NRO runtime claim is made until actual guest pixels appear.
+
+## Stage 284 — NeXium splash visible, guest field not yet rendered
+
+Run `39167371006` successfully launched the **NeXium GUI** after the
+Fedora/XKB repairs. Its screenshots show NeXium's animated gradient-edged
+splash window, **not our synthetic Wild Arms field**. The pixel
+classifier correctly reported `runtime_not_confirmed`: all field
+palette and player pixel counts were zero. The process exit code was 137
+after the workflow's 75-second `timeout` and SIGKILL grace period.
+That exit code alone cannot distinguish a forced timeout kill from an
+out-of-memory kill, so no OOM conclusion is justified.
+
+The next experiment increases the bounded guest-run budget to 130 seconds,
+records `ps` CPU/RSS samples and cgroup memory, activates the X11
+window using `xdotool windowfocus` instead of the unsupported EWMH
+`windowactivate`, and captures five timestamped desktop screenshots.
+
+The experimental NeXium workflow now **fails** if field pixels never
+appear, rather than presenting a misleading green workflow when
+`continue-on-error` allowed a GUI-only attempt to pass. Artifacts and
+summary are uploaded on failure. This workflow remains separate from
+regular project CI and uses no proprietary firmware or game dumps.

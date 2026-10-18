@@ -72,10 +72,10 @@ jobs:
           file nexium-dist/NeXium/nexium
           ldd nexium-dist/NeXium/nexium > nexium-probe/ldd.txt || true
           /usr/bin/vulkaninfo --summary > nexium-probe/vulkan.txt 2>&1 || true
-      - name: Attempt real NeXium guest execution under Xvfb
+      - name: Attempt NeXium guest execution with monitored Vulkan process
         id: attempt
         continue-on-error: true
-        timeout-minutes: 4
+        timeout-minutes: 5
         run: |
           set -u
           mkdir -p nexium-probe
@@ -89,40 +89,73 @@ jobs:
           export SDL_AUDIODRIVER=dummy
           export WGPU_BACKEND=vulkan
           export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          export RUST_LOG=info
           if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
             export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
           fi
-          timeout --signal=INT --kill-after=5 75s \
+          # 137 may indicate a forced timeout kill; do not label it an OOM
+          # without independent memory/cgroup evidence.
+          timeout --signal=TERM --kill-after=10 130s \
             ./nexium-dist/NeXium/nexium \
             "$PWD/native-artifact/wild_arms_field.nro" \
             > nexium-probe/nexium.log 2>&1 &
           emulator_pid=$!
+          (
+            while kill -0 "$emulator_pid" 2>/dev/null; do
+              date -u +'%Y-%m-%dT%H:%M:%SZ'
+              ps -eo pid,ppid,etime,%cpu,%mem,rss,stat,comm |
+                grep -E 'PID|[n]exium|[t]imeout' || true
+              if test -r /sys/fs/cgroup/memory.current; then
+                cat /sys/fs/cgroup/memory.current
+              fi
+              sleep 10
+            done
+          ) > nexium-probe/process-samples.log 2>&1 &
+          monitor_pid=$!
+
           sleep 15
-          xdotool search --onlyvisible --class 'nexium' windowactivate \
-            > nexium-probe/window-search.log 2>&1 || true
           import -display :99 -window root nexium-probe/screen-initial.png || true
-          xdotool key x || true
-          sleep 12
+
+          # X11 focus works without an EWMH-compatible window manager,
+          # unlike xdotool windowactivate.
+          window_id=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null | head -n 1) || true
+          if test -n "$window_id"; then
+            echo "$window_id" > nexium-probe/window-id.txt
+            xdotool getwindowgeometry "$window_id" \
+              > nexium-probe/window-geometry.txt 2>&1 || true
+            xdotool windowfocus "$window_id" \
+              > nexium-probe/window-focus.log 2>&1 || true
+            xdotool key --clearmodifiers x \
+              >> nexium-probe/window-focus.log 2>&1 || true
+          fi
+
+          sleep 20
           import -display :99 -window root nexium-probe/screen-after-x.png || true
-          sleep 13
+          sleep 20
+          import -display :99 -window root nexium-probe/screen-middle.png || true
+          sleep 20
           import -display :99 -window root nexium-probe/screen-later.png || true
-          # The runner shell inherits -e, so allow a nonzero exit here
-          # to ensure every crash is recorded in the exported evidence.
+          sleep 20
+          import -display :99 -window root nexium-probe/screen-final.png || true
           set +e
           wait "$emulator_pid"
           result=$?
+          kill "$monitor_pid" 2>/dev/null
+          wait "$monitor_pid" 2>/dev/null
           set -e
           echo "$result" > nexium-probe/process-exit-code.txt
           exit 0
-      - name: Classify pixel evidence; do not confuse GUI launch with game execution
+      - name: Classify pixel evidence; require guest pixels for success
         id: evidence
-        continue-on-error: true
         if: always()
         run: |
           /usr/bin/python3 tools/audit_nexium_probe.py \
             nexium-probe/screen-initial.png \
             nexium-probe/screen-after-x.png \
+            nexium-probe/screen-middle.png \
             nexium-probe/screen-later.png \
+            nexium-probe/screen-final.png \
             --commit "$GITHUB_SHA" \
             --nexium-archive-sha256 "$NEXIUM_ARCHIVE_SHA256" \
             --report nexium-probe/evidence.json
