@@ -6,7 +6,10 @@ The tool requires independently retained count and SHA-256 head for
 **each** copy. It checks the entire chain, schema, integrity marker and
 freeze state before comparing the ordered event commitments.
 
-The copies must be different paths. A byte-identical event history
+The copies must be different paths **and have different filesystem
+(device, inode) identities**; a hard link does not qualify as a second
+copy. This check cannot prove that two distinct inodes reside on
+independent machines. A byte-identical event history
 passes even when both journals contain a signed conflict and are frozen:
 a frozen conflict cannot be erased or treated as authority to continue
 publication. A shorter history is recognized as a stale prefix and
