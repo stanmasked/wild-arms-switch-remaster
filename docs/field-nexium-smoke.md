@@ -192,3 +192,18 @@ ROI is specific to Xvfb 1600x900 and must not be used for arbitrary
 display sizes. No result is called successful full checkpoint parity:
 even a visible change establishes only a possible response to input,
 not all 23 scripted actions. The NRO padding remains diagnostic only.
+
+## Stage 288 — visual event and round-trip verification
+
+NeXium run `39171302136` passed with real guest rendering and
+visible movement after correct host key **V** (Switch X). The game
+ROI changed by 2,757 pixels at +5 and +10 seconds; screenshots
+at +17 and +29 seconds matched the initial game ROI exactly.
+The intermediate screenshots had the yellow event status strip and
+the initial/return screenshots had the green normal-state strip.
+
+The strict screenshot audit now requires all three observations:
+visible game ROI movement, yellow event status, and byte-identical
+returned ROI. Its test fixtures cover positive and false-positive
+scenarios. These results do not establish all five exact host
+checkpoint images or authenticate keyboard event delivery.

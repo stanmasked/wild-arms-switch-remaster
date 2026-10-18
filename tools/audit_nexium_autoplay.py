@@ -29,41 +29,56 @@ def pixels_changed(first, second, crop=VIEW_CROP, threshold=12):
     return sum(max(pixel) >= threshold for pixel in delta.getdata())
 
 
-def audit_frames(initial, intermediate, report_path):
+def status_bar(image, expected):
+    return all(image.convert("RGB").getpixel((x, 5)) == expected
+               for x in (500, 700, 900))
+
+
+def audit_frames(initial, intermediate, report_path,
+                 require_event_roundtrip=False):
     initial = Path(initial)
     intermediate = [Path(x) for x in intermediate]
-    if not intermediate:
-        raise ValueError("at least one intermediate capture required")
-    frames = [initial, *intermediate]
-    if len(set(p.resolve() for p in frames)) != len(frames):
-        raise ValueError("duplicate screenshot path")
-    with Image.open(initial) as reference:
-        reference.load()
-        if reference.size != EXPECTED_DESKTOP:
-            raise ValueError("unexpected virtual desktop size")
+    if not intermediate or len({p.resolve() for p in [initial, *intermediate]}) != len(intermediate) + 1:
+        raise ValueError("no intermediate screenshots or duplicate paths")
+    with Image.open(initial) as base:
+        base.load()
+        if base.size != EXPECTED_DESKTOP:
+            raise ValueError("wrong Xvfb dimensions")
+        green_initial = status_bar(base, (63, 191, 138))
+        event_seen = False
+        last_green = False
         counts = []
-        for shot in intermediate:
-            with Image.open(shot) as image:
-                image.load()
-                if image.size != reference.size:
+        for i, path in enumerate(intermediate):
+            with Image.open(path) as frame:
+                frame.load()
+                if frame.size != base.size:
                     raise ValueError("screenshot dimensions differ")
-                counts.append(pixels_changed(reference, image))
-    changed = any(value >= MIN_CHANGED_PIXELS for value in counts)
+                counts.append(pixels_changed(base, frame))
+                event_seen |= status_bar(frame, (246, 183, 66))
+                if i == len(intermediate) - 1:
+                    last_green = status_bar(frame, (63, 191, 138))
+    changed = any(n >= MIN_CHANGED_PIXELS for n in counts)
+    returned = green_initial and last_green and counts[-1] == 0
+    strict_ok = changed and event_seen and returned
     report = {
         "kind": "nexium_guest_field_visual_transition",
         "input_key_host": "v",
         "switch_button_intended": "X",
-        "requires_real_game_field": True,
         "game_roi": list(VIEW_CROP),
         "max_changed_pixels": max(counts),
         "changed_by_capture": [
-            {"file": path.name, "changed_pixels": num}
-            for path, num in zip(intermediate, counts)
-        ],
+            {"file": path.name, "changed_pixels": number}
+            for path, number in zip(intermediate, counts)],
         "visual_transition_confirmed": changed,
+        "event_status_bar_detected": event_seen,
+        "round_trip_field_identical": returned,
+        "event_and_roundtrip_observed": strict_ok,
+        "strict_event_roundtrip_required": require_event_roundtrip,
         "controller_event_authenticity_confirmed": False,
         "checkpoint_parity_confirmed": False,
-        "status": ("field_pixels_changed" if changed else "no_visible_field_transition"),
+        "status": ("event_and_roundtrip_observed" if strict_ok else
+                   "field_pixels_changed" if changed else
+                   "no_visible_field_transition"),
     }
     output = Path(report_path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -77,14 +92,18 @@ def main():
     p.add_argument("--initial", type=Path, required=True)
     p.add_argument("--intermediate", nargs="+", type=Path, required=True)
     p.add_argument("--report", type=Path, required=True)
+    p.add_argument("--require-event-roundtrip", action="store_true")
     args = p.parse_args()
     try:
-        report = audit_frames(args.initial, args.intermediate, args.report)
+        report = audit_frames(args.initial, args.intermediate, args.report,
+                              require_event_roundtrip=args.require_event_roundtrip)
     except (OSError, ValueError) as exc:
         p.exit(2, f"Autoplay visual evidence rejected: {exc}\n")
     print(json.dumps({"status": report["status"],
                       "max_changed_pixels": report["max_changed_pixels"]}))
-    if not report["visual_transition_confirmed"]:
+    if not report["visual_transition_confirmed"] or (
+            args.require_event_roundtrip and
+            not report["event_and_roundtrip_observed"]):
         p.exit(1, "No visible field movement in expected game region\n")
 
 

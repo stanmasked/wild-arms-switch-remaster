@@ -40,6 +40,35 @@ class VisualTransitionTests(unittest.TestCase):
             self.assertEqual(r["max_changed_pixels"], 0)
             self.assertFalse(r["visual_transition_confirmed"])
 
+    def test_realistic_event_and_return_enforced(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            start, event, final = (root / name for name in
+                                  ("start.png", "event.png", "return.png"))
+            im = Image.new("RGB", (1600, 900), (12, 19, 31))
+            draw = ImageDraw.Draw(im)
+            draw.rectangle((0, 0, 1599, 9), fill=(63, 191, 138))
+            draw.rectangle((370, 210, 400, 240), fill=(201, 67, 76))
+            im.save(start)
+            e = im.copy()
+            ed = ImageDraw.Draw(e)
+            ed.rectangle((0, 0, 1599, 9), fill=(246, 183, 66))
+            ed.rectangle((370, 210, 400, 240), fill=(174, 155, 115))
+            ed.rectangle((570, 210, 600, 240), fill=(246, 246, 246))
+            e.save(event)
+            ImageDraw.Draw(im).rectangle((10, 20, 230, 100),
+                                         fill=(20, 200, 30))
+            im.save(final)
+            result = audit_frames(start, [event, final], root / "report.json",
+                                  require_event_roundtrip=True)
+            self.assertTrue(result["event_status_bar_detected"])
+            self.assertTrue(result["round_trip_field_identical"])
+            self.assertTrue(result["event_and_roundtrip_observed"])
+            self.assertFalse(result["checkpoint_parity_confirmed"])
+            negative = audit_frames(start, [final], root / "negative.json",
+                                    require_event_roundtrip=True)
+            self.assertFalse(negative["event_and_roundtrip_observed"])
+
     def test_bad_dimensions_and_duplicate_names_rejected(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

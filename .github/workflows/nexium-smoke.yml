@@ -241,6 +241,7 @@ jobs:
               nexium-probe/screen-middle.png \
               nexium-probe/screen-later.png \
               nexium-probe/screen-final.png \
+            --require-event-roundtrip \
             --report nexium-probe/autoplay-evidence.json
       - name: Classify pixel evidence; require guest pixels for success
         id: evidence
