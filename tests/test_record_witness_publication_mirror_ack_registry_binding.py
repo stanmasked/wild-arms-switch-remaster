@@ -63,12 +63,12 @@ class MirrorAcknowledgmentRegistryBindingTests(unittest.TestCase):
         opts.update(changes)
         return bound.verify(self.ack_registry,self.secondary_ack,**opts)
 
-    def first(self):
+    def prepare_first_ack(self):
         self.issue_ack()
         self.mirror_acks()
 
     def test_single_completed_signed_acknowledgment_verified(self):
-        self.first()
+        self.prepare_first_ack()
         r=self.audit_acks()
         self.assertEqual(r['verified_completed_acknowledgment_count'],1)
         self.assertEqual(r['verified_event_count'],2)
@@ -104,31 +104,31 @@ class MirrorAcknowledgmentRegistryBindingTests(unittest.TestCase):
             self.audit_acks()
 
     def test_missing_envelope_rejected(self):
-        self.first()
+        self.prepare_first_ack()
         with self.assertRaises(FAIL):
             self.audit_acks(signed_envelopes={'operator-a':[],'operator-b':[]})
 
     def test_missing_role_manifest_rejected(self):
-        self.first()
+        self.prepare_first_ack()
         with self.assertRaises(FAIL):
             self.audit_acks(signed_envelopes={'operator-a':self.attestations['operator-a']})
 
     def test_extra_envelope_cannot_duplicate_one_completion(self):
-        self.first()
+        self.prepare_first_ack()
         pair=self.attestations['operator-a'][0]
         with self.assertRaises(FAIL):
             self.audit_acks(signed_envelopes={'operator-a':[pair,pair],
                                               'operator-b':[]})
 
     def test_wrong_exact_signed_envelope_pin_rejected(self):
-        self.first()
+        self.prepare_first_ack()
         raw,_=self.attestations['operator-a'][0]
         with self.assertRaises(FAIL):
             self.audit_acks(signed_envelopes={
                 'operator-a':[(raw,'f'*64)],'operator-b':[]})
 
     def test_forged_signed_bytes_with_self_supplied_pin_rejected(self):
-        self.first()
+        self.prepare_first_ack()
         raw,_=self.attestations['operator-a'][0]
         bad=raw[:-1]+b' '
         with self.assertRaises(FAIL):
@@ -137,7 +137,7 @@ class MirrorAcknowledgmentRegistryBindingTests(unittest.TestCase):
                 'operator-b':[]})
 
     def test_authentically_signed_but_different_body_cannot_replace_complete(self):
-        self.first()
+        self.prepare_first_ack()
         altered=self.expected_ack_body(0,
             exact_signed_completion_manifest_sha256='f'*64)
         forged=Path(self.temp.name)/'different-valid-signature.json'
@@ -158,7 +158,7 @@ class MirrorAcknowledgmentRegistryBindingTests(unittest.TestCase):
                 'operator-b':self.attestations['operator-a']})
 
     def test_different_registered_public_key_is_not_allowed(self):
-        self.first()
+        self.prepare_first_ack()
         with self.assertRaises(FAIL):
             self.audit_acks(operator_a_public=self.observers[1][1])
 
@@ -176,7 +176,7 @@ class MirrorAcknowledgmentRegistryBindingTests(unittest.TestCase):
             self.audit_acks(**kw)
 
     def test_forked_second_registry_rejected_even_if_individually_audited(self):
-        self.first()
+        self.prepare_first_ack()
         head=ledger.snapshot(self.secondary_ack)['latest_ledger_sha256']
         ledger._record(self.secondary_ack,action='reserve',
             expected_head=head,scope=self.scope,role='operator-b',
@@ -189,36 +189,36 @@ class MirrorAcknowledgmentRegistryBindingTests(unittest.TestCase):
                 self.secondary_ack)['latest_ledger_sha256'])
 
     def test_stale_externally_pinned_head_is_not_accepted(self):
-        self.first()
+        self.prepare_first_ack()
         with self.assertRaises(FAIL):
             self.audit_acks(primary_head_pin=self.ack_genesis)
 
     def test_wrong_enrollment_genesis_rejected(self):
-        self.first()
+        self.prepare_first_ack()
         with self.assertRaises(FAIL):
             self.audit_acks(secondary_genesis_pin='f'*64)
 
     def test_one_path_cannot_be_two_registries(self):
-        self.first()
+        self.prepare_first_ack()
         with self.assertRaises(FAIL):
             bound.verify(self.ack_registry,self.ack_registry,
                          **self.trusted_acks())
 
     def test_hardlinked_registry_is_rejected(self):
-        self.first()
+        self.prepare_first_ack()
         self.secondary_ack.unlink()
         os.link(self.ack_registry,self.secondary_ack)
         with self.assertRaises(FAIL):
             self.audit_acks()
 
     def test_publicly_readable_secondary_registry_rejected(self):
-        self.first()
+        self.prepare_first_ack()
         self.secondary_ack.chmod(0o644)
         with self.assertRaises(FAIL):
             self.audit_acks()
 
     def test_missing_original_source_registries_do_not_forge_inspection_claim(self):
-        self.first()
+        self.prepare_first_ack()
         self.guard_path.unlink()
         self.mirror.unlink()
         report=self.audit_acks()
@@ -226,7 +226,7 @@ class MirrorAcknowledgmentRegistryBindingTests(unittest.TestCase):
         self.assertFalse(report['underlying_source_mirror_audits_replayed_proved'])
 
     def test_disclaimers_for_external_independence_and_no_release(self):
-        self.first()
+        self.prepare_first_ack()
         r=self.audit_acks()
         for key in ('independent_offhost_registry_retention_proved',
                     'independently_trusted_external_pins_proved',
@@ -252,7 +252,7 @@ class MirrorAcknowledgmentRegistryBindingTests(unittest.TestCase):
         self.manifest_acks.write_bytes(_canonical(content))
         self.manifest_acks.chmod(0o600)
 
-    def cli(self):
+    def ack_cli_argv(self):
         s=self.trusted_acks()
         return [str(self.ack_registry),str(self.secondary_ack),
             '--primary-head-pin',s['primary_head_pin'],
@@ -265,10 +265,10 @@ class MirrorAcknowledgmentRegistryBindingTests(unittest.TestCase):
             '--private-signed-manifest',str(self.manifest_acks)]
 
     def test_cli_success_redacts_signed_details(self):
-        self.first()
+        self.prepare_first_ack()
         self.write_manifest()
         with contextlib.redirect_stdout(out:=io.StringIO()):
-            code=bound.main(self.cli())
+            code=bound.main(self.ack_cli_argv())
         self.assertEqual(code,0,out.getvalue())
         r=json.loads(out.getvalue())
         self.assertEqual(r['verified_completed_acknowledgment_count'],1)
@@ -276,20 +276,20 @@ class MirrorAcknowledgmentRegistryBindingTests(unittest.TestCase):
         self.assertNotIn(self.nonces[0],out.getvalue())
 
     def test_cli_rejects_missing_signed_manifest(self):
-        self.first()
+        self.prepare_first_ack()
         with contextlib.redirect_stdout(out:=io.StringIO()):
-            code=bound.main(self.cli())
+            code=bound.main(self.ack_cli_argv())
         self.assertEqual(code,1)
         self.assertFalse(self.manifest_acks.exists())
 
     def test_cli_rejects_wrong_private_manifest_pin(self):
-        self.first()
+        self.prepare_first_ack()
         self.write_manifest()
         data=json.loads(self.manifest_acks.read_bytes())
         data['operator-a'][0]['sha256']='e'*64
         self.manifest_acks.write_bytes(_canonical(data))
         with contextlib.redirect_stdout(out:=io.StringIO()):
-            code=bound.main(self.cli())
+            code=bound.main(self.ack_cli_argv())
         self.assertEqual(code,1)
         self.assertTrue(json.loads(out.getvalue())['acknowledgment_mirror_signature_conflict'])
 
