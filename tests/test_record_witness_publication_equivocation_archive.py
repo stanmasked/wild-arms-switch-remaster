@@ -204,7 +204,7 @@ class EvidenceArchiveTests(unittest.TestCase):
         x['envelope_b64']='YQ=='
         x['sha256']=hashlib.sha256(b'a').hexdigest()
         self.archive.write_bytes(_canonical(obj))
-        with self.assertRaises(cas.CheckpointCASConflict):
+        with self.assertRaises(ValueError):
             self.inspect()
 
     def test_invalid_base64_refused(self):
