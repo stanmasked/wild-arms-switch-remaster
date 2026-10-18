@@ -7,6 +7,8 @@ a replayed old DB together with an old signed checkpoint can still pass
 when the externally retained latest pin is also rolled back. No unlock API.
 """
 import argparse
+import base64
+import binascii
 from contextlib import closing
 import hashlib
 import hmac
@@ -22,6 +24,7 @@ try:
     )
     from .audit_record_capture_stream_binding import _read_limited
     from .audit_record_verifier_checkpoint import _private_regular_file
+    from .audit_record_verifier_checkpoint import _private_regular_file
 except ImportError:
     from audit_record_anchor_handoff import _canonical
     from audit_record_witness_fence_reconciliation import _signed
@@ -29,6 +32,7 @@ except ImportError:
         SCHEMA as LEDGER_SCHEMA, _private_path, _connect, _audit, MAX_EVENTS,
     )
     from audit_record_capture_stream_binding import _read_limited
+    from audit_record_verifier_checkpoint import _private_regular_file
     from audit_record_verifier_checkpoint import _private_regular_file
 
 SCHEMA = 'wild-arms-ps1-two-admin-replay-head-claim-v1'
@@ -98,6 +102,24 @@ def checkpoint_digest(signed_a, signed_b):
     return hashlib.sha256(ANCHOR_DOMAIN + _canonical(item)).hexdigest()
 
 
+def _public_key_identity(path):
+    """Compare actual DER key material, not just potentially reformatted PEM."""
+    path = _private_regular_file(path)
+    raw = _read_limited(path, 4096)
+    lines = raw.splitlines()
+    if (len(lines) < 3
+            or lines[0] != b'-----BEGIN PUBLIC KEY-----'
+            or lines[-1] != b'-----END PUBLIC KEY-----'):
+        raise CheckpointConflict('unexpected pinned Ed25519 public key format')
+    try:
+        der = base64.b64decode(b''.join(lines[1:-1]), validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise CheckpointConflict('invalid pinned public key material') from exc
+    if not 0 < len(der) <= 1024:
+        raise CheckpointConflict('invalid bounded public key material')
+    return hashlib.sha256(der).digest()
+
+
 def verify(journal_path, signed_a, signed_b, public_a, public_a_pin,
            public_b, public_b_pin, *, checkpoint_tag, prior_checkpoint_pin,
            independently_pinned_checkpoint_sha256):
@@ -111,6 +133,9 @@ def verify(journal_path, signed_a, signed_b, public_a, public_a_pin,
     # Verify the cryptographic statements BEFORE opening the private journal.
     a = _signed(signed_a, SCHEMA, DOMAIN, a_pin, public_a)
     b = _signed(signed_b, SCHEMA, DOMAIN, b_pin, public_b)
+    if hmac.compare_digest(
+            _public_key_identity(public_a), _public_key_identity(public_b)):
+        raise CheckpointConflict('signer public key material is identical')
     if (type(a) is not dict or type(b) is not dict
             or set(a) != FIELDS or set(b) != FIELDS):
         raise CheckpointConflict('unexpected signed journal head fields')
