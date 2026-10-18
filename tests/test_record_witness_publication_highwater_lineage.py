@@ -151,13 +151,13 @@ class HighwaterLineageTests(unittest.TestCase):
     def test_wrong_old_operator_cert_hash_refused(self):
         bad=dict(self.pinned)
         bad['old_a']='f'*64
-        with self.assertRaises(lineage.LineageConflict):
+        with self.assertRaises(cas.CheckpointCASConflict):
             self.check(externally_pinned=bad)
 
     def test_wrong_new_operator_cert_hash_refused(self):
         bad=dict(self.pinned)
         bad['new_b']='f'*64
-        with self.assertRaises(lineage.LineageConflict):
+        with self.assertRaises(cas.CheckpointCASConflict):
             self.check(externally_pinned=bad)
 
     def test_wrong_endorsement_a_envelope_hash_refused(self):
