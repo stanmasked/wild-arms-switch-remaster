@@ -47,7 +47,7 @@ def read_nro(path):
         raise NroFormatError("unsupported NRO header flags")
 
     segments = []
-    last_end = NRO_HEADER_END
+    last_end = 0
     for i, name in enumerate(SEGMENT_NAMES):
         offset = _u32(data, 0x20 + 8 * i)
         size = _u32(data, 0x24 + 8 * i)
@@ -57,6 +57,11 @@ def read_nro(path):
             if offset > declared_size:
                 raise NroFormatError(f"empty {name} segment is outside image")
         else:
+            # elf2nro normally places .text at offset 0, so its file image
+            # contains the NroStart/NroHeader region overlaid by the tool.
+            # Other segments must follow the end of the previous segment.
+            if name == "text" and offset not in (0,) and offset < NRO_HEADER_END:
+                raise NroFormatError("text segment starts inside NRO header")
             if offset < last_end or offset + size > declared_size:
                 raise NroFormatError(f"{name} segment is overlapping or out of bounds")
             if offset % 4:

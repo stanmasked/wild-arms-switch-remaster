@@ -56,6 +56,17 @@ class NroAuditTests(unittest.TestCase):
         self.assertEqual(report["validation"],
                          "static_container_only_not_executed")
 
+    def test_text_segment_may_include_nro_start_and_header(self):
+        payload = make_nro()
+        struct.pack_into("<II", payload, 0x20, 0, 0x180)
+        report = self.parse(payload)
+        self.assertEqual(report["segments"][0]["offset"], 0)
+        self.assertEqual(report["segments"][0]["size"], 0x180)
+
+        corrupted = make_nro()
+        struct.pack_into("<I", corrupted, 0x20, 0x40)
+        self.rejected(corrupted)
+
     def test_assets_and_sections(self):
         payload = make_nro(with_assets=True)
         report = self.parse(payload)
