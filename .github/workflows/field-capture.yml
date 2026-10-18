@@ -6,6 +6,9 @@ on:
       - 'src/field.cpp'
       - 'tests/field_capture.cpp'
       - 'tools/audit_field_capture.py'
+      - 'tools/compare_field_emulator_png.py'
+      - 'tools/test_field_capture_compare.py'
+      - 'tools/compare_field_emulator_png.py'
       - 'CMakeLists.txt'
       - '.github/workflows/field-capture.yml'
   pull_request:
@@ -37,6 +40,8 @@ jobs:
           ./build/wa_field_capture capture-two
       - name: Verify replay equality and encode synthetic PNG references
         run: python3 tools/audit_field_capture.py capture-one capture-two --output field-references
+      - name: Unit-test screenshot comparator using synthetic PNGs (no emulator)
+        run: python3 -m unittest discover -s tools -p 'test_field_capture_compare.py' -v
       - uses: actions/upload-artifact@v4
         with:
           name: wild-arms-field-host-reference-png
