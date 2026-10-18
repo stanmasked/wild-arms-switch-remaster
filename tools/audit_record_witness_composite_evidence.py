@@ -356,8 +356,11 @@ def main(argv=None):
                 args.trusted_supervisor_public_sha256,
                 supervisor_tag=args.supervisor_tag))
         code = 0
-    except CompositeConflict:
+    except CompositeConflict as exc:
         result['report_or_session_binding_conflict'] = True
+        # Every CompositeConflict has a static, non-sensitive reason string.
+        # Never emit raw reports, session ids or private custody tokens.
+        result['error_code'] = str(exc)
         code = 1
     except (OSError, ValueError, TypeError, UnicodeError, KeyError,
             json.JSONDecodeError):
