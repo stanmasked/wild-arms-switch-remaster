@@ -23,7 +23,8 @@ try:
     from .audit_record_anchor_handoff import _canonical
     from .audit_record_witness_fence_reconciliation import _signed
     from .audit_record_witness_run_replay_ledger import (
-        _private_path, _check_expected as _check_registry_pin,
+        _private_path, _check_expected as _external_count_head,
+        ReplayConflict,
         MAX_EVENTS,
     )
     from .audit_record_witness_replay_head_checkpoint import (
@@ -87,6 +88,13 @@ def _hex64(value):
     if type(value) is not str or not HEX64.fullmatch(value):
         raise RegistryConflict('invalid independently pinned 64-hex value')
     return value
+
+
+def _check_registry_pin(count, head, expected_count, expected_head):
+    try:
+        _external_count_head(count, head, expected_count, expected_head)
+    except ReplayConflict as exc:
+        raise RegistryConflict('registry diverged from external head pin') from exc
 
 
 def _connect(path):
