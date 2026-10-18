@@ -6,14 +6,14 @@ on:
       - 'src/field.cpp'
       - 'tools/audit_switch_nro.py'
       - 'tools/test_audit_switch_nro.py'
-      - 'tools/audit_switch_nro.py'
-      - 'tools/test_audit_switch_nro.py'
       - 'include/field*.hpp'
       - '.github/workflows/switch-field.yml'
   pull_request:
     paths:
       - 'switch/**'
       - 'src/field.cpp'
+      - 'tools/audit_switch_nro.py'
+      - 'tools/test_audit_switch_nro.py'
       - 'include/field*.hpp'
       - '.github/workflows/switch-field.yml'
   workflow_dispatch:
