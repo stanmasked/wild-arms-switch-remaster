@@ -76,6 +76,7 @@ on:
       - 'tools/audit_record_witness_report_provenance.py'
       - 'tools/audit_record_witness_run_replay_ledger.py'
       - 'tools/audit_record_witness_replay_head_checkpoint.py'
+      - 'tools/audit_record_witness_checkpoint_registry.py'
       - 'tools/audit_record_remote_witness_fence.py'
       - 'tools/audit_record_remote_reserved_issue.py'
       - 'tools/audit_record_remote_reserved_accept.py'
@@ -109,6 +110,7 @@ on:
       - 'tests/test_record_witness_report_provenance.py'
       - 'tests/test_record_witness_run_replay_ledger.py'
       - 'tests/test_record_witness_replay_head_checkpoint.py'
+      - 'tests/test_record_witness_checkpoint_registry.py'
       - 'tests/test_record_witness_gated_recovery.py'
       - 'tests/test_record_witness_gated_custody.py'
       - 'tests/test_record_reserved_accept.py'
@@ -129,6 +131,7 @@ on:
       - 'docs/ps1-witness-report-provenance.md'
       - 'docs/ps1-witness-run-replay-ledger.md'
       - 'docs/ps1-witness-replay-head-checkpoint.md'
+      - 'docs/ps1-witness-checkpoint-registry.md'
       - 'docs/ps1-witness-gated-recovery.md'
       - 'docs/ps1-witness-gated-custody-writes.md'
       - 'docs/ps1-reserved-capture-acceptance.md'
@@ -288,6 +291,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_record_witness_report_provenance.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_run_replay_ledger.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_replay_head_checkpoint.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_checkpoint_registry.py' -v
           python -m unittest discover -s tests -p 'test_record_reserved_accept.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
           python -m unittest discover -s tests -p 'test_gp0_matrix_*.py' -v
