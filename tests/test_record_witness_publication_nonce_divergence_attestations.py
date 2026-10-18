@@ -189,7 +189,7 @@ class TwoSignedDivergenceAttestationsTests(unittest.TestCase):
             self.checked(nonce_a='c'*32)
 
     def test_invalid_challenge_rejected(self):
-        with self.assertRaises((ValueError,att.AttestationConflict)):
+        with self.assertRaises(cas.CheckpointCASConflict):
             self.checked(nonce_b='not-128-bit')
 
     def test_wrong_audit_id_rejected(self):
@@ -205,7 +205,7 @@ class TwoSignedDivergenceAttestationsTests(unittest.TestCase):
             self.checked(envelope_b_pin='f'*64)
 
     def test_wrong_external_operator_pem_pin_rejected(self):
-        with self.assertRaises((ValueError,att.AttestationConflict)):
+        with self.assertRaises(cas.CheckpointCASConflict):
             self.checked(public_a_pin='f'*64)
 
     def test_wrong_previous_attestation_rejected(self):
@@ -217,7 +217,7 @@ class TwoSignedDivergenceAttestationsTests(unittest.TestCase):
             self.checked(sequence_a=2)
 
     def test_boolean_sequence_rejected(self):
-        with self.assertRaises((ValueError,att.AttestationConflict)):
+        with self.assertRaises(cas.CheckpointCASConflict):
             self.checked(sequence_a=True)
 
     def test_wrong_primary_genesis_rejected(self):
