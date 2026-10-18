@@ -22,7 +22,7 @@ class SignedMirrorDoubleClaimTests(unittest.TestCase):
         self.first_pin=hashlib.sha256(self.first).hexdigest()
         self.second_pin=hashlib.sha256(self.second).hexdigest()
 
-    def params(self):
+    def incident_params(self):
         return dict(scope=self.scope,role='operator-a',
             operator_id='fork-witness-operator-a',
             public=self.observers[0][1],public_pin=self.observers[0][2],
@@ -35,7 +35,7 @@ class SignedMirrorDoubleClaimTests(unittest.TestCase):
             second_previous_sha256=self.previous[0])
 
     def evaluate(self,*,first=None,second=None,**change):
-        kw=self.params()
+        kw=self.incident_params()
         kw.update(change)
         return conflict.verify(self.first if first is None else first,
             self.second if second is None else second,**kw)
@@ -260,7 +260,7 @@ for name in (
     'clone','signed_body','sign_receipt','operator_args','make_fields','reserve',
     'sign_one','kwargs','crosscheck','write','create_witness','inspect_witness',
     'trusted','body_for','make_signed','checked','issue','guarded','cli','snapshot',
-    'advance','seal_mirror','check_mirror','one_complete','build_manifest',
+    'advance','seal_mirror','params','check_mirror','one_complete','build_manifest',
     'expected_ack_body','signed_ack'
 ):
     if hasattr(base.SignedMirrorAcknowledgmentTests,name):
