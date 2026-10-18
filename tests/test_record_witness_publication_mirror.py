@@ -1,4 +1,5 @@
 """Stage 263R: comparison of two pinned local publication journals."""
+import os
 import shutil
 import sqlite3
 import unittest
@@ -64,6 +65,14 @@ class PublicationMirrorTests(prior.SignedPublicationIntakeTests):
         with self.assertRaises(mirror.MirrorConflict):
             mirror.compare(self.intake_path,0,intake.GENESIS,
                            self.intake_path,0,intake.GENESIS)
+
+    def test_hardlink_alias_cannot_masquerade_as_independent_copy(self):
+        self.setup_intake(0)
+        alias=self.v/'hardlinked-intake.sqlite'
+        os.link(self.intake_path,alias)
+        with self.assertRaises(mirror.MirrorConflict):
+            mirror.compare(self.intake_path,0,intake.GENESIS,
+                           alias,0,intake.GENESIS)
 
     def test_conflict_frozen_mirror_is_preserved(self):
         self.setup_intake(0)
