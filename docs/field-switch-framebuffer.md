@@ -40,8 +40,9 @@ binary was built or ran on hardware.
 - This tests an **original synthetic** walkable map, not the original game's
   field, battle, event or camera engine.
 - Gameplay is tile-by-tile, not pixel-interpolated walking.
-- There is no PS1 asset loader, no game save, no battle system, no published
-  emulator capture and no verified real-device execution.
+- There is no original PS1 asset loader, original-compatible save format,
+  or battle system. Later stages added synthetic NeXium field captures and
+  experimental SD-backed field saves, but no physical Switch validation.
 - The standalone `switch/source/field_core.cpp` includes the canonical
   `src/field.cpp` once, avoiding a divergent field logic implementation.
 - CTest remains the authoritative host-level correctness check; the NRO
