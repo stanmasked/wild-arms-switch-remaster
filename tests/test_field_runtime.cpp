@@ -13,9 +13,9 @@ constexpr std::uint64_t kSixtyFpsTicks = 320000;
 void require(bool good) { if (!good) std::abort(); }
 
 struct Surface {
-  std::vector<std::uint32_t> buffer{
+  std::vector<std::uint32_t> buffer = std::vector<std::uint32_t>(
       static_cast<std::size_t>(kRasterWidth + 8) * kRasterHeight + 16,
-      0xBADCAFEu};
+      0xBADCAFEu);
   PixelTarget target{buffer.data(), kRasterWidth, kRasterHeight,
                      kRasterWidth + 8};
 
