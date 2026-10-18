@@ -26,6 +26,11 @@ add_executable(wa_field_world_tests tests/test_field_world.cpp)
 target_link_libraries(wa_field_world_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_world_tests COMMAND wa_field_world_tests)
 
+# Host validation of the exact software framebuffer algorithm used by libnx.
+add_executable(wa_field_pixels_tests tests/test_field_pixels.cpp)
+target_link_libraries(wa_field_pixels_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_pixels_tests COMMAND wa_field_pixels_tests)
+
 # Asset-free terminal exploration demo: host-only, NOT a Switch NRO.
 add_executable(wa_field_demo src/field_demo.cpp)
 target_link_libraries(wa_field_demo PRIVATE wa_field_core)

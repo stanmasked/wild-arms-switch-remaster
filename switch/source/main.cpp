@@ -3,6 +3,7 @@
 #include "field.hpp"
 #include "field_world.hpp"
 #include "field_view.hpp"
+#include "field_pixels.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -35,75 +36,6 @@ PadSample read_pad(PadState& pad) noexcept {
   return sample;
 }
 
-void fill_rect(u32* pixels, const u32 pitch, int x, int y, int w, int h,
-               const u32 color) noexcept {
-  const int x0 = std::clamp(x, 0, kWidth);
-  const int y0 = std::clamp(y, 0, kHeight);
-  const int x1 = std::clamp(x + w, 0, kWidth);
-  const int y1 = std::clamp(y + h, 0, kHeight);
-  for (int row = y0; row < y1; ++row) {
-    u32* dest = pixels + static_cast<std::size_t>(row) * pitch;
-    for (int col = x0; col < x1; ++col)
-      dest[col] = color;
-  }
-}
-
-u32 terrain_color(const CellKind kind) noexcept {
-  switch (kind) {
-    case CellKind::Wall: return RGBA8_MAXALPHA(47, 68, 87);
-    case CellKind::Floor: return RGBA8_MAXALPHA(174, 155, 115);
-    case CellKind::Event: return RGBA8_MAXALPHA(245, 183, 66);
-    case CellKind::Exit: return RGBA8_MAXALPHA(63, 191, 138);
-    case CellKind::Outside: return RGBA8_MAXALPHA(14, 20, 34);
-  }
-  return RGBA8_MAXALPHA(14, 20, 34);
-}
-
-void paint(u32* pixels, const u32 stride_bytes, const RenderFrame& frame,
-           const bool paused, const int area_index) noexcept {
-  const u32 pitch = stride_bytes / sizeof(u32);
-  fill_rect(pixels, pitch, 0, 0, kWidth, kHeight,
-            area_index == 0 ? RGBA8_MAXALPHA(14, 20, 34)
-                            : RGBA8_MAXALPHA(19, 34, 38));
-
-  const int start_x = (kWidth - frame.width * kTileSize) / 2;
-  const int start_y = (kHeight - frame.height * kTileSize) / 2;
-  for (int y = 0; y < frame.height; ++y) {
-    for (int x = 0; x < frame.width; ++x) {
-      const RenderCell* cell = frame.at(x, y);
-      if (!cell) continue;
-      const int left = start_x + x * kTileSize;
-      const int top = start_y + y * kTileSize;
-      fill_rect(pixels, pitch, left + 1, top + 1,
-                kTileSize - 2, kTileSize - 2,
-                terrain_color(cell->terrain));
-      if (cell->player) {
-        const int cx = left + kTileSize / 2;
-        const int cy = top + kTileSize / 2;
-        fill_rect(pixels, pitch, cx - 19, cy - 19, 38, 38,
-                  paused ? RGBA8_MAXALPHA(246, 246, 246)
-                         : RGBA8_MAXALPHA(201, 67, 76));
-        const int marker_size = 10;
-        int mx = cx - marker_size / 2;
-        int my = cy - marker_size / 2;
-        switch (frame.player_facing) {
-          case Direction::Up: my -= 15; break;
-          case Direction::Down: my += 15; break;
-          case Direction::Left: mx -= 15; break;
-          case Direction::Right: mx += 15; break;
-          case Direction::None: break;
-        }
-        fill_rect(pixels, pitch, mx, my, marker_size, marker_size,
-                  RGBA8_MAXALPHA(22, 27, 42));
-      }
-    }
-  }
-  // Status bar: amber when waiting for A to acknowledge an event/exit.
-  fill_rect(pixels, pitch, 0, 0, kWidth, 10,
-            paused ? RGBA8_MAXALPHA(246, 183, 66)
-                   : area_index == 0 ? RGBA8_MAXALPHA(63, 191, 138)
-                                     : RGBA8_MAXALPHA(105, 160, 230));
-}
 
 }  // namespace
 
@@ -155,9 +87,12 @@ int main() {
     u32 stride_bytes = 0;
     u32* pixels = static_cast<u32*>(framebufferBegin(&fb, &stride_bytes));
     if (!pixels) break;
-    paint(pixels, stride_bytes, view,
-          game.clock.paused_for_trigger, game.area);
+    const PixelTarget output{pixels, kWidth, kHeight,
+                             static_cast<int>(stride_bytes / sizeof(u32))};
+    const RasterOutcome drawn = draw_field_pixels(
+        output, view, game.clock.paused_for_trigger, game.area);
     framebufferEnd(&fb);
+    if (drawn != RasterOutcome::Ready) break;
   }
 
   framebufferClose(&fb);
