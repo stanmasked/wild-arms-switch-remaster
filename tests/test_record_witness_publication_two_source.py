@@ -138,7 +138,7 @@ class DualAuthorityTests(unittest.TestCase):
     def test_old_signed_sequence_does_not_match_independent_floor(self):
         old=self.old.copy()
         old['sequence_a']=8
-        with self.assertRaises(dual.DualSourceConflict):
+        with self.assertRaises(live.LiveSourceConflict):
             self.check(old=old)
 
     def test_old_signed_tuple_tampered_even_with_recomputed_checkpoint(self):
