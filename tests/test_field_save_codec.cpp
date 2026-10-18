@@ -137,7 +137,7 @@ void test_corruption_rejections_are_transactional() {
   same(original,destination);
 
   FieldWorld changed = make_demo_world();
-  changed.areas[1].map.tiles[12] = '#'; // nonentrance, valid map edit
+  changed.areas[1].map.tiles[13] = '#'; // nonentrance, valid map edit
   require(changed.valid());
   require(decode_field_save(changed,record,destination) ==
           FieldSaveStatus::WorldMismatch);
