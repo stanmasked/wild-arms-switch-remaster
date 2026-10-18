@@ -242,3 +242,35 @@ into an Xvfb desktop, so an exact full-frame comparator requires a
 separate proven inverse scaling/capture API. The five checks also do not
 prove exact timings for every one of the 23 logical scenario steps.
 No original Wild Arms assets or firmware are used.
+
+## Stage 290 — exact visible RGB matching for five real emulator scenes
+
+Experimental GitHub Actions `39173021610` **succeeded**: it captured
+80 screenshots and independently selected all five in-order NeXium
+checkpoints, each with 77/77 matching terrain colour samples, matching
+player position/colour and status bar. This demonstrates the whole
+scripted round trip, not only a generic frame change.
+
+On the downloadable actual NeXium Xvfb screenshots, an additional
+comparison with the **same-commit** host reference PNGs found a precise
+nearest-neighbour projection:
+
+- Native 1280×720 host image scales to 1234×694 in the desktop.
+- Game viewport is Xvfb rectangle x=23..1256, y=0..693.
+- The NeXium-host performance overlay obscures a 220×154 region in
+  the upper-left corner of that viewport. It is **not guest graphics**.
+- Across 5 checkpoints, excluding the overlay, **4,112,580 visible
+  projected game pixels matched exactly, zero mismatches**.
+- The excluded 169,400 pixels lie outside the active tiled map. The
+  source 1280×720 GPU framebuffer was **not directly extracted**.
+
+The new `tools/audit_nexium_pixel_parity.py` verifies that exact RGB
+correspondence in CI, after the existing ordered checkpoint selector.
+It fails for even one changed visible RGB pixel, checks all same-commit
+reference hashes via the existing reference verifier, and records a
+per-scene full SHA-256 evidence report. The test excludes only the fixed
+NeXium on-screen performance HUD, never changes the original NRO and
+never claims direct native framebuffer capture. This geometry is
+specific to the verified 1600×900 Xvfb + 1280×720 NeXium view; if the
+window layout or scaling changes, the audit should fail until a new
+layout is independently established.

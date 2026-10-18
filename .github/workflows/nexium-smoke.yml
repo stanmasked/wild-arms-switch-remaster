@@ -15,6 +15,8 @@ on:
       - 'tools/test_audit_nexium_autoplay.py'
       - 'tools/audit_nexium_checkpoints.py'
       - 'tools/test_audit_nexium_checkpoints.py'
+      - 'tools/audit_nexium_pixel_parity.py'
+      - 'tools/test_audit_nexium_pixel_parity.py'
       - 'tests/field_capture.cpp'
       - 'include/field_pixels.hpp'
   workflow_dispatch:
@@ -92,6 +94,8 @@ jobs:
             file curl tar gzip coreutils procps-ng
           ldd --version | head -n 1
           ldconfig -p | grep 'libxkbcommon-x11.so'
+      - name: Unit-test NeXium exact projected RGB parity
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_pixel_parity.py' -v
       - name: Unit-test ordered five-checkpoint reference matcher
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_checkpoints.py' -v
       - name: Verify synthetic frame evidence classifier
@@ -273,6 +277,13 @@ jobs:
           cp nexium-probe/verified-checkpoints/02_area0_exit.png nexium-probe/screen-middle.png
           cp nexium-probe/verified-checkpoints/03_area1_start.png nexium-probe/screen-later.png
           cp nexium-probe/verified-checkpoints/04_area0_return.png nexium-probe/screen-final.png
+      - name: Compare all five scaled game images pixel-by-pixel excluding the NeXium HUD
+        if: always()
+        run: |
+          /usr/bin/python3 tools/audit_nexium_pixel_parity.py \
+            --reference same-commit-host-references \
+            --observed nexium-probe/verified-checkpoints \
+            --report nexium-probe/pixel-parity.json
       - name: Verify intended Switch X triggers visible world changes
         if: always()
         run: |
