@@ -8,6 +8,7 @@ considered an up-to-date, accepted mirror. No copying, repair or unlock.
 import argparse
 from contextlib import closing
 import json
+import os
 from pathlib import Path
 import sqlite3
 
@@ -50,8 +51,13 @@ def _snapshot(path, count, head):
 
 def compare(a_path, a_count, a_head, b_path, b_count, b_head):
     """Fail closed for divergence or stale replicas; no repair side effects."""
-    if Path(a_path).resolve() == Path(b_path).resolve():
-        raise MirrorConflict('two purported independent copies alias same file')
+    a_file = _private_path(a_path, exists=True)
+    b_file = _private_path(b_path, exists=True)
+    a_stat = os.stat(a_file, follow_symlinks=False)
+    b_stat = os.stat(b_file, follow_symlinks=False)
+    if ((a_stat.st_dev, a_stat.st_ino) == (b_stat.st_dev, b_stat.st_ino)
+            or Path(a_file).resolve() == Path(b_file).resolve()):
+        raise MirrorConflict('two purported independent copies alias same inode')
     a, frozen_a, scope_a = _snapshot(a_path, a_count, a_head)
     b, frozen_b, scope_b = _snapshot(b_path, b_count, b_head)
     common = min(len(a), len(b))
