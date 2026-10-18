@@ -200,8 +200,10 @@ def verify_receipt(raw, *, source_url, scope, challenge, authority_id,
     }
 
 
-def verify_live(*, fetcher=fetch_live_receipt, challenge=None, **kwargs):
+def verify_live(*, fetcher=None, challenge=None, **kwargs):
     """Generate a nonce at invocation and fetch before verifying signature."""
+    if fetcher is None:
+        fetcher = fetch_live_receipt
     nonce = secrets.token_hex(16) if challenge is None else challenge
     if type(nonce) is not str or not HEX32.fullmatch(nonce):
         raise LiveSourceConflict('invalid fresh nonce')
