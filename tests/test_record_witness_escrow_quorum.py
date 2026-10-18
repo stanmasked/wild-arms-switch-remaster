@@ -59,7 +59,7 @@ class ThreeOperatorEscrowTests(unittest.TestCase):
         registry_head = self.rhead if registry_head is None else registry_head
         checkpoint_head = (self.rcheckpoint if checkpoint_head is None
                            else checkpoint_head)
-        self.signed = {}
+        self.escrow_signed = {}
         self.signed_paths = {}
         self.keys = {}
         self.pins = {}
@@ -71,11 +71,11 @@ class ThreeOperatorEscrowTests(unittest.TestCase):
             body.update(changed.get(role, {}))
             path = self.path('escrow-signed-'+role+'-')
             _sign(body, escrow.SCHEMA, escrow.DOMAIN, key[1], path)
-            self.signed[role] = path.read_bytes()
+            self.escrow_signed[role] = path.read_bytes()
             self.signed_paths[role] = path
             self.keys[role] = key[2]
             self.pins[role] = key[3]
-        self.escrow_pin = escrow.bundle_digest(self.signed)
+        self.escrow_pin = escrow.bundle_digest(self.escrow_signed)
         self.prior = prior
 
     def check(self, *, signed=None, pins=None, keys=None, bundle_pin=None,
@@ -83,7 +83,7 @@ class ThreeOperatorEscrowTests(unittest.TestCase):
               checkpoint_head=None, tag=TAG):
         return escrow.verify(
             self.registry,
-            self.signed if signed is None else signed,
+            self.escrow_signed if signed is None else signed,
             self.keys if keys is None else keys,
             self.pins if pins is None else pins,
             checkpoint_tag=tag,
@@ -130,7 +130,7 @@ class ThreeOperatorEscrowTests(unittest.TestCase):
     def test_missing_one_operator_receipt_fails_closed(self):
         self.fresh()
         self.signed_round()
-        signed = dict(self.signed)
+        signed = dict(self.escrow_signed)
         del signed['escrow-c']
         with self.assertRaises(escrow.EscrowConflict):
             self.check(signed=signed)
@@ -166,7 +166,7 @@ class ThreeOperatorEscrowTests(unittest.TestCase):
                                 escrow.ESCROW_GENESIS,NONCE,TAG)
         signed_c = self.path('rewrapped-signed-c-')
         _sign(body,escrow.SCHEMA,escrow.DOMAIN,self.admins[0][1],signed_c)
-        signed = dict(self.signed)
+        signed = dict(self.escrow_signed)
         signed['escrow-c'] = signed_c.read_bytes()
         with self.assertRaises(escrow.EscrowConflict):
             self.check(keys=keys,pins=pins,signed=signed,
@@ -220,7 +220,7 @@ class ThreeOperatorEscrowTests(unittest.TestCase):
     def test_old_registry_plus_old_pins_cannot_be_excluded_here(self):
         self.fresh()
         self.signed_round()
-        old_receipts = dict(self.signed)
+        old_receipts = dict(self.escrow_signed)
         old_bundle_pin = self.escrow_pin
         self.first_candidate()
         self.accept()
@@ -250,7 +250,7 @@ class ThreeOperatorEscrowTests(unittest.TestCase):
     def test_malformed_signature_and_unsafe_claim_refused(self):
         self.fresh()
         self.signed_round()
-        signed = dict(self.signed)
+        signed = dict(self.escrow_signed)
         signed['escrow-a'] = signed['escrow-b']
         with self.assertRaises(ValueError):
             self.check(signed=signed)
