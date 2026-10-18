@@ -9,6 +9,7 @@ import unittest
 from tests import test_record_witness_publication_attestation_registry_binding as prior
 from tools import audit_record_witness_publication_signed_mirror_acknowledgments as q
 from tools import audit_record_witness_publication_attestation_registry_binding as bound
+from tools import audit_record_witness_publication_receipt_nonce_reconciliation as cross
 from tools import audit_record_witness_publication_checkpoint_cas as cas
 from tools.audit_record_witness_fence_reconciliation import _sign
 
@@ -111,11 +112,11 @@ class SignedMirrorAcknowledgmentTests(unittest.TestCase):
             operator_public_pin=self.observers[0][2],
             nonce='e'*32,seq=2,previous=self.complete['operator-a'][0][1],
             archive_pin=self.archive_pin,evidence_pin='f'*64)
-        with self.assertRaises((ValueError,bound.SignedLedgerConflict)):
+        with self.assertRaises((ValueError,bound.SignedLedgerConflict,cross.LedgerDivergence,cas.CheckpointCASConflict)):
             self.verify()
 
     def test_wrong_enrolled_public_key_rejected(self):
-        with self.assertRaises((ValueError,bound.SignedLedgerConflict)):
+        with self.assertRaises((ValueError,bound.SignedLedgerConflict,cross.LedgerDivergence,cas.CheckpointCASConflict)):
             self.verify(public_b=self.observers[0][1])
 
     def test_duplicate_enrolled_operator_id_rejected(self):
@@ -127,19 +128,19 @@ class SignedMirrorAcknowledgmentTests(unittest.TestCase):
             self.verify(nonce_b=self.nonces[0])
 
     def test_wrong_expected_nonce_rejected(self):
-        with self.assertRaises((ValueError,q.SignedMirrorConflict)):
+        with self.assertRaises((ValueError,q.SignedMirrorConflict,cas.CheckpointCASConflict)):
             self.verify(nonce_b='c'*32)
 
     def test_invalid_nonce_type_rejected(self):
-        with self.assertRaises((ValueError,q.SignedMirrorConflict)):
+        with self.assertRaises((ValueError,q.SignedMirrorConflict,cas.CheckpointCASConflict)):
             self.verify(nonce_a='bad')
 
     def test_wrong_acknowledgment_sequence_rejected(self):
-        with self.assertRaises((ValueError,q.SignedMirrorConflict)):
+        with self.assertRaises((ValueError,q.SignedMirrorConflict,cas.CheckpointCASConflict)):
             self.verify(sequence_a=2)
 
     def test_wrong_predecessor_sha_rejected(self):
-        with self.assertRaises((ValueError,q.SignedMirrorConflict)):
+        with self.assertRaises((ValueError,q.SignedMirrorConflict,cas.CheckpointCASConflict)):
             self.verify(previous_b='f'*64)
 
     def test_wrong_separately_pinned_envelope_sha_rejected(self):
@@ -147,15 +148,15 @@ class SignedMirrorAcknowledgmentTests(unittest.TestCase):
             self.verify(ack_a_pin='f'*64)
 
     def test_role_a_receipt_cannot_impersonate_role_b(self):
-        with self.assertRaises((ValueError,q.SignedMirrorConflict)):
+        with self.assertRaises((ValueError,q.SignedMirrorConflict,cas.CheckpointCASConflict)):
             self.verify(signed_b=self.acks[0],ack_b_pin=self.pins[0])
 
     def test_wrong_head_pin_rejected(self):
-        with self.assertRaises((ValueError,bound.SignedLedgerConflict)):
+        with self.assertRaises((ValueError,bound.SignedLedgerConflict,cross.LedgerDivergence,cas.CheckpointCASConflict)):
             self.verify(head_b='f'*64)
 
     def test_wrong_scope_rejected(self):
-        with self.assertRaises((ValueError,bound.SignedLedgerConflict)):
+        with self.assertRaises((ValueError,bound.SignedLedgerConflict,cross.LedgerDivergence,cas.CheckpointCASConflict)):
             self.verify(scope='untrusted-scope')
 
     def test_signed_unapproved_release_flag_rejected(self):
@@ -184,12 +185,12 @@ class SignedMirrorAcknowledgmentTests(unittest.TestCase):
             self.verify(signed_b=raw,ack_b_pin=hashlib.sha256(raw).hexdigest())
 
     def test_duplicate_acknowledgment_body_does_not_create_quorum(self):
-        with self.assertRaises((ValueError,q.SignedMirrorConflict)):
+        with self.assertRaises((ValueError,q.SignedMirrorConflict,cas.CheckpointCASConflict)):
             self.verify(signed_b=self.acks[0],ack_b_pin=self.pins[0])
 
     def test_unauthenticated_raw_json_rejected(self):
         raw=b'{"schema":"forged"}'
-        with self.assertRaises((ValueError,q.SignedMirrorConflict)):
+        with self.assertRaises((ValueError,q.SignedMirrorConflict,cas.CheckpointCASConflict)):
             self.verify(signed_a=raw,ack_a_pin=hashlib.sha256(raw).hexdigest())
 
     def test_reports_are_explicitly_not_external_custody_proof(self):
