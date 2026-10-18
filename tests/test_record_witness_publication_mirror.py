@@ -80,6 +80,7 @@ class PublicationMirrorTests(prior.SignedPublicationIntakeTests):
         self.setup_intake(0)
         other=self.duplicate()
         self.submit(0,'escrow-a')
+        first_head=self.i_head
         variant=self.conflicting_receipt(0,'escrow-a',nonce='a'*32)
         original=self.intake_path
         self.intake_path=other
@@ -88,7 +89,7 @@ class PublicationMirrorTests(prior.SignedPublicationIntakeTests):
         finally:
             self.intake_path=original
         with self.assertRaises(mirror.MirrorConflict):
-            mirror.compare(original,1,self.i_head,
+            mirror.compare(original,1,first_head,
                            other,1,branch['intake_head_sha256'])
 
 
