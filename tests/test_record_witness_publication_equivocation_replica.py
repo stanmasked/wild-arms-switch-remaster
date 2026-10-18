@@ -168,14 +168,14 @@ class EvidenceReplicaTests(unittest.TestCase):
 
     def test_symlink_to_first_archive_refused(self):
         self.secondary.symlink_to(self.archive)
-        with self.assertRaises((copies.DualCopyConflict,ValueError)):
+        with self.assertRaises(archive.EvidenceArchiveConflict):
             self.verify()
 
     def test_symlink_to_secondary_directory_refused(self):
         alias=Path(self.temp.name)/'alias-folder'
         alias.symlink_to(self.second_dir,target_is_directory=True)
         self.clone()
-        with self.assertRaises((copies.DualCopyConflict,ValueError)):
+        with self.assertRaises(archive.EvidenceArchiveConflict):
             copies.verify(self.archive,alias/self.secondary.name,
                           **self.arguments())
 
@@ -183,7 +183,7 @@ class EvidenceReplicaTests(unittest.TestCase):
         self.clone()
         self.second_dir.chmod(0o755)
         self.addCleanup(self.second_dir.chmod,0o700)
-        with self.assertRaises(copies.DualCopyConflict):
+        with self.assertRaises(archive.EvidenceArchiveConflict):
             self.verify()
 
     def test_world_readable_secondary_file_refused(self):
@@ -226,7 +226,7 @@ class EvidenceReplicaTests(unittest.TestCase):
     def test_unsafe_replication_does_not_create_file(self):
         self.second_dir.chmod(0o755)
         self.addCleanup(self.second_dir.chmod,0o700)
-        with self.assertRaises(copies.DualCopyConflict):
+        with self.assertRaises(archive.EvidenceArchiveConflict):
             self.clone()
         self.assertFalse(self.secondary.exists())
 
