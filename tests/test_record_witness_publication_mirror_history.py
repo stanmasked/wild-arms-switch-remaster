@@ -262,8 +262,20 @@ class SignedMirrorHistoryTests(unittest.TestCase):
             history.pack([{'mirror-admin-a':self.claims[0][witness.ROLES[0]]}])
 
     def test_old_db_and_old_signed_pin_replay_remains_possible(self):
-        self.build_history(0)
-        result=self.check()
+        self.build_history(1)
+        # A privileged rollback of BOTH journals and the operator's
+        # external current pins can present a valid older genesis history.
+        for path in (self.intake_path,self.mirror_b):
+            with sqlite3.connect(path) as db:
+                db.execute('DELETE FROM published_escrow_receipts')
+        genesis=self.claims[0]
+        old_tip=witness.witness_digest(
+            genesis[witness.ROLES[0]],genesis[witness.ROLES[1]])
+        result=self.check(
+            rounds=[genesis],latest=old_tip,
+            a_count=0,b_count=0,
+            a_head=intake.GENESIS,b_head=intake.GENESIS)
+        self.assertTrue(result['both_mirror_chains_match_complete_signed_history'])
         self.assertFalse(result['old_complete_history_with_old_pins_excluded'])
         self.assertFalse(result['all_hidden_equivocations_discovered'])
 
