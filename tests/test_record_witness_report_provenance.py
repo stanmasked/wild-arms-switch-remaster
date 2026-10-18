@@ -232,5 +232,26 @@ class ReportOriginTests(unittest.TestCase):
                        composite_pin=hashlib.sha256(bad).hexdigest())
 
 
+    def test_composite_nested_internal_digest_revalidated(self):
+        self.prepare()
+        obj=json.loads(self.composite_raw)
+        obj['manifest_sha256']='f'*64
+        tampered=_canonical(obj)
+        with self.assertRaises(provenance.OriginConflict):
+            self.check(composite_raw=tampered,
+                       composite_pin=hashlib.sha256(tampered).hexdigest())
+
+    def test_even_pinned_report_must_obey_stage_263j_semantics(self):
+        self.prepare()
+        # Replacing the report is not sufficient: a signed observer
+        # statement cannot legitimize unsafe or malformed report values.
+        obj=json.loads(self.reports['activation'])
+        obj['witness_fence_retired']=True
+        changed={**self.reports,'activation':_canonical(obj)}
+        with self.assertRaises(composite.CompositeConflict):
+            self.check(reports=changed)
+
+
+
 if __name__ == '__main__':
     unittest.main()
