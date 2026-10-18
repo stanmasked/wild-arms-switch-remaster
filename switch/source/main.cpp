@@ -5,6 +5,7 @@
 #include "field_view.hpp"
 #include "field_pixels.hpp"
 #include "field_scenario.hpp"
+#include "field_autoplay.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -59,9 +60,8 @@ int main() {
   padInitializeDefault(&pad);
 
   WorldState game = start_world(world);
-  ScenarioTrack demo = start_field_scenario(world);
+  AutoplayTrack demo = start_field_autoplay(world);
   bool autoplay = false;
-  std::uint32_t demo_wait_ms = 0;
   RenderFrame view{};
   const u64 tick_frequency = armGetSystemTickFreq();
   u64 previous_tick = armGetSystemTick();
@@ -82,30 +82,25 @@ int main() {
 
     const u64 pressed = padGetButtonsDown(&pad);
     if (pressed & HidNpadButton_X) {
-      demo = start_field_scenario(world);
-      if (demo.invalid) break;
+      demo = start_field_autoplay(world);
+      if (demo.failed) break;
       autoplay = true;
-      demo_wait_ms = 2500; // Initial reference remains visible for capture.
     } else if (autoplay && (pressed & HidNpadButton_B)) {
       autoplay = false;
       game = start_world(world);
     }
 
     if (autoplay) {
-      if (demo_wait_ms > delta) {
-        demo_wait_ms -= delta;
-      } else if (!demo.complete) {
-        const ScenarioResult tick = advance_field_scenario(world, demo);
-        if (tick.status == ScenarioStatus::Invalid) break;
-        demo_wait_ms = tick.status == ScenarioStatus::Checkpoint ?
-                           2500u : 350u;
-      }
+      const AutoplayFrame tick = advance_field_autoplay(world, demo, delta);
+      if (tick.status == AutoplayStatus::Invalid ||
+          tick.status == AutoplayStatus::InvalidDelta)
+        break;
     } else {
       const WorldFrameResult manual =
           advance_world_frame(world, game, read_pad(pad), delta);
       (void)manual;
     }
-    const WorldState& displayed = autoplay ? demo.world : game;
+    const WorldState& displayed = autoplay ? demo.scenario.world : game;
     const Map& current_map = world.areas[displayed.area].map;
     if (build_view(view, current_map, displayed.player, kViewport) !=
         RenderOutcome::Ready)

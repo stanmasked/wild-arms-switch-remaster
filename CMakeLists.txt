@@ -41,6 +41,11 @@ add_executable(wa_field_scenario_tests tests/test_field_scenario.cpp)
 target_link_libraries(wa_field_scenario_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_scenario_tests COMMAND wa_field_scenario_tests)
 
+# Pacing for the capture-friendly Switch autoplay, tested on host.
+add_executable(wa_field_autoplay_tests tests/test_field_autoplay.cpp)
+target_link_libraries(wa_field_autoplay_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_autoplay_tests COMMAND wa_field_autoplay_tests)
+
 # Asset-free terminal exploration demo: host-only, NOT a Switch NRO.
 add_executable(wa_field_demo src/field_demo.cpp)
 target_link_libraries(wa_field_demo PRIVATE wa_field_core)
