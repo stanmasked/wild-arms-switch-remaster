@@ -65,7 +65,7 @@ void snapshot(const FieldWorld& world, const FieldRuntime& runtime,
 
   const Map& current_map = world.areas[static_cast<std::size_t>(state.area)].map;
   RenderFrame independent_view{};
-  require(build_view(independent_view, current_map, state, {11, 7}) ==
+  require(build_view(independent_view, current_map, state.player, {11, 7}) ==
           RenderOutcome::Ready);
   require(independent_view.world_left == runtime.view.world_left &&
           independent_view.world_top == runtime.view.world_top);
