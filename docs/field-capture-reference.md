@@ -19,7 +19,7 @@ implementation that the Switch NRO links.
 GitHub Actions runs the host replay twice and requires **byte-for-byte
 identical** raw RGB pixels for every named scene. A Python standard-library
 audit checks exact frame dimensions, two representative bar/background
-pixel colours per scene, distinct scene images and exports lossless PNGs,
+pixel colours per scene, distinct intermediate scenes, exact initial/return image equality\nand exports lossless PNGs,
 with a manifest containing full RGB and PNG SHA-256 digests.
 
 View outputs from the GitHub Actions workflow

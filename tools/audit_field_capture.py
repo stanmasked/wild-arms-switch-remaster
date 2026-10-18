@@ -104,8 +104,13 @@ def run(first: pathlib.Path, second: pathlib.Path, output: pathlib.Path) -> None
             "png_sha256": hashlib.sha256(png_data).hexdigest(),
             "status_rgb": list(EXPECTED_BARS[index]),
         })
-    if len(set(checksums)) != len(NAMES):
-        raise ValueError("capture frames must differ across gameplay states")
+    # Returning to the original entrance with the original facing and no
+    # pending event MUST reproduce the initial image byte-for-byte.
+    if checksums[0] != checksums[-1]:
+        raise ValueError("round trip failed to restore the initial view")
+    if len(set(checksums[:-1])) != len(NAMES) - 1:
+        raise ValueError("intermediate gameplay snapshots are not distinct")
+    manifest["round_trip_pixels_equal"] = True
     (output / "capture_manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
