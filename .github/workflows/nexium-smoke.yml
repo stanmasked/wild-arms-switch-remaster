@@ -215,7 +215,7 @@ jobs:
           if test -n "${window_id:-}"; then
             xdotool windowfocus "$window_id" || true
             send_manual_key() {
-              printf 'host keyboard %s at %s\\n' "$1" "$(date -u +%FT%TZ)" \\
+              printf 'host keyboard %s at %s\n' "$1" "$(date -u +%FT%TZ)" \
                 >> nexium-probe/manual-snapshot/key-events.log
               xdotool keydown --clearmodifiers "$1"
               sleep 0.22
@@ -223,7 +223,7 @@ jobs:
               sleep 0.4
             }
             capture_manual() {
-              import -display :99 -window root \\
+              import -display :99 -window root \
                 "nexium-probe/manual-snapshot/$1.png"
             }
             walk_to_event() {
@@ -249,7 +249,7 @@ jobs:
             send_manual_key n     # Restores pending event + yellow status
             capture_manual 07_event_restored
           else
-            printf '%s\\n' 'No NeXium guest window; manual test not performed' \\
+            printf '%s\n' 'No NeXium guest window; manual test not performed' \
               > nexium-probe/manual-snapshot/input-error.txt
           fi
 
@@ -338,9 +338,9 @@ jobs:
       - name: Audit real Switch Y/Minus and pending event restore screenshots
         if: always()
         run: |
-          /usr/bin/python3 tools/audit_nexium_manual_snapshot.py \\
-            --reference same-commit-host-references \\
-            --screenshots nexium-probe/manual-snapshot \\
+          /usr/bin/python3 tools/audit_nexium_manual_snapshot.py \
+            --reference same-commit-host-references \
+            --screenshots nexium-probe/manual-snapshot \
             --report nexium-probe/manual-snapshot-audit.json
       - name: Verify intended Switch X triggers visible world changes
         if: always()
