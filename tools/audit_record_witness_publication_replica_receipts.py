@@ -197,6 +197,15 @@ def verify(primary,secondary,signed_a,signed_b, *,
         external_operator_a_pin=evidence_operator_a_pin,
         external_operator_b_pin=evidence_operator_b_pin)
     before=replica._separate(primary,secondary)
+    # The signed scope must describe the archives' REAL enrollment.
+    # It is not enough for both receipts to agree on an invented scope.
+    primary_archive=json.loads(archive._read(primary),
+        object_pairs_hook=cas._unique_json_fields,
+        parse_constant=cas._reject_json_constant)
+    if (type(primary_archive) is not dict
+            or type(primary_archive.get('metadata')) is not dict
+            or primary_archive['metadata'].get('scope') != expected_scope):
+        raise ReceiptConflict('signed receipt scope not bound to real archived evidence')
     bodies=[]
     for raw,public,public_pin,role,operator,storage,challenge,previous,sequence in (
             (signed_a,receipt_a_public,receipt_a_public_pin,'operator-a',
