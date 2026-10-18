@@ -3,6 +3,7 @@
 #include "field_autoplay.hpp"
 #include "field_frame_ticks.hpp"
 #include "field_pixels.hpp"
+#include "field_snapshot.hpp"
 #include "field_view.hpp"
 
 #include <cstddef>
@@ -14,6 +15,7 @@ namespace wa::field {
 // sample, current monotonic tick, and writable linear framebuffer.
 struct FieldRuntime {
   WorldState manual{};
+  FieldSnapshotSlot quicksave{};
   AutoplayTrack demo{};
   FrameTickClock timer{};
   RenderFrame view{};
@@ -38,6 +40,10 @@ struct RuntimeFrame {
   bool changed_area = false;
   int checkpoint = -1;
   TimedStatus movement_status = TimedStatus::Idle;
+  // Not a persistent save; does not write to disk.
+  bool snapshot_stored = false;
+  bool snapshot_restored = false;
+  bool snapshot_empty = false;
 };
 
 // Buttons X and B are host-supplied rising edges. In manual mode A is a
@@ -46,6 +52,8 @@ struct RuntimeControls {
   PadSample pad{};
   bool start_demo = false;
   bool cancel_demo = false;
+  bool save_snapshot = false;
+  bool load_snapshot = false;
 };
 
 [[nodiscard]] inline FieldRuntime start_field_runtime(
@@ -109,18 +117,36 @@ struct RuntimeControls {
       return {RuntimeStatus::InvalidSimulation};
     response.checkpoint = outcome.checkpoint;
   } else if (!mode_switched) {
-    const WorldFrameResult outcome =
-        advance_world_frame(world, next.manual, controls.pad,
-                            elapsed.milliseconds);
-    response.movement_status = outcome.controller.movement.status;
-    response.changed_area = outcome.area_changed;
-    switch (response.movement_status) {
-      case TimedStatus::InvalidMap:
-      case TimedStatus::InvalidState:
-      case TimedStatus::InvalidClock:
-      case TimedStatus::InvalidDelta:
+    // A snapshot operation owns its entire frame. It must neither step the
+    // player nor acknowledge an event, even if movement/A is held.
+    if (controls.save_snapshot && controls.load_snapshot)
+      return {RuntimeStatus::InvalidSimulation};
+    if (controls.save_snapshot) {
+      if (save_field_snapshot(world, next.manual, next.quicksave) !=
+          SnapshotOutcome::Stored)
         return {RuntimeStatus::InvalidSimulation};
-      default: break;
+      response.snapshot_stored = true;
+    } else if (controls.load_snapshot) {
+      const SnapshotOutcome restored =
+          load_field_snapshot(world, next.quicksave, next.manual);
+      if (restored == SnapshotOutcome::InvalidState)
+        return {RuntimeStatus::InvalidSimulation};
+      response.snapshot_restored = restored == SnapshotOutcome::Restored;
+      response.snapshot_empty = restored == SnapshotOutcome::Empty;
+    } else {
+      const WorldFrameResult outcome =
+          advance_world_frame(world, next.manual, controls.pad,
+                              elapsed.milliseconds);
+      response.movement_status = outcome.controller.movement.status;
+      response.changed_area = outcome.area_changed;
+      switch (response.movement_status) {
+        case TimedStatus::InvalidMap:
+        case TimedStatus::InvalidState:
+        case TimedStatus::InvalidClock:
+        case TimedStatus::InvalidDelta:
+          return {RuntimeStatus::InvalidSimulation};
+        default: break;
+      }
     }
   }
 

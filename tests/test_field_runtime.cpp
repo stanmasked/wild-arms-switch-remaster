@@ -152,9 +152,90 @@ void test_autoplay_timing_checkpoints_and_manual_cancel() {
   ib.assert_guards();
 }
 
+
+void test_quicksave_restore_manual_mode_and_autoplay_isolation() {
+  const FieldWorld world = make_demo_world();
+  FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  Surface image;
+  constexpr std::uint64_t step = kSwitchTicksPerSecond * 160 / 1000;
+  require(advance_field_runtime(world, rt, 0, {}, image.target).status ==
+          RuntimeStatus::Rendered);
+  const RuntimeControls load_empty{{},false,false,false,true};
+  const auto empty = advance_field_runtime(world, rt, step, load_empty, image.target);
+  require(empty.status == RuntimeStatus::Rendered && empty.snapshot_empty);
+  require(!rt.quicksave.occupied && rt.manual.player.x == 1);
+
+  const RuntimeControls right{PadSample{.dpad_right = true}};
+  require(advance_field_runtime(world,rt,step*2,right,image.target).status ==
+          RuntimeStatus::Rendered);
+  require(rt.manual.player.x == 2 && rt.manual.player.successful_moves == 1);
+  const RuntimeControls save{PadSample{.dpad_right = true},false,false,true,false};
+  const auto captured = advance_field_runtime(
+      world,rt,step*3,save,image.target);
+  require(captured.snapshot_stored && rt.quicksave.occupied);
+  require(rt.manual.player.x == 2);
+  (void)advance_field_runtime(world,rt,step*4,right,image.target);
+  require(rt.manual.player.x == 3 && rt.manual.player.successful_moves == 2);
+  const auto loaded = advance_field_runtime(
+      world,rt,step*5,load_empty,image.target);
+  require(loaded.status == RuntimeStatus::Rendered && loaded.snapshot_restored);
+  require(rt.manual.player.x == 2 && rt.manual.player.successful_moves == 1);
+  (void)advance_field_runtime(world,rt,step*6,right,image.target);
+  require(rt.manual.player.x == 3);
+
+  const RuntimeControls both{{},false,false,true,true};
+  const WorldState before = rt.manual;
+  const auto invalid = advance_field_runtime(world,rt,step*7,both,image.target);
+  require(invalid.status == RuntimeStatus::InvalidSimulation);
+  require(rt.manual.player.x == before.player.x &&
+          rt.manual.player.successful_moves == before.player.successful_moves);
+
+  const RuntimeControls start{{},true,false};
+  const auto demo = advance_field_runtime(world,rt,step*8,start,image.target);
+  require(demo.status == RuntimeStatus::Rendered && rt.autoplay);
+  const auto ignored = advance_field_runtime(world,rt,step*9,save,image.target);
+  require(ignored.status == RuntimeStatus::Rendered &&
+          !ignored.snapshot_stored && rt.quicksave.world.player.x == 2);
+  const RuntimeControls cancel{{},false,true};
+  require(advance_field_runtime(world,rt,step*10,cancel,image.target).status ==
+          RuntimeStatus::Rendered);
+  require(!rt.autoplay && rt.manual.player.x == 1);
+  const auto resume = advance_field_runtime(
+      world,rt,step*11,load_empty,image.target);
+  require(resume.snapshot_restored && rt.manual.player.x == 2);
+  image.assert_guards();
+}
+
+void test_quicksave_pending_event_restores_pause_and_status() {
+  const FieldWorld world = make_demo_world();
+  FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  Surface image;
+  constexpr std::uint64_t step = kSwitchTicksPerSecond * 160 / 1000;
+  (void)advance_field_runtime(world,rt,0,{},image.target);
+  const RuntimeControls right{PadSample{.dpad_right = true}};
+  for (int i=1;i<=3;++i)
+    require(advance_field_runtime(world,rt,step*i,right,image.target).status ==
+            RuntimeStatus::Rendered);
+  require(rt.manual.pending == Trigger::Event && rt.manual.player.x == 4);
+  const RuntimeControls save{{},false,false,true,false};
+  require(advance_field_runtime(world,rt,step*4,save,image.target).snapshot_stored);
+  require(rt.quicksave.world.pending == Trigger::Event);
+  const RuntimeControls confirm{PadSample{.confirm = true}};
+  (void)advance_field_runtime(world,rt,step*5,confirm,image.target);
+  require(rt.manual.pending == Trigger::None);
+  const RuntimeControls load{{},false,false,false,true};
+  require(advance_field_runtime(world,rt,step*6,load,image.target).snapshot_restored);
+  require(rt.manual.pending == Trigger::Event &&
+          rt.manual.clock.paused_for_trigger &&
+          image.pixel(0,0) == rgba(246,183,66));
+  (void)advance_field_runtime(world,rt,step*7,confirm,image.target);
+  require(rt.manual.pending == Trigger::None && rt.manual.player.x == 4);
+}
 } // namespace
 int main() {
   test_sixty_hz_manual_event_pause_and_acknowledgment();
   test_invalid_input_is_transactional_and_guarded();
   test_autoplay_timing_checkpoints_and_manual_cancel();
+  test_quicksave_restore_manual_mode_and_autoplay_isolation();
+  test_quicksave_pending_event_restores_pause_and_status();
 }

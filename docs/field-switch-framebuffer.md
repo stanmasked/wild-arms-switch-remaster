@@ -52,3 +52,18 @@ binary was built or ran on hardware.
 Verify native compilation in CI; inspect actual gameplay in a Switch
 homebrew-compatible emulator or personal Switch; compare key orientation,
 frame pacing, display output, suspend/resume, and event acknowledgement.
+
+## Stage 291 — volatile manual quicksave
+
+In **manual** field mode, press **Y** to remember the current complete
+world/player/event/controller state in an in-memory slot, then **− (Minus)**
+to restore it. Saving or restoring consumes one update without moving or
+acknowledging a pending event. An empty slot does nothing, and a malformed
+snapshot is rejected before replacing the live state. Both controls are
+ignored during scripted autoplay (X); after B resets manual exploration,
+the in-memory checkpoint remains available.
+
+This is **not** a persistent game save. The slot is lost when the NRO exits
+or the console closes the process. No Wild Arms original save data or game
+files are read/written. The five established NeXium autoplay reference
+frames and their pixel parity contract are deliberately unchanged.

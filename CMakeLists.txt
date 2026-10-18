@@ -26,6 +26,11 @@ add_executable(wa_field_world_tests tests/test_field_world.cpp)
 target_link_libraries(wa_field_world_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_world_tests COMMAND wa_field_world_tests)
 
+# Volatile manual field quicksave/quickload and strict snapshot validation.
+add_executable(wa_field_snapshot_tests tests/test_field_snapshot.cpp)
+target_link_libraries(wa_field_snapshot_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_snapshot_tests COMMAND wa_field_snapshot_tests)
+
 # Host validation of the exact software framebuffer algorithm used by libnx.
 add_executable(wa_field_pixels_tests tests/test_field_pixels.cpp)
 target_link_libraries(wa_field_pixels_tests PRIVATE wa_field_core)

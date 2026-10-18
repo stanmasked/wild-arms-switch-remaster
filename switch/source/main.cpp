@@ -80,7 +80,9 @@ int main() {
                              static_cast<int>(stride_bytes / sizeof(u32))};
     const RuntimeControls input{
         read_pad(pad), (pressed & HidNpadButton_X) != 0,
-        (pressed & HidNpadButton_B) != 0};
+        (pressed & HidNpadButton_B) != 0,
+        (pressed & HidNpadButton_Y) != 0,
+        (pressed & HidNpadButton_Minus) != 0};
     const RuntimeFrame result = advance_field_runtime(
         world, runtime, armGetSystemTick(), input, output);
     framebufferEnd(&fb);
