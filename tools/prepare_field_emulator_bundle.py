@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+"""Make an offline-ready handoff for future Switch emulator capture.
+
+The bundle is produced in CI, but never claims emulator execution.
+"""
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import re
+import shutil
+
+from audit_field_capture import (
+    EXPECTED_BACKGROUNDS, EXPECTED_BARS, HEIGHT, NAMES, WIDTH,
+)
+from audit_switch_nro import NroFormatError, read_nro
+from compare_field_emulator_png import read_png_rgb
+
+
+class HandoffError(ValueError):
+    pass
+
+
+def sha256_bytes(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def _load_json(path):
+    result = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(result, dict):
+        raise HandoffError(f"expected JSON object: {path}")
+    return result
+
+
+def _verify_reference(directory):
+    folder = Path(directory)
+    data = _load_json(folder / "capture_manifest.json")
+    if (data.get("kind") != "host_reference_not_emulator_capture" or
+            data.get("width") != WIDTH or data.get("height") != HEIGHT or
+            data.get("round_trip_pixels_equal") is not True or
+            not isinstance(data.get("frames"), list) or
+            len(data["frames"]) != len(NAMES)):
+        raise HandoffError("reference manifest has unexpected schema")
+    if {path.name for path in folder.iterdir() if path.is_file()} != (
+            {"capture_manifest.json"} |
+            {name + ".png" for name in NAMES}):
+        raise HandoffError("reference directory must contain exactly five PNGs and manifest")
+    verified = []
+    previous_hashes = []
+    for index, (name, entry) in enumerate(zip(NAMES, data["frames"])):
+        if not isinstance(entry, dict) or (
+                entry.get("scene") != name or
+                entry.get("status_rgb") != list(EXPECTED_BARS[index])):
+            raise HandoffError(f"wrong scene label or status bar for {name}")
+        path = folder / (name + ".png")
+        png_hash = sha256_bytes(path.read_bytes())
+        if png_hash != entry.get("png_sha256"):
+            raise HandoffError(f"PNG reference checksum differs: {name}")
+        _, _, rgb = read_png_rgb(path, (WIDTH, HEIGHT))
+        rgb_hash = sha256_bytes(rgb)
+        if rgb_hash != entry.get("raw_rgb_sha256"):
+            raise HandoffError(f"RGB reference checksum differs: {name}")
+        if tuple(rgb[:3]) != EXPECTED_BARS[index]:
+            raise HandoffError(f"status pixel mismatch: {name}")
+        start = (100 * WIDTH) * 3
+        if tuple(rgb[start:start+3]) != EXPECTED_BACKGROUNDS[index]:
+            raise HandoffError(f"background pixel mismatch: {name}")
+        previous_hashes.append(rgb_hash)
+        verified.append({
+            "scene": name, "png_sha256": png_hash, "rgb_sha256": rgb_hash
+        })
+    if previous_hashes[0] != previous_hashes[-1] or (
+            len(set(previous_hashes[:4])) != 4):
+        raise HandoffError("field replay lost initial/return image parity")
+    return verified
+
+
+def make_handoff(nro, nro_audit, reference, output, source_commit, tools_dir=None):
+    if not re.fullmatch(r"[0-9a-f]{40}", source_commit):
+        raise HandoffError("source commit must be exactly 40 lowercase hex digits")
+    nro, nro_audit, reference, output = (
+        Path(nro), Path(nro_audit), Path(reference), Path(output)
+    )
+    tools_dir = Path(tools_dir) if tools_dir is not None else Path(__file__).parent
+    if (output.resolve() in (reference.resolve(), nro.parent.resolve(),
+                             tools_dir.resolve()) or
+            reference.resolve() == nro.parent.resolve()):
+        raise HandoffError("input and output directories must be independent")
+    if output.exists() and any(output.iterdir()):
+        raise HandoffError("output directory must be empty to avoid stale assets")
+    nro_report = read_nro(nro)
+    if _load_json(nro_audit) != nro_report:
+        raise HandoffError("supplied NRO audit does not match the actual executable")
+    reference_frames = _verify_reference(reference)
+    tool_names = (
+        "audit_field_capture.py", "audit_switch_nro.py",
+        "compare_field_emulator_png.py",
+    )
+    for name in tool_names:
+        if not (tools_dir / name).is_file():
+            raise HandoffError(f"missing offline comparison helper: {name}")
+
+    output.mkdir(parents=True, exist_ok=True)
+    (output / "reference").mkdir()
+    (output / "tools").mkdir()
+    shutil.copyfile(nro, output / "wild_arms_field.nro")
+    shutil.copyfile(nro_audit, output / "wild_arms_field.nro.audit.json")
+    shutil.copyfile(reference / "capture_manifest.json",
+                    output / "reference" / "capture_manifest.json")
+    for name in NAMES:
+        shutil.copyfile(reference / (name + ".png"),
+                        output / "reference" / (name + ".png"))
+    for name in tool_names:
+        shutil.copyfile(tools_dir / name, output / "tools" / name)
+
+    readme = """# Wild Arms field: emulator handoff (synthetic only)
+
+This package was generated by GitHub Actions for the exact checkout
+recorded in bundle_manifest.json. It contains a homebrew NRO and five
+host-rendered synthetic reference PNGs. **No emulator/hardware run has
+been completed or verified by this package.**
+
+1. Extract the artifact ZIP into an empty local directory.
+2. Launch wild_arms_field.nro in a legally configured, libnx-compatible
+   Switch homebrew environment. Record emulator build, OS, graphics
+   backend, launch procedure and source commit.
+3. Press X to start autoplay; capture the five paused checkpoints in
+   chronological order (1280x720, no window chrome or scaling).
+4. Save the screenshots under captures/ using the five filenames in
+   reference/capture_manifest.json. Do not copy the reference PNGs
+   into captures/ and present them as emulator screenshots.
+5. From the extracted directory, run:
+
+python3 tools/compare_field_emulator_png.py --reference reference \
+  --manifest reference/capture_manifest.json --observed captures \
+  --report results/report.json --write-diffs
+
+Use exact pixels first. Diff images, if any, appear in
+results/pixel-diffs/. The comparison cannot authenticate that screenshots
+came from a real emulator, even when it passes.
+
+Controls: D-pad or left stick moves; A confirms events; X starts/restarts
+autoplay; B cancels autoplay; + exits. All scenes and graphics are
+independently invented examples. No original Wild Arms BIOS, disc,
+sprites, music or level data are packaged.
+"""
+    (output / "README.md").write_text(readme, encoding="utf-8")
+
+    provenance = {
+        "kind": "nro_and_host_reference_for_future_emulator_test",
+        "emulator_execution": "not_performed_or_verified",
+        "checkout_commit": source_commit,
+        "nro": {
+            "file": "wild_arms_field.nro",
+            "sha256": nro_report["sha256"],
+            "size_bytes": nro_report["file_size"],
+            "image_size_bytes": nro_report["image_size"],
+            "build_id_hex": nro_report["build_id_hex"],
+        },
+        "reference_frames": reference_frames,
+        "checkpoint_count": len(reference_frames),
+        "expected_movements": 20,
+        "expected_transitions": 2,
+        "capture_resolution": [WIDTH, HEIGHT],
+    }
+    (output / "bundle_manifest.json").write_text(
+        json.dumps(provenance, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8")
+    return provenance
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--nro", required=True, type=Path)
+    parser.add_argument("--nro-audit", required=True, type=Path)
+    parser.add_argument("--reference", required=True, type=Path)
+    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--source-commit", required=True)
+    args = parser.parse_args()
+    try:
+        report = make_handoff(args.nro, args.nro_audit,
+                              args.reference, args.output, args.source_commit)
+    except (OSError, ValueError, KeyError, TypeError, NroFormatError) as exc:
+        parser.exit(1, f"Emulator handoff rejected: {exc}\n")
+    print(json.dumps({
+        "checkout_commit": report["checkout_commit"],
+        "nro_sha256": report["nro"]["sha256"],
+        "checkpoint_count": report["checkpoint_count"],
+        "emulator_execution": report["emulator_execution"],
+    }, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

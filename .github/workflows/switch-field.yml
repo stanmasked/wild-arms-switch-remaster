@@ -6,6 +6,12 @@ on:
       - 'src/field.cpp'
       - 'tools/audit_switch_nro.py'
       - 'tools/test_audit_switch_nro.py'
+      - 'tools/prepare_field_emulator_bundle.py'
+      - 'tools/test_prepare_field_emulator_bundle.py'
+      - 'tools/audit_field_capture.py'
+      - 'tools/compare_field_emulator_png.py'
+      - 'tests/field_capture.cpp'
+      - 'CMakeLists.txt'
       - 'include/field*.hpp'
       - '.github/workflows/switch-field.yml'
   pull_request:
@@ -14,6 +20,12 @@ on:
       - 'src/field.cpp'
       - 'tools/audit_switch_nro.py'
       - 'tools/test_audit_switch_nro.py'
+      - 'tools/prepare_field_emulator_bundle.py'
+      - 'tools/test_prepare_field_emulator_bundle.py'
+      - 'tools/audit_field_capture.py'
+      - 'tools/compare_field_emulator_png.py'
+      - 'tests/field_capture.cpp'
+      - 'CMakeLists.txt'
       - 'include/field*.hpp'
       - '.github/workflows/switch-field.yml'
   workflow_dispatch:
@@ -42,4 +54,38 @@ jobs:
           path: |
             switch/wild_arms_field.nro
             switch/wild_arms_field.nro.audit.json
+          if-no-files-found: error
+
+  emulator-handoff:
+    name: Package NRO + reference frames (not emulator run)
+    needs: build-nro
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: wild-arms-field-prototype
+          path: native-artifact
+      - name: Test handoff builder with synthetic binaries and PNGs
+        run: python3 -m unittest discover -s tools -p 'test_prepare_field_emulator_bundle.py' -v
+      - name: Build host capture from the same checkout
+        run: |
+          cmake -S . -B build
+          cmake --build build --target wa_field_capture --parallel
+          ctest --test-dir build -R '^wa_field_capture_replay$' --output-on-failure
+          ./build/wa_field_capture first-capture
+          ./build/wa_field_capture second-capture
+          python3 tools/audit_field_capture.py first-capture second-capture --output field-references
+      - name: Bind NRO and five PNG references into one source revision
+        run: |
+          python3 tools/prepare_field_emulator_bundle.py \
+            --nro native-artifact/wild_arms_field.nro \
+            --nro-audit native-artifact/wild_arms_field.nro.audit.json \
+            --reference field-references \
+            --output emulator-handoff \
+            --source-commit "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wild-arms-field-emulator-handoff
+          path: emulator-handoff/
           if-no-files-found: error
