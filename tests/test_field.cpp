@@ -281,7 +281,7 @@ void test_timed_rejects_malformed_inputs_without_mutation() {
   require(advance_timed(clock, s, m, {.right = true}, 1001).status ==
           TimedStatus::InvalidDelta);
   require(advance_timed(clock, s, m,
-                        {.right = true, .down = true}, 60).status ==
+                        {.down = true, .right = true}, 60).status ==
           TimedStatus::AmbiguousInput);
   require(advance_timed(clock, s, Map{2, 2, "??.."},
                         {.right = true}, 60).status ==

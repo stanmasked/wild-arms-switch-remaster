@@ -1,0 +1,35 @@
+name: Switch field prototype
+on:
+  push:
+    paths:
+      - 'switch/**'
+      - 'src/field.cpp'
+      - 'include/field*.hpp'
+      - '.github/workflows/switch-field.yml'
+  pull_request:
+    paths:
+      - 'switch/**'
+      - 'src/field.cpp'
+      - 'include/field*.hpp'
+      - '.github/workflows/switch-field.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-nro:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile asset-free NRO
+        run: make -C switch -j2
+      - name: Verify artifact exists
+        run: test -s switch/wild_arms_field.nro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wild-arms-field-prototype
+          path: switch/wild_arms_field.nro
+          if-no-files-found: error

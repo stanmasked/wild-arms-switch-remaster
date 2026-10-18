@@ -83,7 +83,7 @@ void deterministic_replay_across_event_and_exit() {
       {{.up = true}, 160},
       {{.right = true}, 80},
       {{.right = true}, 80},
-      {{.right = true, .left = true}, 160},
+      {{.left = true, .right = true}, 160},
       {{.right = true}, 160},
       {{.right = true}, 1000},
       {{.down = true}, 160, true},
