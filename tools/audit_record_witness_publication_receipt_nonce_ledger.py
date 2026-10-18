@@ -349,17 +349,49 @@ def guarded_attest(path,registry_path,*,expected_registry_head,**kwargs):
 
 def main(argv=None):
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('action',choices=('audit',))
+    p.add_argument('action',choices=('init','audit'))
     p.add_argument('registry',type=Path)
-    p.add_argument('--expected-ledger-head',required=True)
+    p.add_argument('--scope')
+    p.add_argument('--expected-genesis-pin')
+    p.add_argument('--expected-ledger-head')
+    for letter in ('a','b'):
+        p.add_argument('--operator-'+letter+'-id')
+        p.add_argument('--storage-'+letter+'-id')
+        p.add_argument('--operator-'+letter+'-public',type=Path)
+        p.add_argument('--operator-'+letter+'-pin')
+        p.add_argument('--operator-'+letter+'-initial-previous-sha256')
     a=p.parse_args(argv)
     report={'schema':REPORT_SCHEMA,'automatic_cas_retry_authorized':False,
             'witness_fence_retirement_authorized':False,'witness_fence_retired':False}
     try:
-        report.update(snapshot(a.registry,expected_ledger_head=a.expected_ledger_head))
+        if a.action=='init':
+            if a.scope is None or a.expected_genesis_pin is None:
+                raise NonceLedgerConflict('missing trusted genesis enrollment')
+            enrollment={}
+            identities=[]
+            for role,letter in (('operator-a','a'),('operator-b','b')):
+                public=getattr(a,'operator_'+letter+'_public')
+                pin=getattr(a,'operator_'+letter+'_pin')
+                identities.append(_enrolled_pem(public,pin))
+                enrollment[role]={
+                    'operator_id':getattr(a,'operator_'+letter+'_id'),
+                    'storage_id':getattr(a,'storage_'+letter+'_id'),
+                    'public_pin':pin,
+                    'initial_previous_sha256':getattr(
+                        a,'operator_'+letter+'_initial_previous_sha256'),
+                }
+            if len(set(identities)) != 2:
+                raise NonceLedgerConflict('two operator DER keys are identical')
+            report.update(init(a.registry,scope=a.scope,enrollment=enrollment,
+                               independent_genesis_pin=a.expected_genesis_pin))
+        else:
+            if a.expected_ledger_head is None:
+                raise NonceLedgerConflict('missing independently retained current head')
+            report.update(snapshot(a.registry,
+                                   expected_ledger_head=a.expected_ledger_head))
         status=0
     except (NonceLedgerConflict,ReceiptConflict,ValueError,TypeError,
-            KeyError,OSError,sqlite3.DatabaseError):
+            KeyError,AttributeError,OSError,sqlite3.DatabaseError):
         report['nonce_ledger_conflict']=True
         status=1
     print(json.dumps(report,sort_keys=True))
