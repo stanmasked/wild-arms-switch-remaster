@@ -64,6 +64,54 @@ on:
       - 'tools/audit_record_remote_recovery_witness.py'
       - 'tools/audit_record_witness_fence.py'
       - 'tools/audit_record_witness_fence_reconciliation.py'
+      - 'tools/audit_record_witness_fence_quiescence.py'
+      - 'tools/audit_record_custodian_write_quarantine.py'
+      - 'tools/audit_record_witness_linux_quiescence.py'
+      - 'tools/audit_record_linux_writer_revocation.py'
+      - 'tools/audit_record_linux_writer_inventory.py'
+      - 'tools/audit_record_linux_interpreted_writers.py'
+      - 'tools/audit_record_linux_launcher_inventory.py'
+      - 'tools/audit_record_linux_activation_units.py'
+      - 'tools/audit_record_witness_composite_evidence.py'
+      - 'tools/audit_record_witness_report_provenance.py'
+      - 'tools/audit_record_witness_run_replay_ledger.py'
+      - 'tools/audit_record_witness_replay_head_checkpoint.py'
+      - 'tools/audit_record_witness_checkpoint_registry.py'
+      - 'tools/audit_record_witness_escrow_quorum.py'
+      - 'tools/audit_record_witness_escrow_history.py'
+      - 'tools/audit_record_witness_publication_intake.py'
+      - 'tools/audit_record_witness_publication_mirror.py'
+      - 'tools/audit_record_witness_publication_mirror_witness.py'
+      - 'tools/audit_record_witness_publication_mirror_history.py'
+      - 'tools/audit_record_witness_publication_archive_compare.py'
+      - 'tools/audit_record_witness_publication_transition.py'
+      - 'tools/audit_record_witness_publication_latest_head.py'
+      - 'tools/audit_record_witness_publication_live_source.py'
+      - 'tools/audit_record_witness_publication_two_source.py'
+      - 'tools/audit_record_witness_publication_checkpoint_cas.py'
+      - 'tools/audit_record_witness_publication_cas_reconciliation.py'
+      - 'tools/audit_record_witness_publication_reconnect_crosscheck.py'
+      - 'tools/audit_record_witness_publication_dual_operator_highwater.py'
+      - 'tools/audit_record_witness_publication_highwater_lineage.py'
+      - 'tools/audit_record_witness_publication_highwater_equivocation.py'
+      - 'tools/audit_record_witness_publication_equivocation_archive.py'
+      - 'tools/audit_record_witness_publication_equivocation_replica.py'
+      - 'tools/audit_record_witness_publication_replica_receipts.py'
+      - 'tools/audit_record_witness_publication_receipt_challenge_conflict.py'
+      - 'tools/audit_record_witness_publication_receipt_nonce_ledger.py'
+      - 'tools/audit_record_witness_publication_receipt_nonce_reconciliation.py'
+      - 'tools/audit_record_witness_publication_receipt_nonce_divergence_evidence.py'
+      - 'tools/audit_record_witness_publication_nonce_divergence_attestations.py'
+      - 'tools/audit_record_witness_publication_nonce_attestation_double_claim.py'
+      - 'tools/audit_record_witness_publication_attestation_nonce_guard.py'
+      - 'tools/audit_record_witness_publication_attestation_registry_binding.py'
+      - 'tools/audit_record_witness_publication_signed_mirror_acknowledgments.py'
+      - 'tools/audit_record_witness_publication_signed_mirror_double_claim.py'
+      - 'tools/audit_record_witness_publication_mirror_ack_nonce_guard.py'
+      - 'tools/audit_record_witness_publication_mirror_ack_registry_binding.py'
+      - 'tools/audit_record_witness_publication_mirror_ack_detached_evidence.py'
+      - 'tools/audit_record_witness_publication_replica_receipt_sign.py'
+      - 'tools/audit_record_witness_publication_replica_compare.py'
       - 'tools/audit_record_remote_witness_fence.py'
       - 'tools/audit_record_remote_reserved_issue.py'
       - 'tools/audit_record_remote_reserved_accept.py'
@@ -85,6 +133,55 @@ on:
       - 'tests/test_record_remote_recovery_witness.py'
       - 'tests/test_record_witness_fence.py'
       - 'tests/test_record_witness_fence_reconciliation.py'
+      - 'tests/test_record_witness_fence_quiescence.py'
+      - 'tests/test_record_custodian_write_quarantine.py'
+      - 'tests/test_record_witness_linux_quiescence.py'
+      - 'tests/test_record_linux_writer_revocation.py'
+      - 'tests/test_record_linux_writer_inventory.py'
+      - 'tests/test_record_linux_interpreted_writers.py'
+      - 'tests/test_record_linux_launcher_inventory.py'
+      - 'tests/test_record_linux_activation_units.py'
+      - 'tests/test_record_witness_composite_evidence.py'
+      - 'tests/test_record_witness_report_provenance.py'
+      - 'tests/test_record_witness_run_replay_ledger.py'
+      - 'tests/test_record_witness_replay_head_checkpoint.py'
+      - 'tests/test_record_witness_checkpoint_registry.py'
+      - 'tests/test_record_witness_escrow_quorum.py'
+      - 'tests/test_record_witness_escrow_history.py'
+      - 'tests/test_record_witness_publication_intake.py'
+      - 'tests/test_record_witness_publication_mirror.py'
+      - 'tests/test_record_witness_publication_mirror_witness.py'
+      - 'tests/test_record_witness_publication_mirror_history.py'
+      - 'tests/test_record_witness_publication_archive_compare.py'
+      - 'tests/test_record_witness_publication_transition.py'
+      - 'tests/test_record_witness_publication_latest_head.py'
+      - 'tests/test_record_witness_publication_live_source.py'
+      - 'tests/test_record_witness_publication_two_source.py'
+      - 'tests/test_record_witness_publication_checkpoint_cas.py'
+      - 'tests/test_record_witness_publication_cas_reconciliation.py'
+      - 'tests/test_record_witness_publication_reconnect_crosscheck.py'
+      - 'tests/test_record_witness_publication_dual_operator_highwater.py'
+      - 'tests/test_record_witness_publication_highwater_lineage.py'
+      - 'tests/test_record_witness_publication_highwater_equivocation.py'
+      - 'tests/test_record_witness_publication_equivocation_archive.py'
+      - 'tests/test_record_witness_publication_equivocation_replica.py'
+      - 'tests/test_record_witness_publication_replica_receipts.py'
+      - 'tests/test_record_witness_publication_receipt_challenge_conflict.py'
+      - 'tests/test_record_witness_publication_receipt_nonce_ledger.py'
+      - 'tests/test_record_witness_publication_receipt_nonce_reconciliation.py'
+      - 'tests/test_record_witness_publication_receipt_nonce_divergence_evidence.py'
+      - 'tests/test_record_witness_publication_nonce_divergence_attestations.py'
+      - 'tests/test_record_witness_publication_nonce_attestation_double_claim.py'
+      - 'tests/test_record_witness_publication_attestation_nonce_guard.py'
+      - 'tests/test_record_witness_publication_attestation_registry_binding.py'
+      - 'tests/test_record_witness_publication_signed_mirror_acknowledgments.py'
+      - 'tests/test_record_witness_publication_signed_mirror_double_claim.py'
+      - 'tests/test_record_witness_publication_mirror_ack_nonce_guard.py'
+      - 'tests/test_record_witness_publication_mirror_ack_registry_binding.py'
+      - 'tests/test_record_witness_publication_mirror_ack_detached_evidence.py'
+      - 'tests/test_record_witness_publication_mirror_ack_archive_stability.py'
+      - 'tests/test_record_witness_publication_mirror_ack_pem_stability.py'
+      - 'tests/test_record_witness_publication_replica_compare.py'
       - 'tests/test_record_witness_gated_recovery.py'
       - 'tests/test_record_witness_gated_custody.py'
       - 'tests/test_record_reserved_accept.py'
@@ -93,6 +190,55 @@ on:
       - 'docs/ps1-remote-recovery-witness.md'
       - 'docs/ps1-witness-conditional-fence.md'
       - 'docs/ps1-witness-fence-reconciliation.md'
+      - 'docs/ps1-witness-fence-quiescence-preflight.md'
+      - 'docs/ps1-custodian-write-quarantine.md'
+      - 'docs/ps1-linux-cgroup-quiescence-observation.md'
+      - 'docs/ps1-linux-writer-revocation.md'
+      - 'docs/ps1-linux-writer-inventory.md'
+      - 'docs/ps1-linux-interpreted-writers.md'
+      - 'docs/ps1-linux-launcher-inventory.md'
+      - 'docs/ps1-linux-activation-units.md'
+      - 'docs/ps1-witness-composite-evidence.md'
+      - 'docs/ps1-witness-report-provenance.md'
+      - 'docs/ps1-witness-run-replay-ledger.md'
+      - 'docs/ps1-witness-replay-head-checkpoint.md'
+      - 'docs/ps1-witness-checkpoint-registry.md'
+      - 'docs/ps1-witness-escrow-quorum.md'
+      - 'docs/ps1-witness-escrow-history.md'
+      - 'docs/ps1-witness-publication-intake.md'
+      - 'docs/ps1-witness-publication-mirror.md'
+      - 'docs/ps1-witness-publication-mirror-witness.md'
+      - 'docs/ps1-witness-publication-mirror-history.md'
+      - 'docs/ps1-witness-publication-archive-compare.md'
+      - 'docs/ps1-witness-publication-transition.md'
+      - 'docs/ps1-witness-publication-latest-head.md'
+      - 'docs/ps1-witness-publication-live-source.md'
+      - 'docs/ps1-witness-publication-two-source.md'
+      - 'docs/ps1-witness-publication-checkpoint-cas.md'
+      - 'docs/ps1-witness-publication-cas-reconciliation.md'
+      - 'docs/ps1-witness-publication-reconnect-crosscheck.md'
+      - 'docs/ps1-witness-publication-dual-operator-highwater.md'
+      - 'docs/ps1-witness-publication-highwater-lineage.md'
+      - 'docs/ps1-witness-publication-highwater-equivocation.md'
+      - 'docs/ps1-witness-publication-equivocation-archive.md'
+      - 'docs/ps1-witness-publication-equivocation-replica.md'
+      - 'docs/ps1-witness-publication-replica-receipts.md'
+      - 'docs/ps1-witness-publication-receipt-challenge-conflict.md'
+      - 'docs/ps1-witness-publication-receipt-nonce-ledger.md'
+      - 'docs/ps1-witness-publication-receipt-nonce-reconciliation.md'
+      - 'docs/ps1-witness-publication-receipt-nonce-divergence-evidence.md'
+      - 'docs/ps1-witness-publication-nonce-divergence-attestations.md'
+      - 'docs/ps1-witness-publication-nonce-attestation-double-claim.md'
+      - 'docs/ps1-witness-publication-attestation-nonce-guard.md'
+      - 'docs/ps1-witness-publication-attestation-registry-binding.md'
+      - 'docs/ps1-witness-publication-signed-mirror-acknowledgments.md'
+      - 'docs/ps1-witness-publication-signed-mirror-double-claim.md'
+      - 'docs/ps1-witness-publication-mirror-ack-nonce-guard.md'
+      - 'docs/ps1-witness-publication-mirror-ack-registry-binding.md'
+      - 'docs/ps1-witness-publication-mirror-ack-detached-evidence.md'
+      - 'docs/ps1-witness-publication-mirror-ack-archive-stability.md'
+      - 'docs/ps1-witness-publication-mirror-ack-pem-stability.md'
+      - 'docs/ps1-witness-publication-replica-comparison.md'
       - 'docs/ps1-witness-gated-recovery.md'
       - 'docs/ps1-witness-gated-custody-writes.md'
       - 'docs/ps1-reserved-capture-acceptance.md'
@@ -240,6 +386,55 @@ jobs:
           python -m unittest discover -s tests -p 'test_record_remote_recovery_witness.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_fence.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_fence_reconciliation.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_fence_quiescence.py' -v
+          python -m unittest discover -s tests -p 'test_record_custodian_write_quarantine.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_linux_quiescence.py' -v
+          python -m unittest discover -s tests -p 'test_record_linux_writer_revocation.py' -v
+          python -m unittest discover -s tests -p 'test_record_linux_writer_inventory.py' -v
+          python -m unittest discover -s tests -p 'test_record_linux_interpreted_writers.py' -v
+          python -m unittest discover -s tests -p 'test_record_linux_launcher_inventory.py' -v
+          python -m unittest discover -s tests -p 'test_record_linux_activation_units.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_composite_evidence.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_report_provenance.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_run_replay_ledger.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_replay_head_checkpoint.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_checkpoint_registry.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_escrow_quorum.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_escrow_history.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_intake.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_mirror.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_mirror_witness.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_mirror_history.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_archive_compare.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_transition.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_latest_head.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_live_source.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_two_source.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_checkpoint_cas.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_cas_reconciliation.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_reconnect_crosscheck.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_dual_operator_highwater.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_highwater_lineage.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_highwater_equivocation.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_equivocation_archive.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_equivocation_replica.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_replica_receipts.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_receipt_challenge_conflict.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_receipt_nonce_ledger.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_receipt_nonce_reconciliation.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_receipt_nonce_divergence_evidence.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_nonce_divergence_attestations.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_nonce_attestation_double_claim.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_attestation_nonce_guard.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_attestation_registry_binding.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_signed_mirror_acknowledgments.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_signed_mirror_double_claim.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_mirror_ack_nonce_guard.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_mirror_ack_registry_binding.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_mirror_ack_detached_evidence.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_mirror_ack_archive_stability.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_mirror_ack_pem_stability.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_replica_compare.py' -v
           python -m unittest discover -s tests -p 'test_record_reserved_accept.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
           python -m unittest discover -s tests -p 'test_gp0_matrix_*.py' -v

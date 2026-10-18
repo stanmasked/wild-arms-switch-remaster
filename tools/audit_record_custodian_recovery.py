@@ -229,6 +229,11 @@ def recover(custodian_db, request_raw, approval_a, approval_b,
     with closing(_connect(custodian_db)) as con:
         con.execute('BEGIN IMMEDIATE')
         try:
+            try:
+                from .audit_record_custodian_write_quarantine import require_unquarantined
+            except ImportError:
+                from audit_record_custodian_write_quarantine import require_unquarantined
+            require_unquarantined(con)
             if witness_head is not None:
                 try:
                     from .audit_record_recovery_witness import check_locked
