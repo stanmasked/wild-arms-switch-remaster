@@ -211,13 +211,26 @@ class ThreeOperatorEscrowTests(unittest.TestCase):
         self.signed_round()
         self.first_candidate()
         self.accept()
+        # first_candidate() also creates a Stage 263M predecessor; restore
+        # the original escrow predecessor to test the registry head itself.
+        self.prior = escrow.ESCROW_GENESIS
         with self.assertRaises(escrow.EscrowConflict):
             self.check()
 
     def test_old_registry_plus_old_pins_cannot_be_excluded_here(self):
         self.fresh()
         self.signed_round()
-        result = self.check()
+        old_receipts = dict(self.signed)
+        old_bundle_pin = self.escrow_pin
+        self.first_candidate()
+        self.accept()
+        # A privileged attacker can restore BOTH the registry to its old
+        # genesis state and the prior independently retained "latest" pins.
+        with sqlite3.connect(self.registry) as con:
+            con.execute('DELETE FROM accepted_replay_checkpoints')
+        self.prior = escrow.ESCROW_GENESIS
+        result = self.check(
+            signed=old_receipts, bundle_pin=old_bundle_pin)
         self.assertTrue(result['signed_registry_head_matches_current_snapshot'])
         self.assertFalse(result['historical_replay_with_old_pins_excluded'])
 
