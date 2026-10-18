@@ -7,6 +7,7 @@
 #include "field_scenario.hpp"
 #include "field_autoplay.hpp"
 #include "field_frame_ticks.hpp"
+#include "field_runtime.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -60,63 +61,30 @@ int main() {
   PadState pad{};
   padInitializeDefault(&pad);
 
-  WorldState game = start_world(world);
-  AutoplayTrack demo = start_field_autoplay(world);
-  bool autoplay = false;
-  RenderFrame view{};
-  FrameTickClock frame_clock =
-      make_frame_tick_clock(armGetSystemTickFreq(), armGetSystemTick());
-  if (!frame_clock.valid()) {
+  FieldRuntime runtime = start_field_runtime(
+      world, armGetSystemTickFreq(), armGetSystemTick());
+  if (!runtime.timer.valid()) {
     framebufferClose(&fb);
     return 4;
   }
 
   while (appletMainLoop()) {
     padUpdate(&pad);
-    if (padGetButtonsDown(&pad) & HidNpadButton_Plus) break;
-
-    const FrameTickDelta frame_time =
-        advance_frame_ticks(frame_clock, armGetSystemTick());
-    if (frame_time.status == FrameTickStatus::InvalidClock) break;
-    // Counter resets and long applet pauses deliberately advance no game
-    // time; fractional milliseconds are retained for normal display frames.
-    const u32 delta = frame_time.milliseconds;
-
     const u64 pressed = padGetButtonsDown(&pad);
-    if (pressed & HidNpadButton_X) {
-      demo = start_field_autoplay(world);
-      if (demo.failed) break;
-      autoplay = true;
-    } else if (autoplay && (pressed & HidNpadButton_B)) {
-      autoplay = false;
-      game = start_world(world);
-    }
-
-    if (autoplay) {
-      const AutoplayFrame tick = advance_field_autoplay(world, demo, delta);
-      if (tick.status == AutoplayStatus::Invalid ||
-          tick.status == AutoplayStatus::InvalidDelta)
-        break;
-    } else {
-      const WorldFrameResult manual =
-          advance_world_frame(world, game, read_pad(pad), delta);
-      (void)manual;
-    }
-    const WorldState& displayed = autoplay ? demo.scenario.world : game;
-    const Map& current_map = world.areas[displayed.area].map;
-    if (build_view(view, current_map, displayed.player, kViewport) !=
-        RenderOutcome::Ready)
-      break;
+    if (pressed & HidNpadButton_Plus) break;
 
     u32 stride_bytes = 0;
     u32* pixels = static_cast<u32*>(framebufferBegin(&fb, &stride_bytes));
     if (!pixels) break;
     const PixelTarget output{pixels, kWidth, kHeight,
                              static_cast<int>(stride_bytes / sizeof(u32))};
-    const RasterOutcome drawn = draw_field_pixels(
-        output, view, displayed.clock.paused_for_trigger, displayed.area);
+    const RuntimeControls input{
+        read_pad(pad), (pressed & HidNpadButton_X) != 0,
+        (pressed & HidNpadButton_B) != 0};
+    const RuntimeFrame result = advance_field_runtime(
+        world, runtime, armGetSystemTick(), input, output);
     framebufferEnd(&fb);
-    if (drawn != RasterOutcome::Ready) break;
+    if (result.status != RuntimeStatus::Rendered) break;
   }
 
   framebufferClose(&fb);

@@ -51,6 +51,11 @@ add_executable(wa_field_frame_ticks_tests tests/test_field_frame_ticks.cpp)
 target_link_libraries(wa_field_frame_ticks_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_frame_ticks_tests COMMAND wa_field_frame_ticks_tests)
 
+# End-to-end controller -> hardware clock -> world -> viewport -> RGBA pixels.
+add_executable(wa_field_runtime_tests tests/test_field_runtime.cpp)
+target_link_libraries(wa_field_runtime_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_runtime_tests COMMAND wa_field_runtime_tests)
+
 # Asset-free terminal exploration demo: host-only, NOT a Switch NRO.
 add_executable(wa_field_demo src/field_demo.cpp)
 target_link_libraries(wa_field_demo PRIVATE wa_field_core)
