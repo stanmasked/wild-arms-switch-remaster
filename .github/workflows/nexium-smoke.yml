@@ -21,6 +21,11 @@ on:
       - 'tools/test_audit_nexium_manual_snapshot.py'
       - 'tests/field_capture.cpp'
       - 'include/field_pixels.hpp'
+      - 'include/field_save_codec.hpp'
+      - 'include/field_save_file.hpp'
+      - 'include/field_snapshot.hpp'
+      - 'include/field_runtime.hpp'
+      - 'switch/source/main.cpp'
   workflow_dispatch:
 
 permissions:
