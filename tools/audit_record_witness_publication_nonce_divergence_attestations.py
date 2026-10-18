@@ -1,4 +1,4 @@
-"""Stage 264M: two Ed25519 acknowledgments of independently pinned nonce-fork evidence.
+"""Stages 264M–264O: two Ed25519 acknowledgments of independently pinned nonce-fork evidence.
 
 Each operator signs a *separate, offline inspection claim* about the same
 fully re-audited Stage 264L private artifact. Verification requires exact
@@ -217,6 +217,9 @@ def main(argv=None):
     p.add_argument('--sequence',type=int)
     p.add_argument('--previous-attestation-pin')
     p.add_argument('--signing-private',type=Path)
+    p.add_argument('--attestation-registry',type=Path)
+    p.add_argument('--expected-registry-head')
+    p.add_argument('--storage-id')
     p.add_argument('--output',type=Path)
     p.add_argument('--signing-public',type=Path)
     p.add_argument('--signing-public-pin')
@@ -242,9 +245,19 @@ def main(argv=None):
         if a.action=='sign':
             if any(x is None for x in (a.role,a.operator_id,a.challenge,
                  a.sequence,a.previous_attestation_pin,a.signing_private,
-                 a.signing_public,a.signing_public_pin,a.output)):
-                raise AttestationConflict('missing private operator enrollment')
-            report=attest(a.archive,role=a.role,operator_id=a.operator_id,
+                 a.signing_public,a.signing_public_pin,a.output,
+                 a.attestation_registry,a.expected_registry_head,a.storage_id)):
+                raise AttestationConflict('missing mandatory pre-sign enrollment')
+            # Import inside the CLI entry only; guard imports this module.
+            try:
+                from . import audit_record_witness_publication_attestation_nonce_guard as guard
+            except ImportError:
+                import audit_record_witness_publication_attestation_nonce_guard as guard
+            report=guard.guarded_attest(
+                a.archive,a.attestation_registry,
+                expected_registry_head=a.expected_registry_head,
+                storage_id=a.storage_id,
+                role=a.role,operator_id=a.operator_id,
                 audit_id=a.audit_id,nonce=a.challenge,sequence=a.sequence,
                 previous_pin=a.previous_attestation_pin,
                 signing_private=a.signing_private,public=a.signing_public,
