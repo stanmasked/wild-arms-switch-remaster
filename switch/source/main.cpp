@@ -118,7 +118,7 @@ int main() {
   if (!map.valid()) return 1;
 
   Framebuffer fb{};
-  Result setup = framebufferCreate(&fb, nwindowGetDefault(), kWidth, kHeight,
+  ::Result setup = framebufferCreate(&fb, nwindowGetDefault(), kWidth, kHeight,
                                    PIXEL_FORMAT_RGBA_8888, 2);
   if (R_FAILED(setup)) return 2;
   setup = framebufferMakeLinear(&fb);
