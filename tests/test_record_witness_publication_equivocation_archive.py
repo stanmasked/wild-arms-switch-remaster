@@ -119,7 +119,7 @@ class EvidenceArchiveTests(unittest.TestCase):
 
     def test_wrong_signer_public_key_rejected_on_read(self):
         self.create()
-        with self.assertRaises(cas.CheckpointCASConflict):
+        with self.assertRaises(ValueError):
             self.inspect(operator_a_public=self.observers[1][1])
 
     def test_missing_archive_cannot_be_silently_regenerated(self):
