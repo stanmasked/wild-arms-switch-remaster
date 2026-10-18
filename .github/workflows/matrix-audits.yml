@@ -83,6 +83,7 @@ on:
       - 'tools/audit_record_witness_publication_mirror.py'
       - 'tools/audit_record_witness_publication_mirror_witness.py'
       - 'tools/audit_record_witness_publication_mirror_history.py'
+      - 'tools/audit_record_witness_publication_archive_compare.py'
       - 'tools/audit_record_witness_publication_replica_compare.py'
       - 'tools/audit_record_remote_witness_fence.py'
       - 'tools/audit_record_remote_reserved_issue.py'
@@ -124,6 +125,7 @@ on:
       - 'tests/test_record_witness_publication_mirror.py'
       - 'tests/test_record_witness_publication_mirror_witness.py'
       - 'tests/test_record_witness_publication_mirror_history.py'
+      - 'tests/test_record_witness_publication_archive_compare.py'
       - 'tests/test_record_witness_publication_replica_compare.py'
       - 'tests/test_record_witness_gated_recovery.py'
       - 'tests/test_record_witness_gated_custody.py'
@@ -152,6 +154,7 @@ on:
       - 'docs/ps1-witness-publication-mirror.md'
       - 'docs/ps1-witness-publication-mirror-witness.md'
       - 'docs/ps1-witness-publication-mirror-history.md'
+      - 'docs/ps1-witness-publication-archive-compare.md'
       - 'docs/ps1-witness-publication-replica-comparison.md'
       - 'docs/ps1-witness-gated-recovery.md'
       - 'docs/ps1-witness-gated-custody-writes.md'
@@ -319,6 +322,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_record_witness_publication_mirror.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_publication_mirror_witness.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_publication_mirror_history.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_archive_compare.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_publication_replica_compare.py' -v
           python -m unittest discover -s tests -p 'test_record_reserved_accept.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
