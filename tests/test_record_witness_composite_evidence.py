@@ -110,7 +110,7 @@ class CompositeEvidenceTests(unittest.TestCase):
 
     def test_signed_stop_or_original_request_swapped(self):
         self.init_capture()
-        swapped = self.request(nonce='e'*32)
+        swapped = self.request(nonce='a'*32)
         with self.assertRaises(ValueError):
             self.build(original=swapped)
         other_stop, _, _ = self.signed_stop_for(
@@ -298,7 +298,7 @@ class CompositeEvidenceTests(unittest.TestCase):
         argv, target = self._cli_args()
         with contextlib.redirect_stdout(output := io.StringIO()):
             rc = composite.main(argv)
-        self.assertEqual(rc, 0)
+        self.assertEqual(rc, 0, output.getvalue())
         report = json.loads(output.getvalue())
         self.assertTrue(report['private_manifest_created'])
         self.assertEqual(target.stat().st_mode & 0o077, 0)
