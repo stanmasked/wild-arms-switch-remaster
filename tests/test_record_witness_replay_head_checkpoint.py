@@ -201,6 +201,12 @@ class SignedReplayHeadTests(unittest.TestCase):
         self.assertTrue(result['signed_journal_head_matches_readonly_audit'])
         self.assertFalse(result['historical_replay_with_old_pins_excluded'])
 
+    def test_genesis_checkpoint_cannot_claim_arbitrary_predecessor(self):
+        self.init_journal()
+        with self.assertRaises(head.CheckpointConflict):
+            head.make_body('admin-a', 0, replay.GENESIS,
+                           'f'*64, NONCE, TAG)
+
     def test_invalid_unsigned_template_fields_refused(self):
         for kwargs in (
             {'role':'mallory','count':0,'head':replay.GENESIS,
