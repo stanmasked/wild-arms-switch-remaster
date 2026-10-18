@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import hmac
 import json
+import ipaddress
 from pathlib import Path
 import re
 import secrets
@@ -70,6 +71,12 @@ def validate_url(url):
         port = p.port
     except ValueError as exc:
         raise LiveSourceConflict('invalid head authority endpoint') from exc
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        raise LiveSourceConflict('IP-literal authority URL is disallowed')
     if (p.scheme != 'https' or p.username is not None
             or p.password is not None or p.query or p.fragment
             or not host or not HOST.fullmatch(host)
