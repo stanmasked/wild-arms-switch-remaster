@@ -4,6 +4,10 @@ on:
     paths:
       - 'switch/**'
       - 'src/field.cpp'
+      - 'tools/audit_switch_nro.py'
+      - 'tools/test_audit_switch_nro.py'
+      - 'tools/audit_switch_nro.py'
+      - 'tools/test_audit_switch_nro.py'
       - 'include/field*.hpp'
       - '.github/workflows/switch-field.yml'
   pull_request:
@@ -26,10 +30,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Compile asset-free NRO
         run: make -C switch -j2
-      - name: Verify artifact exists
-        run: test -s switch/wild_arms_field.nro
+      - name: Verify NRO container using synthetic fixture tests
+        run: python3 -m unittest discover -s tools -p 'test_audit_switch_nro.py' -v
+      - name: Audit produced NRO0 segments and optional homebrew assets
+        run: |
+          test -s switch/wild_arms_field.nro
+          python3 tools/audit_switch_nro.py switch/wild_arms_field.nro --json switch/wild_arms_field.nro.audit.json
       - uses: actions/upload-artifact@v4
         with:
           name: wild-arms-field-prototype
-          path: switch/wild_arms_field.nro
+          path: |
+            switch/wild_arms_field.nro
+            switch/wild_arms_field.nro.audit.json
           if-no-files-found: error
