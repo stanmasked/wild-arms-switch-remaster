@@ -36,6 +36,11 @@ add_executable(wa_field_capture tests/field_capture.cpp)
 target_link_libraries(wa_field_capture PRIVATE wa_field_core)
 add_test(NAME wa_field_capture_replay COMMAND wa_field_capture)
 
+# Reference screenshots and native autoplay share the same scripted controls.
+add_executable(wa_field_scenario_tests tests/test_field_scenario.cpp)
+target_link_libraries(wa_field_scenario_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_scenario_tests COMMAND wa_field_scenario_tests)
+
 # Asset-free terminal exploration demo: host-only, NOT a Switch NRO.
 add_executable(wa_field_demo src/field_demo.cpp)
 target_link_libraries(wa_field_demo PRIVATE wa_field_core)
