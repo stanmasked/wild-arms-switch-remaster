@@ -7,7 +7,7 @@ import unittest
 from PIL import Image, ImageDraw
 
 from audit_field_capture import NAMES
-from audit_nexium_checkpoints import refs, desktop
+from test_audit_nexium_checkpoints import refs, desktop
 from audit_nexium_pixel_parity import (
     VIEW_W, VIEW_H, VISIBLE_PIXELS, audit_all, compare_scene,
 )
