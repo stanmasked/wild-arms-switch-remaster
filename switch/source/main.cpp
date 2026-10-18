@@ -1,7 +1,7 @@
 #include <switch.h>
 
 #include "field.hpp"
-#include "field_controls.hpp"
+#include "field_world.hpp"
 #include "field_view.hpp"
 
 #include <algorithm>
@@ -60,10 +60,11 @@ u32 terrain_color(const CellKind kind) noexcept {
 }
 
 void paint(u32* pixels, const u32 stride_bytes, const RenderFrame& frame,
-           const bool paused) noexcept {
+           const bool paused, const int area_index) noexcept {
   const u32 pitch = stride_bytes / sizeof(u32);
   fill_rect(pixels, pitch, 0, 0, kWidth, kHeight,
-            RGBA8_MAXALPHA(14, 20, 34));
+            area_index == 0 ? RGBA8_MAXALPHA(14, 20, 34)
+                            : RGBA8_MAXALPHA(19, 34, 38));
 
   const int start_x = (kWidth - frame.width * kTileSize) / 2;
   const int start_y = (kHeight - frame.height * kTileSize) / 2;
@@ -100,22 +101,15 @@ void paint(u32* pixels, const u32 stride_bytes, const RenderFrame& frame,
   // Status bar: amber when waiting for A to acknowledge an event/exit.
   fill_rect(pixels, pitch, 0, 0, kWidth, 10,
             paused ? RGBA8_MAXALPHA(246, 183, 66)
-                   : RGBA8_MAXALPHA(63, 191, 138));
+                   : area_index == 0 ? RGBA8_MAXALPHA(63, 191, 138)
+                                     : RGBA8_MAXALPHA(105, 160, 230));
 }
 
 }  // namespace
 
 int main() {
-  const Map map{
-    11, 7,
-    "###########"
-    "#...!.....#"
-    "#.#.###.#.#"
-    "#...#...#.#"
-    "#.#...#...#"
-    "#.....E...#"
-    "###########"};
-  if (!map.valid()) return 1;
+  const FieldWorld world = make_demo_world();
+  if (!world.valid()) return 1;
 
   Framebuffer fb{};
   ::Result setup = framebufferCreate(&fb, nwindowGetDefault(), kWidth, kHeight,
@@ -131,9 +125,7 @@ int main() {
   PadState pad{};
   padInitializeDefault(&pad);
 
-  State player{1, 1};
-  MovementClock clock{};
-  PadDecoder decoder{};
+  WorldState game = start_world(world);
   RenderFrame view{};
   const u64 tick_frequency = armGetSystemTickFreq();
   u64 previous_tick = armGetSystemTick();
@@ -152,16 +144,19 @@ int main() {
     const u32 delta = static_cast<u32>(std::min<u64>(
         elapsed_ms, kMaximumMovementDeltaMs));
 
-    const PadFrameResult result =
-        advance_pad_frame(decoder, clock, player, map, read_pad(pad), delta);
+    const WorldFrameResult result =
+        advance_world_frame(world, game, read_pad(pad), delta);
     (void)result;
-    if (build_view(view, map, player, kViewport) != RenderOutcome::Ready)
+    const Map& current_map = world.areas[game.area].map;
+    if (build_view(view, current_map, game.player, kViewport) !=
+        RenderOutcome::Ready)
       break;
 
     u32 stride_bytes = 0;
     u32* pixels = static_cast<u32*>(framebufferBegin(&fb, &stride_bytes));
     if (!pixels) break;
-    paint(pixels, stride_bytes, view, clock.paused_for_trigger);
+    paint(pixels, stride_bytes, view,
+          game.clock.paused_for_trigger, game.area);
     framebufferEnd(&fb);
   }
 
