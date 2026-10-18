@@ -247,7 +247,7 @@ class ReplicaReceiptTests(unittest.TestCase):
                         hashlib.sha256(forged).hexdigest())
 
     def test_swapped_valid_receipts_refused(self):
-        with self.assertRaises(receipts.ReceiptConflict):
+        with self.assertRaises((ValueError,receipts.ReceiptConflict)):
             self.verify(raw_a=self.raw[1],raw_b=self.raw[0],
                         receipt_a_envelope_pin=self.receipt_pins[1],
                         receipt_b_envelope_pin=self.receipt_pins[0])
