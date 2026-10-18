@@ -124,7 +124,11 @@ def _replay_data(data,*,scope,genesis_a,genesis_b,head_a,head_b,
     count,pending=bound._completed(rows_a,a['enrollment'],scope,
         signed,{'operator-a':operator_a_public,'operator-b':operator_b_public})
     return {'completed':count,'pending':pending,'event_count':len(rows_a),
-            'head':head_a}
+            'head':head_a,
+            # Not exported as claimed off-host custody. Used only to match
+            # each stable PEM identity with the externally pinned genesis.
+            'enrolled_public_pins':{
+                role:a['enrollment'][role]['public_pin'] for role in ledger.ROLES}}
 
 
 def _report(pin,review,*,created):
@@ -166,9 +170,35 @@ def _stable_archive_identity(path):
             state.st_nlink,state.st_uid,state.st_mtime_ns,state.st_ctime_ns)
 
 
+def _stable_public_pem(path):
+    """Owner-private PEM inode and exact bytes; refuse replacement mid-read."""
+    initial=_stable_archive_identity(path)
+    if not 0<initial[2]<=4096:
+        raise OfflineMirrorEvidenceConflict('invalid bounded enrolled PEM size')
+    raw=detached._private_read(path)
+    if len(raw)!=initial[2] or _stable_archive_identity(path)!=initial:
+        raise OfflineMirrorEvidenceConflict('enrolled public PEM changed while reading')
+    return (initial,raw)
+
+
+def _confirm_operator_pems(snapshots,operator_a_public,operator_b_public,
+                           enrolled_pins):
+    for role,path in (('operator-a',operator_a_public),
+                      ('operator-b',operator_b_public)):
+        before,raw=snapshots[role]
+        if (not hmac.compare_digest(
+                hashlib.sha256(raw).hexdigest(),enrolled_pins[role])
+                or _stable_public_pem(path)!=(before,raw)):
+            raise OfflineMirrorEvidenceConflict(
+                'enrolled public PEM changed during full replay')
+
+
 def inspect(path,*,archive_pin,scope,genesis_a,genesis_b,head_a,head_b,
             operator_a_public,operator_b_public):
     cas.digest(archive_pin)
+    operator_snapshots={
+        'operator-a':_stable_public_pem(operator_a_public),
+        'operator-b':_stable_public_pem(operator_b_public)}
     initial=_stable_archive_identity(path)
     raw=detached._private_read(path)
     pin=hashlib.sha256(raw).hexdigest()
@@ -184,6 +214,13 @@ def inspect(path,*,archive_pin,scope,genesis_a,genesis_b,head_a,head_b,
     result=_replay_data(obj,scope=scope,genesis_a=genesis_a,
         genesis_b=genesis_b,head_a=head_a,head_b=head_b,
         operator_a_public=operator_a_public,operator_b_public=operator_b_public)
+    # A PEM can be replaced mid-verification just as the archive can.
+    # Enrollment pins are bound to the externally checked registry genesis.
+    # Rechecking BOTH operator keys also covers an enrolled role without
+    # any completed signature in this particular archive.
+    _confirm_operator_pems(
+        operator_snapshots,operator_a_public,operator_b_public,
+        result['enrolled_public_pins'])
     # Revalidate the actual path and exact private bytes *after* all chain
     # and Ed25519 checks, catching file replacement during verification
     # even if the original first read was correctly pinned.
