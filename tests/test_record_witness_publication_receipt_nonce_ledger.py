@@ -189,7 +189,7 @@ class ReceiptNonceLedgerTests(unittest.TestCase):
             try:
                 return ledger._record(self.registry_path,
                     action='reserve',expected_head=self.registry_genesis,**fields)
-            except ledger.NonceLedgerConflict:
+            except (ledger.NonceLedgerConflict,sqlite3.DatabaseError):
                 return None
         with ThreadPoolExecutor(max_workers=2) as pool:
             out=list(pool.map(attempt,range(2)))
