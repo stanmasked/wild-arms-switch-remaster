@@ -54,8 +54,10 @@ jobs:
           dnf install -y --setopt=install_weak_deps=False \
             mesa-vulkan-drivers vulkan-tools xorg-x11-server-Xvfb \
             xdotool ImageMagick python3-pillow gtk3 alsa-lib systemd-libs \
-            libxkbcommon vulkan-loader file curl tar gzip coreutils procps-ng
+            libxkbcommon libxkbcommon-x11 vulkan-loader \
+            file curl tar gzip coreutils procps-ng
           ldd --version | head -n 1
+          ldconfig -p | grep 'libxkbcommon-x11.so'
       - name: Verify synthetic frame evidence classifier
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_probe.py' -v
       - name: Download exact verified official NeXium Linux archive

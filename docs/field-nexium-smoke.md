@@ -58,3 +58,18 @@ The correction switches only this experimental job to `fedora:44`,
 which provides GNU libc 2.43, retains the exact pinned NeXium archive,
 and records the emulator process exit code even on failure. Subsequent
 results must still be checked for an actual guest framebuffer.
+
+## Fedora 44 follow-up — missing XKB X11 bridge
+
+The Fedora 44 attempt `39167127996` started the Linux binary
+past GLIBC dynamic loading, but the GUI panicked before drawing:
+
+```
+Library libxkbcommon-x11.so could not be loaded
+```
+
+The reported process exit code was 101, all three Xvfb screenshots
+remained blank, and `runtime_not_confirmed` was correctly recorded.
+The correction installs Fedora package `libxkbcommon-x11` and asserts
+the shared library is visible to the dynamic linker before launching
+NeXium. No NRO runtime claim is made until actual guest pixels appear.
