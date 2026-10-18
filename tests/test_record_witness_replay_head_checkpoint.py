@@ -128,7 +128,7 @@ class SignedReplayHeadTests(unittest.TestCase):
         # DER material is identical; the SHA-256 of the PEM file differs.
         lines[1:2] = [lines[1][:12], lines[1][12:]]
         reformatted = self.path('same-key-alternate-pem-')
-        reformatted.write_text('\\n'.join(lines) + '\\n')
+        reformatted.write_text('\n'.join(lines) + '\n')
         reformatted.chmod(0o600)
         other = ('bob', self.admin_a[1], reformatted,
                  hashlib.sha256(reformatted.read_bytes()).hexdigest())
