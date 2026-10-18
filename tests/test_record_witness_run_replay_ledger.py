@@ -209,7 +209,7 @@ class ReplayLedgerTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             journal.initialize(self.journal)
         self.journal.unlink()
-        with self.assertRaises(sqlite3.OperationalError):
+        with self.assertRaises(FileNotFoundError):
             journal.inspect(self.journal,0,journal.GENESIS)
 
     def test_missing_private_ledger_or_symlink_refused(self):
