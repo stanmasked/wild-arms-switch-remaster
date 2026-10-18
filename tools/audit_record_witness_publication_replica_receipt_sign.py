@@ -5,6 +5,7 @@ The receipt is a signed observation, not a physical custody certificate.
 """
 import argparse
 import json
+import sqlite3
 from pathlib import Path
 
 try:
@@ -66,7 +67,7 @@ def main(argv=None):
         status=0
     except (nonce_ledger.NonceLedgerConflict,receipts.ReceiptConflict,
             cas.CheckpointCASConflict,ValueError,
-            OSError,TypeError,KeyError,IndexError):
+            OSError,TypeError,KeyError,IndexError,sqlite3.DatabaseError):
         result['receipt_conflict']=True
         status=1
     print(json.dumps(result,sort_keys=True))
