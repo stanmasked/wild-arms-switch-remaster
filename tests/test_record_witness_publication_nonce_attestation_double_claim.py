@@ -168,7 +168,7 @@ class DoubleAttestationClaimTests(unittest.TestCase):
             self.evaluate(first_envelope_pin=self.pin_b,second_envelope_pin=self.pin_a)
 
     def test_wrong_public_key_hash_rejected(self):
-        with self.assertRaises((ValueError,incident.DoubleAttestationConflict)):
+        with self.assertRaises(cas.CheckpointCASConflict):
             self.evaluate(public_pin='c'*64)
 
     def test_wrong_signer_public_key_rejected(self):
@@ -207,11 +207,11 @@ class DoubleAttestationClaimTests(unittest.TestCase):
             self.evaluate(second_previous_sha256='b'*64)
 
     def test_invalid_sequence_boolean_rejected(self):
-        with self.assertRaises((ValueError,incident.DoubleAttestationConflict)):
+        with self.assertRaises(cas.CheckpointCASConflict):
             self.evaluate(second_sequence=True)
 
     def test_invalid_nonce_rejected(self):
-        with self.assertRaises((ValueError,incident.DoubleAttestationConflict)):
+        with self.assertRaises(cas.CheckpointCASConflict):
             self.evaluate(first_nonce='invalid-nonce')
 
     def test_forged_release_permission_is_rejected(self):
