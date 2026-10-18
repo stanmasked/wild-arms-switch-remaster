@@ -121,8 +121,17 @@ class DetachedMirrorAckEvidenceTests(unittest.TestCase):
             self.make_archive()
         self.assertFalse(self.archive_path.exists())
 
-    def test_forked_registry_refused_before_creating_archive(self):
-        self.ack_registry.unlink()
+    def test_two_valid_but_forked_registries_cannot_create_archive(self):
+        # Both heads are individually valid; only the cross-registry
+        # equality comparison catches this post-copy reservation fork.
+        head=ledger.snapshot(self.secondary_ack)['latest_ledger_sha256']
+        ledger._record(self.secondary_ack,action='reserve',
+            expected_head=head,scope=self.scope,role='operator-b',
+            operator_id=self.ack_enrollment['operator-b']['operator_id'],
+            storage_id=self.stores[1],
+            operator_public_pin=self.observers[1][2],
+            nonce='e'*32,seq=1,previous=self.previous[1],
+            archive_pin='f'*64,evidence_pin='e'*64)
         with self.assertRaises(FAIL):
             self.make_archive()
         self.assertFalse(self.archive_path.exists())
