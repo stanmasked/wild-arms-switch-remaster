@@ -31,6 +31,11 @@ add_executable(wa_field_snapshot_tests tests/test_field_snapshot.cpp)
 target_link_libraries(wa_field_snapshot_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_snapshot_tests COMMAND wa_field_snapshot_tests)
 
+# Stage 293: versioned, portable 40-byte synthetic field save record.
+add_executable(wa_field_save_codec_tests tests/test_field_save_codec.cpp)
+target_link_libraries(wa_field_save_codec_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_save_codec_tests COMMAND wa_field_save_codec_tests)
+
 # Host validation of the exact software framebuffer algorithm used by libnx.
 add_executable(wa_field_pixels_tests tests/test_field_pixels.cpp)
 target_link_libraries(wa_field_pixels_tests PRIVATE wa_field_core)

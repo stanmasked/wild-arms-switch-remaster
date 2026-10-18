@@ -67,3 +67,25 @@ This is **not** a persistent game save. The slot is lost when the NRO exits
 or the console closes the process. No Wild Arms original save data or game
 files are read/written. The five established NeXium autoplay reference
 frames and their pixel parity contract are deliberately unchanged.
+
+## Stage 293 — versioned field save record (portable host codec)
+
+The host/Switch-neutral \`include/field_save_codec.hpp\` introduces a fixed
+40-byte v1 record for the *synthetic* manual field state. It encodes map
+identity, location, facing, movement counter, movement-clock state, active
+trigger and confirm-button decoder using fixed-width little-endian fields.
+An explicit 32-bit CRC detects accidental byte corruption; an independent
+64-bit world fingerprint rejects saves from incompatible synthetic maps.
+Reserved fields, unsupported versions, malformed coordinates/clock/pending
+events and truncated or extended records are rejected **without modifying
+the live player or the previous destination state**. It uses no proprietary
+Wild Arms save data.
+
+This is a **serialization library only**. Stage 293 does **not** write to
+the Nintendo Switch SD card, add persistence between process launches, or
+change Y/Minus quicksave behavior. These require a future platform-specific
+file adapter with atomic replacement and failure recovery. The synthetic
+five-scene reference PNGs, known NeXium guest visuals and valid NRO layout
+remain unchanged.
+
+\`wa_field_save_codec_tests\` is included in Host/Matrix CTest coverage.
