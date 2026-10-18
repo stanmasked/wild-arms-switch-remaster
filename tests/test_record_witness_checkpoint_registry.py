@@ -218,6 +218,34 @@ class AcceptedCheckpointRegistryTests(unittest.TestCase):
             registry.inspect(self.registry,1,accepted['registry_head_sha256'],
                              accepted['latest_checkpoint_sha256'])
 
+    def test_unexpected_sqlite_trigger_is_rejected_not_executed(self):
+        self.fresh()
+        self.first_candidate()
+        # An attacker who can modify the registry schema must not be able
+        # to add write side effects to an otherwise apparently valid table.
+        with sqlite3.connect(self.registry) as con:
+            con.execute(
+                "CREATE TRIGGER unexpected AFTER INSERT ON "
+                "accepted_replay_checkpoints BEGIN SELECT 1; END")
+        with self.assertRaises(registry.RegistryConflict):
+            self.accept()
+        with self.assertRaises(registry.RegistryConflict):
+            registry.inspect(
+                self.registry,0,registry.GENESIS,checkpoint.ANCHOR_GENESIS)
+
+    def test_inserted_fake_chain_event_rejected(self):
+        self.fresh()
+        self.first_candidate()
+        first=self.accept()
+        with sqlite3.connect(self.registry) as con:
+            con.execute(
+                "UPDATE accepted_replay_checkpoints SET "
+                "checkpoint_nonce=? WHERE sequence=1", ('a'*32,))
+        with self.assertRaises(registry.RegistryConflict):
+            registry.inspect(
+                self.registry,1,first['registry_head_sha256'],
+                first['latest_checkpoint_sha256'])
+
     def test_missing_registry_and_symlink_registry_refused(self):
         self.fresh()
         with self.assertRaises(FileExistsError):
