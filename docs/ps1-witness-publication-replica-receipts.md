@@ -39,6 +39,30 @@ use the wrong private key can leave a no-clobber receipt artifact that is
 later rejected at readback. Never automatically overwrite or retry such
 ambiguous outputs.
 
+The reference operator-side command is also exposed as
+\`tools/audit_record_witness_publication_replica_receipt_sign.py\`.
+It refuses to replace an existing output, and requires a private signing key:
+
+    python3 -m tools.audit_record_witness_publication_replica_receipt_sign \
+      /operator-a/private/case.json /operator-a/private/receipt.json \
+      --role operator-a --operator-id operator-a --storage-id storage-a \
+      --scope private-wild-arms-publication-mirrors \
+      --audit-id audit-unique-001 --challenge FRESH_32_HEX \
+      --receipt-sequence NEXT_A_SEQUENCE \
+      --previous-receipt-sha256 PREVIOUS_A_RECEIPT_SHA256 \
+      --archive-sha256 INDEPENDENT_ARCHIVE_SHA256 \
+      --evidence-sha256 INDEPENDENT_STAGE_264E_EVIDENCE_SHA256 \
+      --evidence-operator-a-public /enrolled/evidence-a.pem \
+      --evidence-operator-a-pin EVIDENCE_A_PEM_SHA256 \
+      --evidence-operator-b-public /enrolled/evidence-b.pem \
+      --evidence-operator-b-pin EVIDENCE_B_PEM_SHA256 \
+      --signing-private /operator-a/private/signing-key.pem \
+      --signing-public /enrolled/operator-a.pem \
+      --signing-public-pin ENROLLED_OPERATOR_A_PEM_SHA256
+
+It emits a proposed receipt envelope SHA-256 for separate operator retention.
+It never reports that external retention was carried out.
+
 ## Verifying both signed statements and both copies
 
 \`verify(...)\` takes two exact signed receipt envelopes, **independently
