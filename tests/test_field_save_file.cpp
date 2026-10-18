@@ -1,4 +1,6 @@
 #include "field_save_file.hpp"
+#include "field_runtime.hpp"
+#include <vector>
 
 #include <cstdio>
 #include <cstdlib>
@@ -197,6 +199,65 @@ void test_io_error_and_generation_exhaustion() {
   expect(store_field_save_file(world,s,f.prefix) ==
          FileSaveStatus::SequenceExhausted);
 }
+
+void test_restart_import_matches_event_frame_and_confirm_edge() {
+  Fixture f;
+  const FieldWorld world = make_demo_world();
+  constexpr std::uint64_t frequency = 19200000;
+  constexpr std::uint64_t step = 3072000; // 160ms @ 19.2MHz
+  const PixelTarget render_target{};
+  (void)render_target;
+  std::vector<std::uint32_t> pixels(
+      static_cast<std::size_t>(kRasterWidth) * kRasterHeight);
+  PixelTarget target{pixels.data(), kRasterWidth, kRasterHeight,
+                     kRasterWidth};
+  FieldRuntime first = start_field_runtime(world, frequency, 0);
+  expect(advance_field_runtime(world, first, 0, {}, target).status ==
+         RuntimeStatus::Rendered);
+  const RuntimeControls right{PadSample{.dpad_right = true}};
+  for(int frame=1; frame<=3; ++frame)
+    expect(advance_field_runtime(world, first, step*frame,
+                                 right, target).status ==
+           RuntimeStatus::Rendered);
+  expect(first.manual.pending == Trigger::Event);
+  expect(first.manual.player.x == 4);
+  const auto reference_event = pixels;
+
+  const RuntimeControls save{{}, false, false, true, false};
+  expect(advance_field_runtime(world, first, step*4,
+                               save, target).snapshot_stored);
+  expect(pixels == reference_event);
+  expect(store_field_save_file(world, first.quicksave.world,
+                               f.prefix) == FileSaveStatus::Stored);
+
+  // This represents a full process restart: fresh RAM state, no quicksave.
+  FieldRuntime restarted =
+      start_field_runtime(world, frequency, step*4);
+  expect(!restarted.quicksave.occupied);
+  WorldState imported{};
+  expect(load_field_save_file(world, f.prefix, imported) ==
+         FileSaveStatus::Loaded);
+  restarted.quicksave.world = imported;
+  restarted.quicksave.occupied = true;
+  const RuntimeControls load{{}, false, false, false, true};
+  const RuntimeFrame loaded = advance_field_runtime(
+      world, restarted, step*4, load, target);
+  expect(loaded.status == RuntimeStatus::Rendered &&
+         loaded.snapshot_restored);
+  expect(pixels == reference_event);
+  expect(restarted.manual.pending == Trigger::Event);
+  const RuntimeControls ack{PadSample{.confirm = true}};
+  const auto after_ack = advance_field_runtime(
+      world, restarted, step*5, ack, target);
+  expect(after_ack.status == RuntimeStatus::Rendered);
+  expect(restarted.manual.pending == Trigger::None);
+  expect(pixels != reference_event);
+  const auto reload = advance_field_runtime(
+      world, restarted, step*6, load, target);
+  expect(reload.snapshot_restored &&
+         restarted.manual.pending == Trigger::Event);
+  expect(pixels == reference_event);
+}
 }
 
 int main() {
@@ -205,4 +266,5 @@ int main() {
   test_stale_temporary_is_not_published_and_failed_publish_keeps_old();
   test_invalid_state_and_invalid_world_do_not_overwrite();
   test_io_error_and_generation_exhaustion();
+  test_restart_import_matches_event_frame_and_confirm_edge();
 }
