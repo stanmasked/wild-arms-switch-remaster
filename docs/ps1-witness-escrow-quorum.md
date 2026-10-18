@@ -43,7 +43,7 @@ and separate from the custody service**.
 
 ## Read-only verification
 
-All thirteen flags and pins should be supplied directly from the
+All receipt paths, public-key pins and head anchors must be supplied directly from the
 independent operator's archive; do not derive them from the untrusted
 host's own files.
 
