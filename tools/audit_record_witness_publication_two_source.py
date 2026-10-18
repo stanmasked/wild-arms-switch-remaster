@@ -148,7 +148,7 @@ def verify(old_signed_a, old_signed_b, *, old_checkpoint_pin,
     if (type(challenges) not in (tuple,list) or len(challenges) != 2
             or any(type(v) is not str or not HEX32.fullmatch(v)
                    for v in challenges)
-            or len(set(challenges + (old['challenge_a'],old['challenge_b']))) != 4):
+            or len(set(tuple(challenges) + (old['challenge_a'],old['challenge_b']))) != 4):
         raise DualSourceConflict('new challenges must differ from all prior ones')
     if fetcher is None:
         fetcher = live.fetch_live_receipt
