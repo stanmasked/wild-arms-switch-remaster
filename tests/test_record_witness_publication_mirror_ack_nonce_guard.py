@@ -38,7 +38,7 @@ class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
             enrollment=self.ack_enrollment,
             independent_genesis_pin=self.ack_genesis)
 
-    def arguments(self,i=0,**changes):
+    def ack_arguments(self,i=0,**changes):
         p=self.params()
         d=dict(
             signed_envelopes=self.complete,head_a=p['primary_head_pin'],
@@ -59,9 +59,9 @@ class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
 
     def sign_guarded_ack(self,i=0,**changes):
         return guard.guarded_sign(self.guard_path,self.mirror,self.ack_registry,
-                                 **self.arguments(i,**changes))
+                                 **self.ack_arguments(i,**changes))
 
-    def snapshot(self):
+    def ack_snapshot(self):
         return ledger.snapshot(self.ack_registry)
 
     def test_first_guarded_signature_commits_exact_two_events(self):
@@ -79,7 +79,7 @@ class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
     def test_second_role_can_sign_after_first_ack_committed(self):
         a=self.sign_guarded_ack()
         b=self.sign_guarded_ack(1,expected_registry_head=a['latest_ack_registry_sha256'])
-        self.assertEqual(self.snapshot()['event_count'],4)
+        self.assertEqual(self.ack_snapshot()['event_count'],4)
         self.assertTrue(b['mirror_full_signature_audit_ran_before_and_after_signing'])
         report=self.verify(
             signed_a=self.paths[0].read_bytes(),signed_b=self.paths[1].read_bytes(),
@@ -101,7 +101,7 @@ class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
             expected_registry_head=a['latest_ack_registry_sha256'],
             output=output)
         self.assertTrue(output.exists())
-        self.assertEqual(self.snapshot()['event_count'],4)
+        self.assertEqual(self.ack_snapshot()['event_count'],4)
         self.assertEqual(b['acknowledgment_sha256'],
                          hashlib.sha256(output.read_bytes()).hexdigest())
 
@@ -116,38 +116,38 @@ class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
     def test_wrong_next_sequence_rejected(self):
         with self.assertRaises(ledger.NonceLedgerConflict):
             self.sign_guarded_ack(sequence=2)
-        self.assertEqual(self.snapshot()['event_count'],0)
+        self.assertEqual(self.ack_snapshot()['event_count'],0)
 
     def test_wrong_predecessor_sha_rejected(self):
         with self.assertRaises(ledger.NonceLedgerConflict):
             self.sign_guarded_ack(previous_ack_sha256='e'*64)
-        self.assertEqual(self.snapshot()['event_count'],0)
+        self.assertEqual(self.ack_snapshot()['event_count'],0)
 
     def test_wrong_expected_registry_head_rejected(self):
         with self.assertRaises(ledger.NonceLedgerConflict):
             self.sign_guarded_ack(expected_registry_head='f'*64)
-        self.assertEqual(self.snapshot()['event_count'],0)
+        self.assertEqual(self.ack_snapshot()['event_count'],0)
 
     def test_unknown_storage_id_rejected(self):
         with self.assertRaises(ledger.NonceLedgerConflict):
             self.sign_guarded_ack(storage_id='not-the-enrolled-storage')
-        self.assertEqual(self.snapshot()['event_count'],0)
+        self.assertEqual(self.ack_snapshot()['event_count'],0)
 
     def test_wrong_operator_identity_refused_before_reserve(self):
         with self.assertRaises(guard.MirrorGuardConflict):
             self.sign_guarded_ack(operator_id='not-enrolled-operator')
-        self.assertEqual(self.snapshot()['event_count'],0)
+        self.assertEqual(self.ack_snapshot()['event_count'],0)
 
     def test_wrong_operator_public_pem_refused(self):
         with self.assertRaises((ValueError,guard.MirrorGuardConflict,cas.CheckpointCASConflict)):
             self.sign_guarded_ack(signing_public=self.observers[1][1],
                          signing_public_pin=self.observers[1][2])
-        self.assertEqual(self.snapshot()['event_count'],0)
+        self.assertEqual(self.ack_snapshot()['event_count'],0)
 
     def test_wrong_head_mirror_refused_without_nonce_consumption(self):
         with self.assertRaises((ValueError,guard.MirrorGuardConflict,cross.LedgerDivergence)):
             self.sign_guarded_ack(head_b='f'*64)
-        self.assertEqual(self.snapshot()['event_count'],0)
+        self.assertEqual(self.ack_snapshot()['event_count'],0)
 
     def test_bad_signed_manifest_pin_refused_before_reserve(self):
         envelopes={r:list(v) for r,v in self.complete.items()}
@@ -155,7 +155,7 @@ class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
         envelopes['operator-a']=[(raw,'f'*64)]
         with self.assertRaises((ValueError,guard.MirrorGuardConflict,binding.SignedLedgerConflict)):
             self.sign_guarded_ack(signed_envelopes=envelopes)
-        self.assertEqual(self.snapshot()['event_count'],0)
+        self.assertEqual(self.ack_snapshot()['event_count'],0)
 
     def test_missing_ack_ledger_cannot_silently_reinitialize(self):
         self.ack_registry.unlink()
@@ -166,17 +166,17 @@ class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
     def test_wrong_private_key_burns_nonce_with_pending_state(self):
         with self.assertRaises((ValueError,OSError,cas.CheckpointCASConflict)):
             self.sign_guarded_ack(signing_private=self.observers[1][0])
-        pending=self.snapshot()
+        pending=self.ack_snapshot()
         self.assertEqual(pending['pending_operator_roles'],['operator-a'])
         self.assertEqual(pending['event_count'],1)
         with self.assertRaises(ledger.NonceLedgerConflict):
             self.sign_guarded_ack(expected_registry_head=pending['latest_ledger_sha256'])
-        self.assertEqual(self.snapshot()['event_count'],1)
+        self.assertEqual(self.ack_snapshot()['event_count'],1)
 
     def test_nonexistent_private_key_burns_nonce(self):
         with self.assertRaises((ValueError,OSError,cas.CheckpointCASConflict)):
             self.sign_guarded_ack(signing_private=Path(self.temp.name)/'absent-private.pem')
-        self.assertEqual(self.snapshot()['pending_operator_roles'],['operator-a'])
+        self.assertEqual(self.ack_snapshot()['pending_operator_roles'],['operator-a'])
 
     def test_existing_output_fails_without_overwrite_and_leaves_pending(self):
         self.paths[0].write_text('preexisting private payload')
@@ -184,12 +184,12 @@ class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
         with self.assertRaises((ValueError,FileExistsError,OSError)):
             self.sign_guarded_ack()
         self.assertEqual(self.paths[0].read_text(),'preexisting private payload')
-        self.assertEqual(self.snapshot()['pending_operator_roles'],['operator-a'])
+        self.assertEqual(self.ack_snapshot()['pending_operator_roles'],['operator-a'])
 
     def test_bad_nonce_rejected_before_reservation(self):
         with self.assertRaises(cas.CheckpointCASConflict):
             self.sign_guarded_ack(nonce='invalid')
-        self.assertEqual(self.snapshot()['event_count'],0)
+        self.assertEqual(self.ack_snapshot()['event_count'],0)
 
     def test_body_commitment_includes_audit_id(self):
         original=self.expected_ack_body(0)
@@ -225,7 +225,7 @@ class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
         with ThreadPoolExecutor(max_workers=2) as pool:
             got=list(pool.map(race,(0,1)))
         self.assertEqual(sum(v is not None for v in got),1)
-        self.assertEqual(self.snapshot()['event_count'],2)
+        self.assertEqual(self.ack_snapshot()['event_count'],2)
 
     def test_disclaimer_flags_never_claim_external_custody(self):
         out=self.sign_guarded_ack()
@@ -242,7 +242,7 @@ class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
 
     def cli_args(self):
         self.build_manifest()
-        d=self.arguments()
+        d=self.ack_arguments()
         return [str(self.guard_path),str(self.mirror),
             str(self.ack_registry),str(self.paths[0]),
             '--private-signed-manifest',str(self.manifest),
@@ -266,7 +266,7 @@ class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
         report=json.loads(out.getvalue())
         self.assertTrue(report['nonce_reserved_before_ed25519_signature'])
         self.assertFalse(report['witness_fence_retired'])
-        self.assertEqual(self.snapshot()['event_count'],2)
+        self.assertEqual(self.ack_snapshot()['event_count'],2)
         self.assertNotIn(self.nonces[0],out.getvalue())
 
     def test_cli_refuses_stale_head_with_no_signature(self):
@@ -291,10 +291,10 @@ class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
 for name in (
     'sign','compute_pin','fetch','_advanced_keeper','certificate',
     'body','endorse','bundle','args','check','create','inspect',
-    'copy_args','clone','signed_body','sign_receipt',
+    'arguments','copy_args','clone','signed_body','sign_receipt',
     'operator_args','make_fields','reserve','sign_one','kwargs',
     'crosscheck','write','create_witness','inspect_witness',
-    'trusted','body_for','make_signed','checked','issue','guarded','cli',
+    'trusted','body_for','make_signed','checked','issue','guarded','cli','snapshot',
     'advance','seal_mirror','params','check_mirror','one_complete',
     'build_manifest','expected_ack_body','signed_ack','verify'
 ):
