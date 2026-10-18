@@ -101,6 +101,6 @@ global_writer_revocation_proved=false,
 witness_fence_retirement_authorized=false,
 witness_fence_retired=false.
 
-The 15 synthetic regressions cover duplicate, stale, malicious,
+The 17 synthetic regressions cover duplicate, stale, malicious,
 concurrent and corrupted submissions, not a production PlayStation
 or Nintendo Switch game build. PR remains Draft.
