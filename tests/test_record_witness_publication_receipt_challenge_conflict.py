@@ -139,7 +139,7 @@ class ReceiptChallengeConflictTests(unittest.TestCase):
                           second_envelope_pin=self.first_pin)
 
     def test_wrong_operator_pem_pin_refused(self):
-        with self.assertRaises(conflict.ChallengeReuseConflict):
+        with self.assertRaises(cas.CheckpointCASConflict):
             self.evaluate(operator_public_pin='c'*64)
 
     def test_unenrolled_signing_public_key_refused(self):
@@ -152,7 +152,7 @@ class ReceiptChallengeConflictTests(unittest.TestCase):
             self.evaluate(nonce='c'*32)
 
     def test_invalid_nonce_refused(self):
-        with self.assertRaises(conflict.ChallengeReuseConflict):
+        with self.assertRaises(cas.CheckpointCASConflict):
             self.evaluate(nonce='wrong')
 
     def test_wrong_scope_refused(self):
