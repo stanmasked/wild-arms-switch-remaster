@@ -13,6 +13,7 @@ from unittest import mock
 from tests import test_record_witness_publication_attestation_nonce_guard as fixture
 from tools import audit_record_witness_publication_attestation_registry_binding as bound
 from tools import audit_record_witness_publication_receipt_nonce_ledger as ledger
+from tools import audit_record_witness_publication_checkpoint_cas as cas
 from tools import audit_record_witness_publication_receipt_nonce_reconciliation as cross
 from tools import audit_record_witness_publication_attestation_nonce_guard as guard
 from tools import audit_record_witness_publication_nonce_divergence_attestations as signed
@@ -194,7 +195,7 @@ class MirroredAttestationBindingTests(unittest.TestCase):
         self.one_complete()
         self.mirror.unlink()
         os.link(self.guard_path,self.mirror)
-        with self.assertRaises((bound.SignedLedgerConflict,cross.LedgerDivergence,ledger.CheckpointCASConflict)):
+        with self.assertRaises((bound.SignedLedgerConflict,cross.LedgerDivergence,cas.CheckpointCASConflict)):
             self.check_mirror()
 
     def test_world_readable_mirror_rejected(self):
