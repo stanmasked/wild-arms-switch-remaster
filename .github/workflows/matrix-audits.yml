@@ -91,6 +91,7 @@ on:
       - 'tools/audit_record_witness_publication_checkpoint_cas.py'
       - 'tools/audit_record_witness_publication_cas_reconciliation.py'
       - 'tools/audit_record_witness_publication_reconnect_crosscheck.py'
+      - 'tools/audit_record_witness_publication_dual_operator_highwater.py'
       - 'tools/audit_record_witness_publication_replica_compare.py'
       - 'tools/audit_record_remote_witness_fence.py'
       - 'tools/audit_record_remote_reserved_issue.py'
@@ -140,6 +141,7 @@ on:
       - 'tests/test_record_witness_publication_checkpoint_cas.py'
       - 'tests/test_record_witness_publication_cas_reconciliation.py'
       - 'tests/test_record_witness_publication_reconnect_crosscheck.py'
+      - 'tests/test_record_witness_publication_dual_operator_highwater.py'
       - 'tests/test_record_witness_publication_replica_compare.py'
       - 'tests/test_record_witness_gated_recovery.py'
       - 'tests/test_record_witness_gated_custody.py'
@@ -176,6 +178,7 @@ on:
       - 'docs/ps1-witness-publication-checkpoint-cas.md'
       - 'docs/ps1-witness-publication-cas-reconciliation.md'
       - 'docs/ps1-witness-publication-reconnect-crosscheck.md'
+      - 'docs/ps1-witness-publication-dual-operator-highwater.md'
       - 'docs/ps1-witness-publication-replica-comparison.md'
       - 'docs/ps1-witness-gated-recovery.md'
       - 'docs/ps1-witness-gated-custody-writes.md'
@@ -351,6 +354,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_record_witness_publication_checkpoint_cas.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_publication_cas_reconciliation.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_publication_reconnect_crosscheck.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_dual_operator_highwater.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_publication_replica_compare.py' -v
           python -m unittest discover -s tests -p 'test_record_reserved_accept.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
