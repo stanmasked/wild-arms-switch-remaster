@@ -216,6 +216,28 @@ class SignedPublicationIntakeTests(unittest.TestCase):
             self.submit(0,'escrow-a',damaged)
         self.assertEqual(self.i_count,0)
 
+    def test_same_ed25519_key_cannot_be_enrolled_as_two_roles(self):
+        self.setup_intake(0)
+        self.submit(0,'escrow-a')
+        body=json.loads(self.rounds[0]['escrow-b'])['body']
+        file=self.path('duplicated-operator-key-')
+        _sign(body,escrow.SCHEMA,escrow.DOMAIN,self.admins[0][1],file)
+        with self.assertRaises(intake.PublicationConflict):
+            self.submit(0,'escrow-b',file.read_bytes(),key_role='escrow-a')
+        self.assertEqual(self.i_count,1)
+        self.assertEqual(intake.inspect(
+            self.intake_path,1,self.i_head)['intake_event_count'],1)
+
+    def test_one_operator_key_cannot_rotate_silently_between_rounds(self):
+        self.setup_intake(1)
+        self.full_round(0)
+        body=json.loads(self.rounds[1]['escrow-a'])['body']
+        file=self.path('rotated-operator-key-')
+        _sign(body,escrow.SCHEMA,escrow.DOMAIN,self.admins[1][1],file)
+        with self.assertRaises(intake.PublicationConflict):
+            self.submit(1,'escrow-a',file.read_bytes(),key_role='escrow-b')
+        self.assertEqual(self.i_count,3)
+
     def test_two_concurrent_same_tip_only_one_append(self):
         self.setup_intake(0)
         def publish(_):
