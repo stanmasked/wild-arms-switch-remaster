@@ -73,8 +73,11 @@ There is no enrollment, writing, recovery or fence-retirement command.
 The Python helper verify_with_live_sources() additionally executes the full
 Stage 264B two-source live cross-check between **two** signed historical
 floor observations and rejects head mismatches across the operations.
-It accepts fully specified Stage 264B reconnect parameters; it does not
-weaken or replace that stage's HTTPS and signature requirements.
+It automatically binds both operator keys against all four source/notary
+DER identities, even if the caller omits the optional exclusion list, and
+requires identical scope and current generation/pair/event-head inputs to both
+components. It accepts fully specified Stage 264B reconnect parameters; it
+does not weaken or replace that stage's HTTPS and signature requirements.
 
 ## What this does NOT prove
 
