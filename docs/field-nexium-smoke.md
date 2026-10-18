@@ -135,3 +135,33 @@ attempted loading, accepted the file, or logged a failure. Missing files
 are explicitly recorded rather than silently treated as empty success.
 Neither a successful loader message nor a green build proves a frame
 was rendered; actual screenshot evidence remains mandatory.
+
+## Stage 286 — real guest NRO fails upstream NeXium 16-byte offset check
+
+Detailed `NEXIUM_DATA_ROOT/logs` artifact from the failed guest/control
+attempt `39169208671` finally exposed the immediate error:
+
+`[nexium_runner::boot] Boot failed: Data segment out of bounds`
+
+This is caused by a NeXium loader logic defect for normally wrapped
+homebrew files: `nexium-loader/src/nro.rs` detects `NRO0` at
+`input[16..20]`, then slices the input from byte 16, but compares
+unchanged segment offsets against this **shortened** slice. In the
+original asset-free NRO, `.data` ends exactly at byte 151,552,
+which is the complete and valid file length. NeXium instead compares
+that valid endpoint to 151,536 (= 151,552 - 16), reporting an apparent
+16-byte overrun. Our canonical NRO0 checker correctly accepts the file.
+
+This commit intentionally **does not modify the valid standard NRO**.
+Instead the separate experimental NeXium smoke workflow creates a clearly
+named NON-STANDARD diagnostic copy, appending exactly 16 zero bytes
+without replacing or publishing it as a valid homebrew artifact. The
+probe is only for isolating NeXium's loader bounds check and can still
+fail at later stages because loader offsets remain inconsistent.
+The manifest records original/probe SHA-256, added bytes and explicitly
+marks the probe `probe_is_valid_standard_nro: false` and
+`guest_execution_verified: false`. Unit tests guarantee the source
+binary is unmodified and reject reuse or other file shapes.
+
+A long-term fix belongs in NeXium's own loader code; the emulator-only
+padding is NOT an acceptable change to the production NRO.

@@ -9,6 +9,8 @@ on:
       - 'tools/test_audit_nexium_launch_control.py'
       - 'tools/audit_nexium_session.py'
       - 'tools/test_audit_nexium_session.py'
+      - 'tools/prepare_nexium_nro_probe.py'
+      - 'tools/test_prepare_nexium_nro_probe.py'
   workflow_dispatch:
 
 permissions:
@@ -80,6 +82,15 @@ jobs:
           file nexium-dist/NeXium/nexium
           ldd nexium-dist/NeXium/nexium > nexium-probe/ldd.txt || true
           /usr/bin/vulkaninfo --summary > nexium-probe/vulkan.txt 2>&1 || true
+      - name: Verify loader compatibility probe on synthetic NRO fixtures
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_prepare_nexium_nro_probe.py' -v
+      - name: Generate clearly marked nonstandard emulator-only loader probe
+        run: |
+          mkdir -p nexium-probe
+          /usr/bin/python3 tools/prepare_nexium_nro_probe.py \
+            native-artifact/wild_arms_field.nro \
+            nexium-probe/ne_loader_probe_only.nro \
+            --report nexium-probe/loader-probe-manifest.json
       - name: Attempt NeXium guest execution with monitored Vulkan process
         id: attempt
         continue-on-error: true
@@ -106,7 +117,7 @@ jobs:
           # without independent memory/cgroup evidence.
           timeout --signal=TERM --kill-after=10 130s \
             ./nexium-dist/NeXium/nexium \
-            "$PWD/native-artifact/wild_arms_field.nro" \
+            "$PWD/nexium-probe/ne_loader_probe_only.nro" \
             > nexium-probe/nexium.log 2>&1 &
           emulator_pid=$!
           (
