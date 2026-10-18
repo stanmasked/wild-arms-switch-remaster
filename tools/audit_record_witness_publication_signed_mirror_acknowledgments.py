@@ -143,6 +143,15 @@ def verify(primary,secondary,ack_a,ack_b, *,
                 scope=scope,operator_a_public=public_a,operator_b_public=public_b,
                 signed_envelopes=signed_envelopes)
     first=bound.verify(primary,secondary,**kwargs)
+    # Two keys may be distinct while an arbitrary claimed operator ID is
+    # not in the original, externally pinned registry enrollment. Authenticate
+    # the identity against the ledger, not merely the signed text.
+    enrolled=bound.cross._read_once(
+        primary,expected_scope=scope,
+        expected_genesis=genesis_a,expected_head=head_a)['enrollment']
+    if (operator_a_id!=enrolled['operator-a']['operator_id']
+            or operator_b_id!=enrolled['operator-b']['operator_id']):
+        raise SignedMirrorConflict('signed mirror acknowledgments use unenrolled operator IDs')
     expected=(
         expected_body(first,scope=scope,audit_id=audit_id,
             operator_role='operator-a',operator_id=operator_a_id,
@@ -169,7 +178,11 @@ def verify(primary,secondary,ack_a,ack_b, *,
     if expected[0]['operator_role']==expected[1]['operator_role']:
         raise SignedMirrorConflict('signed operator roles not distinct')
     last=bound.verify(primary,secondary,**kwargs)
-    if last!=first or manifest_digest(signed_envelopes)!=digest_manifest:
+    enrolled_again=bound.cross._read_once(
+        primary,expected_scope=scope,
+        expected_genesis=genesis_a,expected_head=head_a)['enrollment']
+    if (last!=first or enrolled_again!=enrolled
+            or manifest_digest(signed_envelopes)!=digest_manifest):
         raise SignedMirrorConflict('mirrored state changed between signed checks')
     return {
         'schema':REPORT_SCHEMA,
