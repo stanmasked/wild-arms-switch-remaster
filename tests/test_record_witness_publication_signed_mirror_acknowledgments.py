@@ -123,6 +123,13 @@ class SignedMirrorAcknowledgmentTests(unittest.TestCase):
         with self.assertRaises(q.SignedMirrorConflict):
             self.verify(operator_b_id='fork-witness-operator-a')
 
+    def test_signed_but_unenrolled_operator_identity_rejected(self):
+        forged=self.signed_ack(0,operator_id='independent-looking-unenrolled-id')
+        with self.assertRaises(q.SignedMirrorConflict):
+            self.verify(signed_a=forged,
+                ack_a_pin=hashlib.sha256(forged).hexdigest(),
+                operator_a_id='independent-looking-unenrolled-id')
+
     def test_duplicate_challenges_rejected(self):
         with self.assertRaises(q.SignedMirrorConflict):
             self.verify(nonce_b=self.nonces[0])
