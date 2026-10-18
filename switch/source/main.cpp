@@ -6,6 +6,7 @@
 #include "field_pixels.hpp"
 #include "field_scenario.hpp"
 #include "field_autoplay.hpp"
+#include "field_frame_ticks.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -63,22 +64,23 @@ int main() {
   AutoplayTrack demo = start_field_autoplay(world);
   bool autoplay = false;
   RenderFrame view{};
-  const u64 tick_frequency = armGetSystemTickFreq();
-  u64 previous_tick = armGetSystemTick();
+  FrameTickClock frame_clock =
+      make_frame_tick_clock(armGetSystemTickFreq(), armGetSystemTick());
+  if (!frame_clock.valid()) {
+    framebufferClose(&fb);
+    return 4;
+  }
 
   while (appletMainLoop()) {
     padUpdate(&pad);
     if (padGetButtonsDown(&pad) & HidNpadButton_Plus) break;
 
-    const u64 current_tick = armGetSystemTick();
-    const u64 elapsed_ticks = current_tick - previous_tick;
-    previous_tick = current_tick;
-    // A large pause (e.g. home menu) is deliberately capped: skip game time
-    // rather than running thousands of catch-up moves after resuming.
-    const u64 ticks_per_ms = tick_frequency / 1000;
-    const u64 elapsed_ms = ticks_per_ms ? elapsed_ticks / ticks_per_ms : 0;
-    const u32 delta = static_cast<u32>(std::min<u64>(
-        elapsed_ms, kMaximumMovementDeltaMs));
+    const FrameTickDelta frame_time =
+        advance_frame_ticks(frame_clock, armGetSystemTick());
+    if (frame_time.status == FrameTickStatus::InvalidClock) break;
+    // Counter resets and long applet pauses deliberately advance no game
+    // time; fractional milliseconds are retained for normal display frames.
+    const u32 delta = frame_time.milliseconds;
 
     const u64 pressed = padGetButtonsDown(&pad);
     if (pressed & HidNpadButton_X) {
