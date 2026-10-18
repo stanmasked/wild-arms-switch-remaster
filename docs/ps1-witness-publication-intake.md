@@ -59,7 +59,11 @@ python3 -m tools.audit_record_witness_publication_intake submit \
 
 Use `escrow-b` and `escrow-c` with their respective enrolled
 public keys for the other receipts. Only individually valid signed
-claims can enter the journal.
+claims can enter the journal. The audit also records the SHA-256 of the
+decoded Ed25519 public-key DER material in each event, refuses the same
+key under two different roles, and refuses a silent key rotation for a
+role across rounds. A deliberate key change requires a separately
+reviewed, versioned enrollment protocol, not an unannounced replacement.
 
 For every round, publish all three operator receipts before moving
 to the next accepted registry checkpoint; begin with round 0
