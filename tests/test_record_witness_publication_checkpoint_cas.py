@@ -140,6 +140,23 @@ class CheckpointCASTests(unittest.TestCase):
         with self.assertRaises(cas.CheckpointCASConflict):
             self.advance(self.report(changes={'schema':'false'}))
 
+    def test_duplicate_top_level_report_key_rejected(self):
+        raw=self.report()
+        raw=raw[:-1]+b',"new_event_count":2}'
+        with self.assertRaises(cas.CheckpointCASConflict):
+            self.advance(raw)
+
+    def test_nonfinite_json_report_field_rejected(self):
+        raw=self.report().replace(b'"new_event_count": 2',
+                                  b'"new_event_count": NaN')
+        self.assertIn(b'NaN',raw)
+        with self.assertRaises(cas.CheckpointCASConflict):
+            self.advance(raw)
+
+    def test_invalid_json_report_rejected(self):
+        with self.assertRaises(cas.CheckpointCASConflict):
+            self.advance(b'{malformed-json')
+
     def test_boolean_integer_report_rejected(self):
         with self.assertRaises(cas.CheckpointCASConflict):
             self.advance(self.report(count=True))
