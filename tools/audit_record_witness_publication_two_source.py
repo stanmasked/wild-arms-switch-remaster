@@ -97,8 +97,8 @@ def verify(old_signed_a, old_signed_b, *, old_checkpoint_pin,
         for key in ('head','history','witness','bundle'):
             if type(state[key]) is not str or not HEX64.fullmatch(state[key]):
                 raise DualSourceConflict('invalid publication SHA-256 digest')
-    if all(old[k] == current[k] for k in ('head','history','witness','bundle')):
-        raise DualSourceConflict('unchanged head cannot represent advancement')
+    if any(old[k] == current[k] for k in ('head','history','witness','bundle')):
+        raise DualSourceConflict('strict event advancement requires changed committed digests')
     for source in (source_a,source_b):
         live.validate_url(source['source_url'])
         if (type(source['authority_id']) is not str
