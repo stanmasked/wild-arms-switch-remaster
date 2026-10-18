@@ -173,6 +173,14 @@ class DualAuthorityTests(unittest.TestCase):
         with self.assertRaises(dual.DualSourceConflict):
             self.check(current=current)
 
+    def test_advanced_count_with_unchanged_commitment_refused(self):
+        for key in ('head','history','witness','bundle'):
+            with self.subTest(key=key):
+                current=self.current.copy()
+                current[key]=self.old[key]
+                with self.assertRaises(dual.DualSourceConflict):
+                    self.check(current=current)
+
     def test_boolean_event_count_rejected(self):
         current=self.current.copy()
         current['count']=True
