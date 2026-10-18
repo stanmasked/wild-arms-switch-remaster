@@ -24,7 +24,8 @@ class SessionAuditTests(unittest.TestCase):
             control.write_text("Window GPU: llvmpipe\n")
             result = analyze(guest, control)
             self.assertEqual(result["guest_boot_outcome"], "guest_boot_requested")
-            self.assertTrue(result["frontend_autoload_request_seen"])\n            self.assertTrue(result["guest_boot_request_seen"])
+            self.assertTrue(result["frontend_autoload_request_seen"])
+            self.assertTrue(result["guest_boot_request_seen"])
             self.assertFalse(result["control_has_autoload_marker"])
             self.assertFalse(result["guest_rendered_frame_confirmed"])
 
@@ -33,9 +34,9 @@ class SessionAuditTests(unittest.TestCase):
             base = Path(folder)
             guest = base / "guest.log"
             guest.write_text(
-                "Auto-loaded NRO: /tmp/game.nro (CPU: Dynarmic)\\n"
-                "Booting NRO: /tmp/game.nro\\n"
-                "[ERROR] Boot failed: Data segment out of bounds\\n"
+                "Auto-loaded NRO: /tmp/game.nro (CPU: Dynarmic)\n"
+                "Booting NRO: /tmp/game.nro\n"
+                "[ERROR] Boot failed: Data segment out of bounds\n"
             )
             result = analyze(guest, base / "missing-control.log")
             self.assertEqual(result["guest_boot_outcome"], "guest_boot_failed")
