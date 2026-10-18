@@ -13,6 +13,8 @@ import base64
 import hashlib
 import hmac
 import json
+import os
+import stat
 from pathlib import Path
 import sqlite3
 
@@ -148,9 +150,26 @@ def _report(pin,review,*,created):
     }
 
 
+def _stable_archive_identity(path):
+    """Observe private inode, timestamps and size around the entire offline audit.
+
+    No standalone stat can prevent a privileged attacker changing and
+    restoring a file; this complements, rather than replaces, the
+    bounded O_NOFOLLOW/fstat path checks in detached._private_read.
+    """
+    safe=private._secure_parent(path)
+    state=os.lstat(safe)
+    if (not stat.S_ISREG(state.st_mode) or state.st_nlink!=1
+            or state.st_uid!=os.getuid() or state.st_mode&0o077):
+        raise OfflineMirrorEvidenceConflict('archive identity no longer private')
+    return (state.st_dev,state.st_ino,state.st_size,state.st_mode,
+            state.st_nlink,state.st_uid,state.st_mtime_ns,state.st_ctime_ns)
+
+
 def inspect(path,*,archive_pin,scope,genesis_a,genesis_b,head_a,head_b,
             operator_a_public,operator_b_public):
     cas.digest(archive_pin)
+    initial=_stable_archive_identity(path)
     raw=detached._private_read(path)
     pin=hashlib.sha256(raw).hexdigest()
     if not hmac.compare_digest(pin,archive_pin):
@@ -165,6 +184,13 @@ def inspect(path,*,archive_pin,scope,genesis_a,genesis_b,head_a,head_b,
     result=_replay_data(obj,scope=scope,genesis_a=genesis_a,
         genesis_b=genesis_b,head_a=head_a,head_b=head_b,
         operator_a_public=operator_a_public,operator_b_public=operator_b_public)
+    # Revalidate the actual path and exact private bytes *after* all chain
+    # and Ed25519 checks, catching file replacement during verification
+    # even if the original first read was correctly pinned.
+    if (_stable_archive_identity(path)!=initial
+            or detached._private_read(path)!=raw
+            or _stable_archive_identity(path)!=initial):
+        raise OfflineMirrorEvidenceConflict('archive changed during offline verification')
     return _report(pin,result,created=False)
 
 
