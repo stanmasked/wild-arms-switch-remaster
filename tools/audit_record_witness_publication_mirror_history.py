@@ -212,7 +212,7 @@ def verify(a_path,a_count,a_head,b_path,b_count,b_head,archive_raw,archive_pin,
         if nonce in used_nonces:
             raise SnapshotHistoryConflict('reused mirror witness epoch nonce')
         used_nonces.add(nonce)
-        prior = witness_digest(signed)
+        prior = witness_digest(signed[ROLES[0]], signed[ROLES[1]])
     if not hmac.compare_digest(prior,expected_latest_witness):
         raise SnapshotHistoryConflict('latest signed mirror epoch differs from pin')
     if len(events) and freeze_prefix != frozen:
