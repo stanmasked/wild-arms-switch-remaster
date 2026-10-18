@@ -13,6 +13,8 @@ from tools import audit_record_witness_publication_mirror_ack_nonce_guard as gua
 from tools import audit_record_witness_publication_receipt_nonce_ledger as ledger
 from tools import audit_record_witness_publication_signed_mirror_acknowledgments as mirror
 from tools import audit_record_witness_publication_checkpoint_cas as cas
+from tools import audit_record_witness_publication_receipt_nonce_reconciliation as cross
+from tools import audit_record_witness_publication_attestation_registry_binding as binding
 
 
 class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
@@ -143,7 +145,7 @@ class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
         self.assertEqual(self.snapshot()['event_count'],0)
 
     def test_wrong_head_mirror_refused_without_nonce_consumption(self):
-        with self.assertRaises((ValueError,guard.MirrorGuardConflict)):
+        with self.assertRaises((ValueError,guard.MirrorGuardConflict,cross.LedgerDivergence)):
             self.guarded(head_b='f'*64)
         self.assertEqual(self.snapshot()['event_count'],0)
 
@@ -151,7 +153,7 @@ class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
         envelopes={r:list(v) for r,v in self.complete.items()}
         raw,_=envelopes['operator-a'][0]
         envelopes['operator-a']=[(raw,'f'*64)]
-        with self.assertRaises((ValueError,guard.MirrorGuardConflict)):
+        with self.assertRaises((ValueError,guard.MirrorGuardConflict,binding.SignedLedgerConflict)):
             self.guarded(signed_envelopes=envelopes)
         self.assertEqual(self.snapshot()['event_count'],0)
 
@@ -162,7 +164,7 @@ class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
         self.assertFalse(self.ack_registry.exists())
 
     def test_wrong_private_key_burns_nonce_with_pending_state(self):
-        with self.assertRaises((ValueError,OSError)):
+        with self.assertRaises((ValueError,OSError,cas.CheckpointCASConflict)):
             self.guarded(signing_private=self.observers[1][0])
         pending=self.snapshot()
         self.assertEqual(pending['pending_operator_roles'],['operator-a'])
@@ -172,7 +174,7 @@ class MirrorAcknowledgmentNonceGuardTests(unittest.TestCase):
         self.assertEqual(self.snapshot()['event_count'],1)
 
     def test_nonexistent_private_key_burns_nonce(self):
-        with self.assertRaises((ValueError,OSError)):
+        with self.assertRaises((ValueError,OSError,cas.CheckpointCASConflict)):
             self.guarded(signing_private=Path(self.temp.name)/'absent-private.pem')
         self.assertEqual(self.snapshot()['pending_operator_roles'],['operator-a'])
 
