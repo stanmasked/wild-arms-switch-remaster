@@ -15,7 +15,8 @@ import re
 try:
     from .audit_record_anchor_handoff import _canonical
     from .audit_record_witness_composite_evidence import (
-        _decode_canonical, SPECS, SCHEMA as COMPOSITE_SCHEMA,
+        _decode_canonical, _report, DOMAIN as COMPOSITE_DOMAIN, SPECS,
+        SCHEMA as COMPOSITE_SCHEMA,
         MAX_REPORT, MAX_BUNDLE, CompositeConflict,
     )
     from .audit_record_witness_fence_reconciliation import _signed
@@ -108,6 +109,22 @@ def verify(composite_raw, composite_pin, index_raw, index_pin, reports,
                 'witness_fence_retirement_authorized',
                 'witness_fence_retired'))):
         raise OriginConflict('unsafe or incomplete upstream composite')
+    # A verified external file pin alone does not mean the nested payload
+    # satisfies the Stage 263J schema and internal domain hash contract.
+    internal = dict(composite)
+    claimed = internal.pop('manifest_sha256')
+    if (type(claimed) is not str or not SHA.fullmatch(claimed)
+            or not hmac.compare_digest(
+                hashlib.sha256(
+                    COMPOSITE_DOMAIN + _canonical(internal)).hexdigest(),
+                claimed)):
+        raise OriginConflict('composite internal manifest hash mismatch')
+    if (set(composite['safety']) != {
+            'reports_independently_attested','reports_observed_atomically',
+            'all_writers_durably_revoked','witness_fence_retirement_authorized',
+            'witness_fence_retired','native_switch_game_build_verified'}
+            or composite['safety']['native_switch_game_build_verified'] is not False):
+        raise OriginConflict('unexpected composite safety declarations')
     session = composite['session']
     if (not _digest(session.get('original_request_sha256'))
             or not _digest(session.get('signed_supervisor_stop_sha256'))
@@ -121,6 +138,7 @@ def verify(composite_raw, composite_pin, index_raw, index_pin, reports,
     observed_nonces = set()
     for kind in SPECS:
         raw_report = reports[kind]
+        _report(kind, raw_report)  # Recheck exact Stage 263J report semantics.
         if type(raw_report) is not bytes or len(raw_report) > MAX_REPORT:
             raise OriginConflict('oversized provenance report')
         bound = composite['report_bindings'][kind]
