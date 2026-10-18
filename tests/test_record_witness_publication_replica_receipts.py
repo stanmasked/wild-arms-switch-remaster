@@ -9,6 +9,7 @@ import unittest
 from tests import test_record_witness_publication_equivocation_replica as previous
 from tools import audit_record_witness_publication_replica_receipts as receipts
 from tools import audit_record_witness_publication_replica_receipt_sign as signer
+from tools import audit_record_witness_publication_receipt_nonce_ledger as nonce_ledger
 from tools import audit_record_witness_publication_equivocation_archive as archive
 from tools import audit_record_witness_publication_equivocation_replica as replica
 from tools import audit_record_witness_publication_checkpoint_cas as cas
@@ -46,6 +47,23 @@ class ReplicaReceiptTests(unittest.TestCase):
         for idx in (0,1):
             self.raw.append(self.sign_receipt(idx))
         self.receipt_pins=[hashlib.sha256(x).hexdigest() for x in self.raw]
+        self.registry_path=Path(self.temp.name)/'nonce-consumption.db'
+        self.registry_enrollment={
+            'operator-a':{
+                'operator_id':'private-operator-a',
+                'storage_id':'private-store-a',
+                'public_pin':self.observers[0][2],
+                'initial_previous_sha256':self.previous_receipts[0]},
+            'operator-b':{
+                'operator_id':'private-operator-b',
+                'storage_id':'private-store-b',
+                'public_pin':self.observers[1][2],
+                'initial_previous_sha256':self.previous_receipts[1]}}
+        self.registry_genesis=nonce_ledger.genesis_digest(
+            self.scope,self.registry_enrollment)
+        nonce_ledger.init(self.registry_path,scope=self.scope,
+            enrollment=self.registry_enrollment,
+            independent_genesis_pin=self.registry_genesis)
 
     def signed_body(self,idx,**override):
         obj=receipts._body(
@@ -303,6 +321,8 @@ class ReplicaReceiptTests(unittest.TestCase):
             '--evidence-operator-a-pin',self.observers[0][2],
             '--evidence-operator-b-public',str(self.observers[1][1]),
             '--evidence-operator-b-pin',self.observers[1][2],
+            '--nonce-registry',str(self.registry_path),
+            '--expected-registry-head',self.registry_genesis,
             '--signing-private',str(self.observers[idx][0]),
             '--signing-public',str(self.observers[idx][1]),
             '--signing-public-pin',self.observers[idx][2],
