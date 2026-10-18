@@ -1,0 +1,44 @@
+name: Field capture reference (host, no emulator)
+on:
+  push:
+    paths:
+      - 'include/field*.hpp'
+      - 'src/field.cpp'
+      - 'tests/field_capture.cpp'
+      - 'tools/audit_field_capture.py'
+      - 'CMakeLists.txt'
+      - '.github/workflows/field-capture.yml'
+  pull_request:
+    paths:
+      - 'include/field*.hpp'
+      - 'src/field.cpp'
+      - 'tests/field_capture.cpp'
+      - 'tools/audit_field_capture.py'
+      - 'CMakeLists.txt'
+      - '.github/workflows/field-capture.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-reference:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure and compile host capture
+        run: |
+          cmake -S . -B build
+          cmake --build build --target wa_field_capture --parallel
+      - name: Replay and create two independent image sequences
+        run: |
+          ctest --test-dir build -R '^wa_field_capture_replay$' --output-on-failure
+          ./build/wa_field_capture capture-one
+          ./build/wa_field_capture capture-two
+      - name: Verify replay equality and encode synthetic PNG references
+        run: python3 tools/audit_field_capture.py capture-one capture-two --output field-references
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wild-arms-field-host-reference-png
+          path: field-references/
+          if-no-files-found: error
