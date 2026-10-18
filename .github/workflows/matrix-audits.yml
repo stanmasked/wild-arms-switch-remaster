@@ -96,6 +96,8 @@ on:
       - 'tools/audit_record_witness_publication_highwater_equivocation.py'
       - 'tools/audit_record_witness_publication_equivocation_archive.py'
       - 'tools/audit_record_witness_publication_equivocation_replica.py'
+      - 'tools/audit_record_witness_publication_replica_receipts.py'
+      - 'tools/audit_record_witness_publication_replica_receipt_sign.py'
       - 'tools/audit_record_witness_publication_replica_compare.py'
       - 'tools/audit_record_remote_witness_fence.py'
       - 'tools/audit_record_remote_reserved_issue.py'
@@ -150,6 +152,7 @@ on:
       - 'tests/test_record_witness_publication_highwater_equivocation.py'
       - 'tests/test_record_witness_publication_equivocation_archive.py'
       - 'tests/test_record_witness_publication_equivocation_replica.py'
+      - 'tests/test_record_witness_publication_replica_receipts.py'
       - 'tests/test_record_witness_publication_replica_compare.py'
       - 'tests/test_record_witness_gated_recovery.py'
       - 'tests/test_record_witness_gated_custody.py'
@@ -191,6 +194,7 @@ on:
       - 'docs/ps1-witness-publication-highwater-equivocation.md'
       - 'docs/ps1-witness-publication-equivocation-archive.md'
       - 'docs/ps1-witness-publication-equivocation-replica.md'
+      - 'docs/ps1-witness-publication-replica-receipts.md'
       - 'docs/ps1-witness-publication-replica-comparison.md'
       - 'docs/ps1-witness-gated-recovery.md'
       - 'docs/ps1-witness-gated-custody-writes.md'
@@ -371,6 +375,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_record_witness_publication_highwater_equivocation.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_publication_equivocation_archive.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_publication_equivocation_replica.py' -v
+          python -m unittest discover -s tests -p 'test_record_witness_publication_replica_receipts.py' -v
           python -m unittest discover -s tests -p 'test_record_witness_publication_replica_compare.py' -v
           python -m unittest discover -s tests -p 'test_record_reserved_accept.py' -v
           python -m unittest discover -s tests -p 'test_record_pointer_use.py' -v
