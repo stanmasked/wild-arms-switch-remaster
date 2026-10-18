@@ -31,7 +31,7 @@ int main() {
         if (!cell) return 1;
         std::cout << glyph_for(*cell, frame.player_facing);
       }
-      std::cout << '\\n';
+      std::cout << '\n';
     }
     std::cout << "Moves: " << player.successful_moves << " > " << std::flush;
     char key = 0;
