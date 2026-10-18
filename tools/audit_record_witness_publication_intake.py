@@ -68,7 +68,8 @@ MARKER = 0x50554251  # PUBQ
 MAX_RECORDS = 96
 COLUMNS = (
     'sequence','schema','prior_event_sha256','scope','round_number','role',
-    'signed_receipt_sha256','registry_head_sha256','checkpoint_sha256',
+    'signed_receipt_sha256','signer_key_material_sha256',
+    'registry_head_sha256','checkpoint_sha256',
     'previous_escrow_sha256','round_nonce','decision','reason',
     'original_receipt_sha256','event_sha256',
 )
@@ -80,6 +81,7 @@ CREATE_SQL = """CREATE TABLE published_escrow_receipts (
     round_number INTEGER NOT NULL,
     role TEXT NOT NULL,
     signed_receipt_sha256 TEXT NOT NULL,
+    signer_key_material_sha256 TEXT NOT NULL,
     registry_head_sha256 TEXT NOT NULL,
     checkpoint_sha256 TEXT NOT NULL,
     previous_escrow_sha256 TEXT NOT NULL,
@@ -161,7 +163,9 @@ def _audit(con):
                 or any(c not in '0123456789abcdef'
                        for c in r['round_nonce'])
                 or any(not (type(r[k]) is str and HEX64.fullmatch(r[k]))
-                       for k in ('signed_receipt_sha256','registry_head_sha256',
+                       for k in ('signed_receipt_sha256',
+                                 'signer_key_material_sha256',
+                                 'registry_head_sha256',
                                  'checkpoint_sha256','previous_escrow_sha256',
                                  'original_receipt_sha256','event_sha256'))
                 or (r['decision'],r['reason']) not in (
@@ -175,6 +179,15 @@ def _audit(con):
         if r['decision'] == 'accepted':
             if slot in accepted or r['original_receipt_sha256'] != '0'*64:
                 raise PublicationConflict('duplicate accepted publication')
+            if any(
+                    (old['role'] != r['role']
+                     and old['signer_key_material_sha256'] ==
+                     r['signer_key_material_sha256'])
+                    or (old['role'] == r['role']
+                        and old['signer_key_material_sha256'] !=
+                        r['signer_key_material_sha256'])
+                    for old in accepted.values()):
+                raise PublicationConflict('operator signing key enrollment changed')
             accepted[slot] = r
         else:
             if r['reason'] == 'slot-conflict':
@@ -302,6 +315,7 @@ def submit(intake_path, registry_path, signed_raw,role,
         else registry_events[number][:2]
     )
     signed_hash = hashlib.sha256(signed_raw).hexdigest()
+    key_material = _public_key_identity(public_path).hex()
     intake_path = _private_path(intake_path, exists=True)
     with closing(_connect(intake_path)) as con:
         con.execute('BEGIN IMMEDIATE')
@@ -314,6 +328,13 @@ def submit(intake_path, registry_path, signed_raw,role,
                 raise PublicationConflict('published scope differs')
             if n >= MAX_RECORDS:
                 raise PublicationConflict('publication intake exceeds bound')
+            if any(
+                    (old['role'] != role and
+                     old['signer_key_material_sha256'] == key_material)
+                    or (old['role'] == role and
+                        old['signer_key_material_sha256'] != key_material)
+                    for old in accepted.values()):
+                raise PublicationConflict('duplicated or rotated operator key')
             slot = (number,role)
             previous = accepted.get(slot)
             if previous is not None and previous['signed_receipt_sha256'] == signed_hash:
@@ -347,6 +368,7 @@ def submit(intake_path, registry_path, signed_raw,role,
                 'prior_event_sha256':head,
                 'scope':checkpoint_tag,'round_number':number,'role':role,
                 'signed_receipt_sha256':signed_hash,
+                'signer_key_material_sha256':key_material,
                 'registry_head_sha256':claim['registry_head_sha256'],
                 'checkpoint_sha256':claim['latest_checkpoint_sha256'],
                 'previous_escrow_sha256':claim['previous_escrow_sha256'],
@@ -359,7 +381,7 @@ def submit(intake_path, registry_path, signed_raw,role,
             digest = hashlib.sha256(DOMAIN+_canonical(event)).hexdigest()
             con.execute(
                 'INSERT INTO published_escrow_receipts VALUES '
-                '(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                '(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                 (*event.values(),digest))
             updated=_audit(con)
             if (updated[0] != n+1 or updated[1] != digest or
