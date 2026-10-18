@@ -1,4 +1,5 @@
 #include "field.hpp"
+#include "field_view.hpp"
 
 #include <iostream>
 
@@ -20,10 +21,17 @@ int main() {
   if (!map.valid()) return 1;
 
   for (;;) {
-    for (int y = 0; y < map.height; ++y) {
-      for (int x = 0; x < map.width; ++x)
-        std::cout << (x == player.x && y == player.y ? '@' : map.tile(x, y));
-      std::cout << '\n';
+    RenderFrame frame;
+    if (build_view(frame, map, player, Viewport{9, 5}) !=
+        RenderOutcome::Ready)
+      return 1;
+    for (int y = 0; y < frame.height; ++y) {
+      for (int x = 0; x < frame.width; ++x) {
+        const RenderCell* cell = frame.at(x, y);
+        if (!cell) return 1;
+        std::cout << glyph_for(*cell, frame.player_facing);
+      }
+      std::cout << '\\n';
     }
     std::cout << "Moves: " << player.successful_moves << " > " << std::flush;
     char key = 0;

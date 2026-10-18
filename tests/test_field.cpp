@@ -1,5 +1,6 @@
 #include "field.hpp"
 #include "field_timing.hpp"
+#include "field_view.hpp"
 
 #include <cstdint>
 #include <cstdlib>
@@ -318,6 +319,127 @@ void test_timed_counter_overflow_safety() {
           s.successful_moves == std::numeric_limits<std::uint64_t>::max());
 }
 
+
+void test_viewport_camera_and_player_facing() {
+  const auto m = village();
+  State s{1, 1, Direction::Up};
+  RenderFrame f;
+  require(build_view(f, m, s, {3, 3}) == RenderOutcome::Ready);
+  require(f.ready && f.width == 3 && f.height == 3);
+  require(f.world_left == 0 && f.world_top == 0);
+  require(f.at(1, 1) && f.at(1, 1)->player);
+  require(f.at(1, 1)->terrain == CellKind::Floor);
+  require(glyph_for(*f.at(1, 1), f.player_facing) == '^');
+  require(glyph_for(*f.at(0, 0), f.player_facing) == '#');
+  require(!f.at(-1, 0) && !f.at(3, 0) && !f.at(0, 3));
+
+  s = State{5, 3, Direction::Left};
+  require(build_view(f, m, s, {3, 3}) == RenderOutcome::Ready);
+  require(f.world_left == 4 && f.world_top == 2);
+  require(f.at(1, 1)->player && f.at(1, 1)->terrain == CellKind::Floor);
+  require(glyph_for(*f.at(1, 1), f.player_facing) == '<');
+  require(glyph_for(*f.at(2, 2), f.player_facing) == '#');
+}
+
+void test_viewport_preserves_underlying_event_and_exit() {
+  const auto m = village();
+  RenderFrame f;
+  State event{3, 1, Direction::Right};
+  require(build_view(f, m, event, {3, 3}) == RenderOutcome::Ready);
+  require(f.world_left == 2 && f.world_top == 0);
+  require(f.at(1, 1)->terrain == CellKind::Event);
+  require(f.at(1, 1)->player);
+  require(glyph_for(*f.at(1, 1), f.player_facing) == '>');
+  require(glyph_for({CellKind::Event, false}, Direction::Down) == '!');
+  State exit{4, 3, Direction::None};
+  require(build_view(f, m, exit, {3, 3}) == RenderOutcome::Ready);
+  require(f.at(1, 1)->terrain == CellKind::Exit);
+  require(glyph_for(*f.at(1, 1), f.player_facing) == '@');
+}
+
+void test_viewport_small_map_padding() {
+  const Map m{2, 1, ".E"};
+  RenderFrame f;
+  require(build_view(f, m, State{0, 0}, {5, 3}) ==
+          RenderOutcome::Ready);
+  require(f.world_left == -1 && f.world_top == -1);
+  require(f.at(0, 0)->terrain == CellKind::Outside);
+  require(glyph_for(*f.at(0, 0), Direction::Down) == ' ');
+  require(f.at(1, 1)->player &&
+          f.at(1, 1)->terrain == CellKind::Floor);
+  require(f.at(2, 1)->terrain == CellKind::Exit);
+  require(!f.at(2, 1)->player);
+  require(f.at(4, 2)->terrain == CellKind::Outside);
+}
+
+void test_viewport_invalid_inputs_leave_frame_unchanged() {
+  const auto m = village();
+  RenderFrame f;
+  require(build_view(f, m, State{1, 1}, {3, 3}) ==
+          RenderOutcome::Ready);
+  const int x = f.world_left, y = f.world_top;
+  const char glyph = glyph_for(*f.at(1, 1), f.player_facing);
+  require(build_view(f, m, State{1, 1}, {0, 3}) ==
+          RenderOutcome::InvalidViewport);
+  require(build_view(f, m, State{1, 1}, {33, 3}) ==
+          RenderOutcome::InvalidViewport);
+  require(build_view(f, m, State{1, 1}, {3, -1}) ==
+          RenderOutcome::InvalidViewport);
+  require(build_view(f, Map{2, 2, "?"}, State{1, 1}, {3, 3}) ==
+          RenderOutcome::InvalidMap);
+  require(build_view(f, m, State{0, 0}, {3, 3}) ==
+          RenderOutcome::InvalidState);
+  require(build_view(f, m, State{7, 0}, {3, 3}) ==
+          RenderOutcome::InvalidState);
+  require(build_view(f, m,
+                     State{1, 1, static_cast<Direction>(99)}, {3, 3}) ==
+          RenderOutcome::InvalidState);
+  require(f.ready && f.width == 3 && f.height == 3);
+  require(f.world_left == x && f.world_top == y);
+  require(glyph_for(*f.at(1, 1), f.player_facing) == glyph);
+}
+
+void test_viewport_maximum_and_uninitialized_frame() {
+  RenderFrame f;
+  require(!f.at(0, 0));
+  const Map m{64, 64, std::string(4096, '.')};
+  require(build_view(f, m, State{32, 32}, {32, 32}) ==
+          RenderOutcome::Ready);
+  require(f.world_left == 16 && f.world_top == 16);
+  require(f.at(16, 16) && f.at(16, 16)->player);
+  require(f.at(31, 31) &&
+          f.at(31, 31)->terrain == CellKind::Floor);
+  require(!f.at(32, 31) && !f.at(31, 32));
+  int actors = 0;
+  for (int y = 0; y < f.height; ++y)
+    for (int x = 0; x < f.width; ++x)
+      actors += static_cast<int>(f.at(x, y)->player);
+  require(actors == 1);
+}
+
+void test_viewport_deterministic_replay() {
+  const auto m = village();
+  const Input inputs[] = {
+      {.right = true}, {.right = true}, {.left = true},
+      {.down = true}, {.down = true}, {.right = true}};
+  State a{1, 1}, b{1, 1};
+  for (const auto input : inputs) {
+    (void)step(a, m, input);
+    (void)step(b, m, input);
+    RenderFrame fa, fb;
+    require(build_view(fa, m, a, {5, 3}) == RenderOutcome::Ready);
+    require(build_view(fb, m, b, {5, 3}) == RenderOutcome::Ready);
+    require(fa.world_left == fb.world_left &&
+            fa.world_top == fb.world_top &&
+            fa.player_facing == fb.player_facing);
+    for (int y = 0; y < 3; ++y)
+      for (int x = 0; x < 5; ++x) {
+        require(fa.at(x, y)->terrain == fb.at(x, y)->terrain);
+        require(fa.at(x, y)->player == fb.at(x, y)->player);
+      }
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -339,4 +461,10 @@ int main() {
   test_timed_exit_pause();
   test_timed_rejects_malformed_inputs_without_mutation();
   test_timed_counter_overflow_safety();
+  test_viewport_camera_and_player_facing();
+  test_viewport_preserves_underlying_event_and_exit();
+  test_viewport_small_map_padding();
+  test_viewport_invalid_inputs_leave_frame_unchanged();
+  test_viewport_maximum_and_uninitialized_frame();
+  test_viewport_deterministic_replay();
 }
