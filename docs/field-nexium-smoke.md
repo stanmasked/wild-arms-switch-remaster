@@ -118,3 +118,20 @@ state; it cannot prove guest execution or pinpoint a CPU/JIT bug.
 The no-NRO control test is intentionally nonblocking to retain logs on
 failure, while the main guest-pixel verification remains a strict CI gate.
 Unit tests use invented desktop images, not an actual emulator.
+
+## Stage 286 — capture the actual NeXium host session logs
+
+NeXium uses `nexium_common::file_logger::FileLogger` and writes the
+internal `Auto-loaded NRO`, `Boot: NRO`, `Failed to load NRO` and
+GPU/loader messages to
+`$NEXIUM_DATA_ROOT/logs/nexium-YYYYMMDD-HHMMSS.log`.
+Standard-output redirection captured primarily unrelated ALSA warnings
+and omitted these diagnostics on every earlier run.
+
+The experiment now exports the latest bounded (2 MB) log from **both**
+the NRO launch and the no-NRO control run, and uses a standard-library
+host analyzer to identify whether the emulator merely started its GUI,
+attempted loading, accepted the file, or logged a failure. Missing files
+are explicitly recorded rather than silently treated as empty success.
+Neither a successful loader message nor a green build proves a frame
+was rendered; actual screenshot evidence remains mandatory.

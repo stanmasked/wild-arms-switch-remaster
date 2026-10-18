@@ -7,6 +7,8 @@ on:
       - 'tools/test_audit_nexium_probe.py'
       - 'tools/audit_nexium_launch_control.py'
       - 'tools/test_audit_nexium_launch_control.py'
+      - 'tools/audit_nexium_session.py'
+      - 'tools/test_audit_nexium_session.py'
   workflow_dispatch:
 
 permissions:
@@ -64,6 +66,8 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_probe.py' -v
       - name: Unit-test with/without NRO screenshot comparison
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_launch_control.py' -v
+      - name: Verify internal NeXium session-log parser with synthetic logs
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_session.py' -v
       - name: Download exact verified official NeXium Linux archive
         run: |
           set -euo pipefail
@@ -177,6 +181,33 @@ jobs:
             --no-nro nexium-probe/control-without-nro.png \
             --report nexium-probe/control-comparison.json
 
+      - name: Retain NeXium internal host logs from both runs
+        if: always()
+        run: |
+          set -eu
+          mkdir -p nexium-probe
+          for label in guest control; do
+            if test "$label" = guest; then
+              root="$RUNNER_TEMP/nexium-wild-arms-data/logs"
+            else
+              root="$RUNNER_TEMP/nexium-empty-control/logs"
+            fi
+            dest="nexium-probe/$label-internal.log"
+            if test -d "$root"; then
+              latest=$(find "$root" -maxdepth 1 -name 'nexium-*.log' -type f -printf '%T@ %p\n' |
+                sort -nr | head -n 1 | cut -d' ' -f2-) || true
+              if test -n "$latest" && test -f "$latest"; then
+                head -c 2000000 "$latest" > "$dest"
+              fi
+            fi
+            if ! test -f "$dest"; then
+              echo "Internal log not found: $root" > "nexium-probe/$label-internal-missing.txt"
+            fi
+          done
+          /usr/bin/python3 tools/audit_nexium_session.py \
+            --guest nexium-probe/guest-internal.log \
+            --control nexium-probe/control-internal.log \
+            --report nexium-probe/session-audit.json
       - name: Classify pixel evidence; require guest pixels for success
         id: evidence
         if: always()
