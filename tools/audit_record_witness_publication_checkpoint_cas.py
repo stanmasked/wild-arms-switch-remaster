@@ -269,6 +269,19 @@ def _assert_expected(state, *, expected_generation,expected_pair_pin,expected_ev
         raise CheckpointCASConflict('external expected checkpoint stale or rolled back')
 
 
+def _unique_json_fields(pairs):
+    value={}
+    for key,item in pairs:
+        if key in value:
+            raise CheckpointCASConflict('duplicate Stage 263Y JSON field')
+        value[key]=item
+    return value
+
+
+def _reject_json_constant(value):
+    raise CheckpointCASConflict('non-finite Stage 263Y JSON number')
+
+
 def _report(raw, independent_report_pin):
     if type(raw) is not bytes or not 0 < len(raw) <= MAX_REPORT:
         raise CheckpointCASConflict('invalid bounded Stage 263Y report')
@@ -276,7 +289,8 @@ def _report(raw, independent_report_pin):
     if not hmac.compare_digest(actual,digest(independent_report_pin)):
         raise CheckpointCASConflict('untrusted Stage 263Y report bytes')
     try:
-        item=json.loads(raw)
+        item=json.loads(raw,object_pairs_hook=_unique_json_fields,
+                        parse_constant=_reject_json_constant)
     except (UnicodeError,ValueError) as exc:
         raise CheckpointCASConflict('invalid Stage 263Y report JSON') from exc
     if (type(item) is not dict or set(item) != FIELDS
