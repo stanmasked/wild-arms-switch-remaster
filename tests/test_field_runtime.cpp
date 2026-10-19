@@ -528,14 +528,19 @@ void test_manual_preflight_rejects_corrupt_ledger_without_L() {
   const RuntimeControls right{PadSample{.dpad_right = true}};
   const RuntimeControls collect{{}, false, true};
   const RuntimeControls journal{{}, false, false, false, false, true};
-  for (const RuntimeControls& attempt : {right, collect, journal}) {
+  const RuntimeControls demo{{}, true};
+  const RuntimeControls save{{}, false, false, true};
+  const RuntimeControls load{{}, false, false, false, true};
+  for (const RuntimeControls& attempt :
+       {right, collect, journal, demo, save, load}) {
     const RuntimeFrame result =
         advance_field_runtime(world, rt, step, attempt, screen.target);
     require(result.status == RuntimeStatus::InvalidSimulation &&
             screen.buffer == original_pixels &&
             rt.timer.previous_tick == original_tick &&
             rt.manual.player.x == original_x &&
-            rt.discoveries.count == 2 && !rt.quicksave.occupied);
+            rt.discoveries.count == 2 && !rt.quicksave.occupied &&
+            !rt.autoplay);
   }
 
   // Repair the second entry and confirm input works normally again.
