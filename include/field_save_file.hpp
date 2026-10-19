@@ -35,7 +35,10 @@ enum class JournalInterruption {
   AfterTemporarySynced,
   AfterTemporaryValidated,
   AfterPreviousSlotRemoved,
-  AfterNewSlotRenamed
+  AfterNewSlotRenamed,
+  // Test-only false negatives, not crashes; verification still proceeds.
+  AfterNewSlotRenamedReportedFailure,
+  AfterPostPublishFirstReadRejected
 };
 
 struct FileSaveSlot {
@@ -207,17 +210,40 @@ struct FileSaveLoadResult {
   }
   if (simulate == JournalInterruption::AfterPreviousSlotRemoved)
     return FileSaveStatus::IoError;
-  if (std::rename(temporary.c_str(), target.c_str()) != 0) {
-    (void)std::remove(temporary.c_str());
-    return FileSaveStatus::IoError;
+  // NeXium's emulated filesystem can return a false-negative publishing
+  // status after a complete record has become visible. Only the actual
+  // *fully validated record*, never the API return code alone, proves
+  // durability at this emulated-filesystem level.
+  const bool renamed = std::rename(temporary.c_str(), target.c_str()) == 0;
+  const bool rename_reported_success =
+      renamed &&
+      simulate != JournalInterruption::AfterNewSlotRenamedReportedFailure;
+  if (simulate == JournalInterruption::AfterNewSlotRenamed && renamed)
+    return FileSaveStatus::IoError;  // Simulated interrupted process.
+
+  // Try a bounded number of separately opened full record reads. The
+  // payload comparison includes journal generation, encoded world and CRC.
+  constexpr int kPostPublishReadAttempts = 3;
+  for (int attempt = 0; attempt < kPostPublishReadAttempts; ++attempt) {
+    FileSaveSlot published{};
+    if (simulate == JournalInterruption::AfterPostPublishFirstReadRejected &&
+        attempt == 0) {
+      published.status = FileSaveStatus::IoError;  // Test-only false read.
+    } else {
+      published = read_field_journal_slot(world, target);
+    }
+    if (published.status == FileSaveStatus::Loaded &&
+        published.bytes == payload) {
+      // A non-successful rename report cannot override exact committed
+      // content. If the move actually failed, discard any leftover .tmp.
+      if (!rename_reported_success)
+        (void)std::remove(temporary.c_str());
+      return FileSaveStatus::Stored;
+    }
   }
-  if (simulate == JournalInterruption::AfterNewSlotRenamed)
-    return FileSaveStatus::IoError;
-  const FileSaveSlot published = read_field_journal_slot(world, target);
-  if (published.status != FileSaveStatus::Loaded ||
-      published.bytes != payload)
-    return FileSaveStatus::IoError;
-  return FileSaveStatus::Stored;
+  // If no read proved the expected committed record, fail closed.
+  (void)std::remove(temporary.c_str());
+  return FileSaveStatus::IoError;
 }
 
 }  // namespace wa::field

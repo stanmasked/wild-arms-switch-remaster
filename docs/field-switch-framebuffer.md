@@ -285,3 +285,29 @@ verified and the diagnostic files are retained as CI artifacts.
 
 As before, the scope is NeXium's isolated emulated filesystem only,
 not Nintendo Switch hardware durability or physical SD power loss.
+
+## Stage 301 — exact journal postcondition versus emulated FS false negatives
+
+The Stage 300 **real guest screenshot** showed red `SD ERROR` even
+though the repaired B journal had a valid generation and CRC and was
+successfully loaded in the fifth independently launched NeXium process.
+The old single readback returned an error after publication in that
+particular emulator run. The journal format and gameplay state remain
+unchanged; suppressing the warning without proof would be unsafe.
+
+The writer now checks the freshly published file through up to three
+independent reopen operations and returns `Stored` **only** when an
+exact 56-byte committed record, generation, world encoding and CRC
+match the desired payload. This proof is attempted even after a
+negative rename report, because the emulated filesystem may have
+committed the file despite its response. A missing, truncated,
+corrupt or different record still fails; the previous intact slot
+is not replaced by this policy.
+
+Host tests inject a false-negative rename result, a transient first
+readback failure and an unwritable new target, and require success
+only when the full committed bytes exist. The original interruption
+test at `AfterNewSlotRenamed` still reports interruption as before.
+The Stage 301 NeXium workflow must pass the existing **unchanged**
+green `SD SAVED` pixel comparison; no test tolerance is relaxed.
+This is not physical Switch SD power-cut verification.

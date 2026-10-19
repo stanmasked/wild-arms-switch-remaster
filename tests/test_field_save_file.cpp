@@ -425,6 +425,52 @@ void test_restart_import_matches_event_frame_and_confirm_edge() {
          restarted.manual.pending == Trigger::Event);
   expect(pixels == reference_event);
 }
+void test_postpublish_false_negative_error_reports() {
+  Fixture f;
+  const FieldWorld world=make_demo_world();
+  const WorldState start=start_world(world);
+  const WorldState event=to_event(world);
+  expect(store_field_save_file(world,start,f.prefix)==FileSaveStatus::Stored);
+  // A transient failure to open the freshly published file must be
+  // retried; only an exact CRC-valid published payload can pass.
+  expect(store_field_save_file(
+      world,event,f.prefix,
+      JournalInterruption::AfterPostPublishFirstReadRejected)==
+      FileSaveStatus::Stored);
+  const FileSaveSlot b=read_field_journal_slot(world,f.prefix+".b");
+  expect(b.status==FileSaveStatus::Loaded && b.generation==2);
+  same(event,b.world);
+  // An emulated false-negative rename result with a valid committed file
+  // is also not a data loss. This test makes no claim about hardware fsync.
+  expect(store_field_save_file(
+      world,start,f.prefix,
+      JournalInterruption::AfterNewSlotRenamedReportedFailure)==
+      FileSaveStatus::Stored);
+  const FileSaveSlot a=read_field_journal_slot(world,f.prefix+".a");
+  expect(a.status==FileSaveStatus::Loaded && a.generation==3);
+  same(start,a.world);
+  WorldState loaded{};
+  expect(load_field_save_file(world,f.prefix,loaded)==FileSaveStatus::Loaded);
+  same(start,loaded);
+}
+
+void test_postpublish_never_accepts_blocked_destination() {
+  Fixture f;
+  const FieldWorld world=make_demo_world();
+  const WorldState start=start_world(world);
+  const WorldState event=to_event(world);
+  expect(store_field_save_file(world,start,f.prefix)==FileSaveStatus::Stored);
+  expect(::mkdir((f.prefix+".b").c_str(),0700)==0);
+  expect(store_field_save_file(
+      world,event,f.prefix,
+      JournalInterruption::AfterNewSlotRenamedReportedFailure)==
+      FileSaveStatus::IoError);
+  expect(::rmdir((f.prefix+".b").c_str())==0);
+  WorldState loaded{};
+  expect(load_field_save_file(world,f.prefix,loaded)==FileSaveStatus::Loaded);
+  same(start,loaded);
+}
+
 }
 
 int main() {
@@ -437,4 +483,6 @@ int main() {
   test_restart_import_matches_event_frame_and_confirm_edge();
   test_interrupted_journal_publication_recovery();
   test_interrupted_first_save_never_accepts_temporary_file();
+  test_postpublish_false_negative_error_reports();
+  test_postpublish_never_accepts_blocked_destination();
 }
