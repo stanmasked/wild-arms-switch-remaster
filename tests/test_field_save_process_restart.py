@@ -5,6 +5,7 @@ Invoked by CTest with the compiled host executable. Includes corrupted
 save and stale .tmp negative checks with process boundaries.
 """
 import hashlib
+import zlib
 from pathlib import Path
 import subprocess
 import sys
@@ -94,30 +95,46 @@ class ProcessRestartTests(unittest.TestCase):
             self.invoke("expect-start", path,
                         "NEW_PROCESS_FELL_BACK_TO_PREVIOUS_INITIAL_SAVE")
 
-    def test_false_negative_publication_repairs_b_across_processes(self):
-        with tempfile.TemporaryDirectory(prefix="wild-arms-repair-") as td:
-            path = Path(td) / "field-save"
-            a, b = path.with_suffix(".a"), path.with_suffix(".b")
-            self.invoke("save-start", path,
-                        "FIRST_PROCESS_STORED_INITIAL_LOCATION")
-            unchanged_a = a.read_bytes()
-            self.invoke("save", path,
-                        "FIRST_PROCESS_WRITTEN_PENDING_EVENT")
-            damaged = bytearray(b.read_bytes())
-            damaged[23] ^= 0x80
-            b.write_bytes(damaged)
-            self.invoke("expect-start", path,
-                        "NEW_PROCESS_FELL_BACK_TO_PREVIOUS_INITIAL_SAVE")
-            self.invoke("repair-false-negative", path,
-                        "FRESH_PROCESS_REPAIRED_B_DESPITE_FALSE_RENAME_ERROR")
-            self.assertEqual(a.read_bytes(), unchanged_a)
-            replacement = b.read_bytes()
-            self.assertEqual(len(replacement), 56)
-            self.assertNotEqual(replacement, damaged)
-            self.assertEqual(int.from_bytes(
-                replacement[4:12], "little"), 2)
-            self.invoke("expect-healthy-start", path,
-                        "FRESH_PROCESS_LOADED_REPAIRED_HEALTHY_JOURNAL")
+    def test_postpublication_false_negatives_repair_across_processes(self):
+        # Each case uses five completely separate binary executions on
+        # its own real filesystem journal, not an in-memory simulation.
+        scenarios = (
+            ("repair-false-negative",
+             "FRESH_PROCESS_REPAIRED_B_DESPITE_FALSE_RENAME_ERROR"),
+            ("repair-transient-readback",
+             "FRESH_PROCESS_REPAIRED_B_AFTER_TRANSIENT_READBACK"),
+        )
+        for mode, expected in scenarios:
+            with self.subTest(false_negative=mode):
+                with tempfile.TemporaryDirectory(prefix="wild-arms-repair-") as td:
+                    path = Path(td) / "field-save"
+                    a, b = path.with_suffix(".a"), path.with_suffix(".b")
+                    self.invoke("save-start", path,
+                                "FIRST_PROCESS_STORED_INITIAL_LOCATION")
+                    unchanged_a = a.read_bytes()
+                    self.invoke("save", path,
+                                "FIRST_PROCESS_WRITTEN_PENDING_EVENT")
+                    damaged = bytearray(b.read_bytes())
+                    damaged[23] ^= 0x80
+                    b.write_bytes(damaged)
+                    self.invoke("expect-start", path,
+                                "NEW_PROCESS_FELL_BACK_TO_PREVIOUS_INITIAL_SAVE")
+                    self.invoke(mode, path, expected)
+                    self.assertEqual(a.read_bytes(), unchanged_a)
+                    replacement = b.read_bytes()
+                    self.assertEqual(len(replacement), 56)
+                    self.assertNotEqual(replacement, damaged)
+                    self.assertEqual(int.from_bytes(
+                        replacement[4:12], "little"), 2)
+                    # Independent Python CRC verifier; do not trust only
+                    # the decoder in the C++ helper.
+                    for record in (unchanged_a, replacement):
+                        self.assertEqual(record[:4], b"WAJ1")
+                        self.assertEqual(
+                            zlib.crc32(record[:52]),
+                            int.from_bytes(record[52:56], "little"))
+                    self.invoke("expect-healthy-start", path,
+                                "FRESH_PROCESS_LOADED_REPAIRED_HEALTHY_JOURNAL")
 
     def test_torn_committed_record_fails_without_state_change(self):
         with tempfile.TemporaryDirectory(prefix="wild-arms-restart-") as td:

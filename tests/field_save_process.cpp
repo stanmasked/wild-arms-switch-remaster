@@ -19,7 +19,8 @@ int main(int argc, char** argv) {
   FieldRuntime runtime = start_field_runtime(world, frequency, 0);
   if (!runtime.timer.valid() || runtime.manual.player.x != 1 ||
       runtime.quicksave.occupied) return 4;
-  if (std::strcmp(argv[1], "repair-false-negative") == 0) {
+  if (std::strcmp(argv[1], "repair-false-negative") == 0 ||
+      std::strcmp(argv[1], "repair-transient-readback") == 0) {
     // Newly launched process: no RAM save survives. Load the valid old
     // journal A while corrupted B remains a genuine on-disk CRC failure.
     WorldState recovered{};
@@ -44,9 +45,13 @@ int main(int argc, char** argv) {
       return 20;
     // Reproduce a false-negative emulated rename report, but accept the
     // write only once the exact CRC-checked committed bytes are visible.
-    if (store_field_save_file(
-            world, runtime.manual, path,
-            JournalInterruption::AfterNewSlotRenamedReportedFailure)
+    const bool first_read_rejected =
+        std::strcmp(argv[1], "repair-transient-readback") == 0;
+    const JournalInterruption injected =
+        first_read_rejected ?
+        JournalInterruption::AfterPostPublishFirstReadRejected :
+        JournalInterruption::AfterNewSlotRenamedReportedFailure;
+    if (store_field_save_file(world, runtime.manual, path, injected)
         != FileSaveStatus::Stored)
       return 21;
     const FileSaveSlot fixed_b =
@@ -56,7 +61,9 @@ int main(int argc, char** argv) {
         fixed_b.world.player.x != 1 ||
         fixed_b.world.pending != Trigger::None)
       return 22;
-    std::puts("FRESH_PROCESS_REPAIRED_B_DESPITE_FALSE_RENAME_ERROR");
+    std::puts(first_read_rejected ?
+        "FRESH_PROCESS_REPAIRED_B_AFTER_TRANSIENT_READBACK" :
+        "FRESH_PROCESS_REPAIRED_B_DESPITE_FALSE_RENAME_ERROR");
     return 0;
   }
   if (std::strcmp(argv[1], "expect-healthy-start") == 0) {

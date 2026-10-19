@@ -324,3 +324,16 @@ the repaired B be an exact, validated generation 2; the error-result
 simulation must not corrupt game state. These tests are host-only
 confirmation of the writer's postcondition rule while the separate
 strict NeXium screenshot and SD audit remains pending.
+
+### Stage 301 subtest extension — second false-negative mode
+
+The five-process host journal scenario is now repeated for **two**
+independently injected false negatives: a rename API that reports
+failure despite publishing the correct bytes, and a transient
+rejected *first* post-publication readback. Each fixture corrupts
+the real B slot, independently reloads A, republishes the state,
+checks Python's separate `zlib.crc32` over **both** 56-byte records,
+requires A's original bytes unchanged, and finally boots a new
+process with the redundancy warning cleared. The two cases are
+not emulator guest proof; the unchanged NeXium screenshot audit
+still gates real visible `SD SAVED` confirmation.
