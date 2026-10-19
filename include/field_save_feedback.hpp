@@ -1,6 +1,7 @@
 #pragma once
 
 #include "field_pixels.hpp"
+#include "field_save_file.hpp"
 
 #include <array>
 #include <cstddef>
@@ -14,6 +15,26 @@ enum class StorageNotice {
   None, SdSaved, RamOnly, SdLoaded, RamLoaded,
   SdError, BadSave, NoSave
 };
+// Keep error/success mapping independent from libnx so host can test it.
+[[nodiscard]] constexpr StorageNotice storage_save_notice(
+    bool sd_accessible, FileSaveStatus disk_result) noexcept {
+  return !sd_accessible ? StorageNotice::RamOnly :
+         disk_result == FileSaveStatus::Stored ? StorageNotice::SdSaved :
+                                                StorageNotice::SdError;
+}
+[[nodiscard]] constexpr StorageNotice storage_load_notice(
+    bool restored, bool imported_from_sd, bool sd_accessible,
+    FileSaveStatus disk_result) noexcept {
+  if (restored)
+    return imported_from_sd ? StorageNotice::SdLoaded :
+                              StorageNotice::RamLoaded;
+  if (!sd_accessible || disk_result == FileSaveStatus::IoError)
+    return StorageNotice::SdError;
+  if (disk_result == FileSaveStatus::Corrupt)
+    return StorageNotice::BadSave;
+  return StorageNotice::NoSave;
+}
+
 constexpr std::uint32_t kStorageNoticeDurationMs = 900;
 constexpr int kStorageNoticeX = 982;
 constexpr int kStorageNoticeY = 29;

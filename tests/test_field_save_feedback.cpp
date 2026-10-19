@@ -9,6 +9,30 @@ namespace {
 using namespace wa::field;
 void expect(bool v) { if (!v) std::abort(); }
 
+void test_actual_storage_outcome_mapping() {
+  expect(storage_save_notice(true,FileSaveStatus::Stored) ==
+         StorageNotice::SdSaved);
+  expect(storage_save_notice(false,FileSaveStatus::Missing) ==
+         StorageNotice::RamOnly);
+  for (const auto failure : {FileSaveStatus::IoError,
+                             FileSaveStatus::Corrupt,
+                             FileSaveStatus::SequenceExhausted}) {
+    expect(storage_save_notice(true,failure) == StorageNotice::SdError);
+  }
+  expect(storage_load_notice(true,true,true,FileSaveStatus::Loaded) ==
+         StorageNotice::SdLoaded);
+  expect(storage_load_notice(true,false,true,FileSaveStatus::Loaded) ==
+         StorageNotice::RamLoaded);
+  expect(storage_load_notice(false,false,true,FileSaveStatus::Missing) ==
+         StorageNotice::NoSave);
+  expect(storage_load_notice(false,false,false,FileSaveStatus::Missing) ==
+         StorageNotice::SdError);
+  expect(storage_load_notice(false,false,true,FileSaveStatus::IoError) ==
+         StorageNotice::SdError);
+  expect(storage_load_notice(false,false,true,FileSaveStatus::Corrupt) ==
+         StorageNotice::BadSave);
+}
+
 void test_feedback_codes_and_lifecycle() {
   StorageFeedback feedback{};
   expect(feedback.notice == StorageNotice::None &&
@@ -86,6 +110,7 @@ void test_onscreen_messages_only_touch_status_corner() {
 
 } // namespace
 int main() {
+  test_actual_storage_outcome_mapping();
   test_feedback_codes_and_lifecycle();
   test_onscreen_messages_only_touch_status_corner();
 }

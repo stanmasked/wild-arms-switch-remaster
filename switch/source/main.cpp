@@ -145,18 +145,15 @@ int main() {
           store_field_save_file(world, runtime.quicksave.world, kSaveBase) :
           FileSaveStatus::Missing;
       begin_storage_notice(feedback,
-          !storage_ready ? StorageNotice::RamOnly :
-          written == FileSaveStatus::Stored ? StorageNotice::SdSaved :
-                                             StorageNotice::SdError);
+          storage_save_notice(storage_ready, written));
     } else if (result.snapshot_restored) {
-      begin_storage_notice(feedback, imported_from_sd ?
-          StorageNotice::SdLoaded : StorageNotice::RamLoaded);
+      begin_storage_notice(feedback,
+          storage_load_notice(true, imported_from_sd, storage_ready,
+                              attempted_read));
     } else if (result.snapshot_empty) {
       begin_storage_notice(feedback,
-          attempted_read == FileSaveStatus::Corrupt ?
-              StorageNotice::BadSave :
-          attempted_read == FileSaveStatus::IoError ?
-              StorageNotice::SdError : StorageNotice::NoSave);
+          storage_load_notice(false, false, storage_ready,
+                              attempted_read));
     }
     (void)draw_storage_notice(output, feedback);
     framebufferEnd(&fb);
