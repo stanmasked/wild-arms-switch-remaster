@@ -450,6 +450,93 @@ void test_held_journal_freezes_inputs_and_shows_session_clues() {
           rt.timer.previous_tick==before_tick);
 }
 
+
+void test_cross_area_discovery_journal_survives_world_and_snapshot_changes() {
+  const FieldWorld world = make_demo_world();
+  FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  Surface screen;
+  constexpr std::uint64_t step = kSwitchTicksPerSecond * 160 / 1000;
+  require(advance_field_runtime(world, rt, 0, {}, screen.target).status ==
+          RuntimeStatus::Rendered);
+
+  // Begin adjacent to the authored area-0 clue without entering its tile.
+  rt.manual.player.x = 3;
+  rt.manual.player.y = 1;
+  rt.manual.player.facing = Direction::Right;
+  const RuntimeControls inspect{PadSample{.confirm = true}};
+  const RuntimeControls record{{}, false, true};
+  require(advance_field_runtime(world, rt, step, inspect, screen.target).
+          inspected == Trigger::Event);
+  const RuntimeFrame first = advance_field_runtime(
+      world, rt, step * 2, record, screen.target);
+  require(first.clue_recorded && first.clue_count == 1 &&
+          rt.discoveries.entries[0].area == 0 &&
+          rt.discoveries.entries[0].x == 4 &&
+          rt.discoveries.entries[0].y == 1);
+
+  // Set an otherwise valid, already-triggered exit at x6,y5, then
+  // acknowledge it through the real world transition handler.
+  rt.manual.player.x = 6;
+  rt.manual.player.y = 5;
+  rt.manual.player.facing = Direction::Down;
+  rt.manual.pending = Trigger::Exit;
+  rt.manual.clock.carry_ms = 0;
+  rt.manual.clock.held = Direction::None;
+  rt.manual.clock.paused_for_trigger = true;
+  const RuntimeFrame transitioned = advance_field_runtime(
+      world, rt, step * 3, inspect, screen.target);
+  require(transitioned.status == RuntimeStatus::Rendered &&
+          transitioned.changed_area && rt.manual.area == 1 &&
+          rt.discoveries.count == 1);
+  require(rt.manual.player.x == 1 && rt.manual.player.y == 1);
+
+  // Area 1 has a different event coordinate; releasing A first is
+  // necessary because inspection accepts the confirmation rising edge.
+  rt.manual.player.x = 3;
+  rt.manual.player.y = 3;
+  rt.manual.player.facing = Direction::Right;
+  require(advance_field_runtime(world, rt, step * 4, {}, screen.target).
+          status == RuntimeStatus::Rendered);
+  require(advance_field_runtime(world, rt, step * 5, inspect, screen.target).
+          inspected == Trigger::Event);
+  const RuntimeFrame second = advance_field_runtime(
+      world, rt, step * 6, record, screen.target);
+  require(second.clue_recorded && second.clue_count == 2 &&
+          rt.discoveries.entries[1].area == 1 &&
+          rt.discoveries.entries[1].x == 4 &&
+          rt.discoveries.entries[1].y == 3);
+
+  // Both lines are visible in the modal journal, ordered by discovery.
+  const RuntimeControls view{{}, false, false, false, false, true};
+  const RuntimeFrame opened = advance_field_runtime(
+      world, rt, step * 7, view, screen.target);
+  require(opened.status == RuntimeStatus::Rendered &&
+          opened.journal_visible && opened.clue_count == 2);
+  constexpr int first_glyph_x = kJournalPanelX + 36 + 2;
+  constexpr int first_glyph_y = kJournalPanelY + 88;
+  require(screen.pixel(first_glyph_x, first_glyph_y) ==
+          rgba(246, 247, 252));
+  require(screen.pixel(first_glyph_x, first_glyph_y + 27) ==
+          rgba(246, 247, 252));
+
+  // Neither quicksave nor quickload serializes the session-only notes.
+  const RuntimeControls save{{}, false, false, true, false};
+  const RuntimeControls load{{}, false, false, false, true};
+  require(advance_field_runtime(world, rt, step * 8, save, screen.target).
+          snapshot_stored);
+  require(advance_field_runtime(world, rt, step * 9, load, screen.target).
+          snapshot_restored);
+  require(rt.discoveries.count == 2 &&
+          valid_discovery_journal(world, rt.discoveries));
+
+  // A new game process/session starts a new ledger even though the
+  // previous in-memory world snapshot and its clues still exist.
+  FieldRuntime fresh = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  require(fresh.discoveries.count == 0);
+  require(fresh.manual.area == 0);
+  screen.assert_guards();
+}
+
 } // namespace
 int main() {
   test_sixty_hz_manual_event_pause_and_acknowledgment();
@@ -459,6 +546,7 @@ int main() {
   test_manual_event_clue_recording_is_explicit_and_unique();
   test_b_does_not_record_without_inspected_event();
   test_held_journal_freezes_inputs_and_shows_session_clues();
+  test_cross_area_discovery_journal_survives_world_and_snapshot_changes();
   test_invalid_input_is_transactional_and_guarded();
   test_autoplay_timing_checkpoints_and_manual_cancel();
   test_quicksave_restore_manual_mode_and_autoplay_isolation();
