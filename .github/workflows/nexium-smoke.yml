@@ -26,6 +26,8 @@ on:
       - 'include/field_snapshot.hpp'
       - 'include/field_runtime.hpp'
       - 'include/field_save_feedback.hpp'
+      - 'tools/audit_nexium_storage_feedback.py'
+      - 'tools/test_audit_nexium_storage_feedback.py'
       - 'switch/source/main.cpp'
   workflow_dispatch:
 
@@ -104,6 +106,8 @@ jobs:
           ldconfig -p | grep 'libxkbcommon-x11.so'
       - name: Unit-test NeXium exact projected RGB parity
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_pixel_parity.py' -v
+      - name: Unit-test short-lived manual save feedback screenshots
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_storage_feedback.py' -v
       - name: Unit-test manual quicksave and event restore desktop audit
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_manual_snapshot.py' -v
       - name: Unit-test ordered five-checkpoint reference matcher
@@ -348,6 +352,12 @@ jobs:
             --reference same-commit-host-references \
             --observed nexium-probe/verified-checkpoints \
             --report nexium-probe/pixel-parity.json
+      - name: Audit actual guest SD/RAM notice colors and text
+        if: always()
+        run: |
+          /usr/bin/python3 tools/audit_nexium_storage_feedback.py \
+            --screenshots nexium-probe/status-feedback \
+            --report nexium-probe/storage-feedback-audit.json
       - name: Audit real Switch Y/Minus and pending event restore screenshots
         if: always()
         run: |
@@ -395,6 +405,10 @@ jobs:
           if test -f nexium-probe/five-checkpoints.json; then
             echo "Five-scene structural evidence:" >> "$GITHUB_STEP_SUMMARY"
             /usr/bin/python3 -c 'import json; x=json.load(open("nexium-probe/five-checkpoints.json")); print("validated scenes:",len(x["verified_scenes"]),"complete:",x["full_five_checkpoint_sequence_observed"] )' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/storage-feedback-audit.json; then
+            echo "Real on-screen storage notices:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; d=json.load(open("nexium-probe/storage-feedback-audit.json")); print("all four indicators valid:",d["all_four_indicators_valid"])' >> "$GITHUB_STEP_SUMMARY"
           fi
           if test -f nexium-probe/manual-snapshot-audit.json; then
             echo "Manual Y/Minus + event restoration audit:" >> "$GITHUB_STEP_SUMMARY"
