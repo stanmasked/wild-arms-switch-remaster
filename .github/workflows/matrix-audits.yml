@@ -1,5 +1,12 @@
 name: Matrix reverse-engineering audits
 
+concurrency:
+  # Preserve one pending/running execution per workflow + event + PR/branch.
+  # Do not let historical field-prototype commits consume the queue.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+
 on:
   push:
     paths:
