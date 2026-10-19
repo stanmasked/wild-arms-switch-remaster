@@ -392,3 +392,22 @@ This classification is a diagnostic report, not a gameplay result,
 a workaround or a replacement for the existing RGB/CRC CI gate.
 No assumptions are made about which stage the real NeXium guest
 failed at until its original debug line is obtained.
+
+### Stage 302 fallback trace transport — emulated SD only
+
+The first instrumented NeXium guest run did not expose the
+`svcOutputDebugString` line in the emulator's retained log; the
+strict fourth-guest screenshot audit still failed (667 RGB pixels).
+An *experimental-only* Makefile flag now compiles
+`WA_NEXIUM_SAVE_TRACE=1` into the separate NeXium NRO target.
+It writes a single small `WA_SAVE_TRACE v1` line, without game
+data, paths or memory pointers, to
+`sdmc:/switch/wild_arms_field/save-phase.txt` after pressing Y.
+The workflow copies that file out of its isolated emulator data
+root **before launching guest five**, and feeds it into the same
+validated diagnostic parser. A unit test covers this transport.
+
+The normal Switch workflow builds without that flag and does not
+write diagnostic files. No save status is altered, and the strict
+SD SAVED RGB gate is unchanged. The new evidence is diagnostic,
+not proof that the reported write succeeded.

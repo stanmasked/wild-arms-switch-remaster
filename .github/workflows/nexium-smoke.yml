@@ -51,8 +51,8 @@ jobs:
       image: devkitpro/devkita64:latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build actual asset-free Switch NRO
-        run: make -C switch -j2
+      - name: Build actual asset-free Switch NRO with isolated diagnostics
+        run: make -C switch -j2 WA_NEXIUM_SAVE_TRACE=1
       - name: Check NRO0 format and manifest
         run: |
           python3 tools/audit_switch_nro.py switch/wild_arms_field.nro --json switch/wild_arms_field.nro.audit.json
@@ -500,6 +500,12 @@ jobs:
           result=$?
           set -e
           echo "$result" > nexium-probe/repaired-sd/fourth-exit-code.txt
+          # Experimental NRO writes one non-sensitive phase line to SDMC.
+          # Copy it BEFORE guest 5 can replace this evidence.
+          guest_trace="$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/save-phase.txt"
+          if test -s "$guest_trace"; then
+            cp "$guest_trace" nexium-probe/repaired-sd/fourth-save-phase.txt
+          fi
           # Preserve fourth-process internal debug logs BEFORE fifth starts.
           logfile=$(find "$NEXIUM_DATA_ROOT/logs" -maxdepth 1 -type f             -name '*.log' -printf '%T@ %p\n' 2>/dev/null             | sort -nr | head -n 1 | cut -d' ' -f2-) || true
           if test -n "$logfile" && test -f "$logfile"; then
@@ -574,7 +580,9 @@ jobs:
           grep 'WA_SAVE_TRACE' nexium-probe/repaired-sd/fourth-process.log | tail -n 12 || true
           printf 'Fourth guest trace from internal NeXium logs:\n'
           grep -h 'WA_SAVE_TRACE' nexium-probe/repaired-sd/fourth-internal.log             | tail -n 12 || true
-          /usr/bin/python3 tools/audit_nexium_write_trace.py             --output nexium-probe/repaired-sd/write-trace.json             nexium-probe/repaired-sd/fourth-process.log             nexium-probe/repaired-sd/fourth-internal.log || true
+          printf 'Fourth guest trace from isolated SDMC:\n'
+          cat nexium-probe/repaired-sd/fourth-save-phase.txt 2>/dev/null || true
+          /usr/bin/python3 tools/audit_nexium_write_trace.py             --output nexium-probe/repaired-sd/write-trace.json             nexium-probe/repaired-sd/fourth-save-phase.txt             nexium-probe/repaired-sd/fourth-process.log             nexium-probe/repaired-sd/fourth-internal.log || true
       - name: Audit actual fourth guest SD repair and fifth guest clean SD load
         run: |
           /usr/bin/python3 tools/audit_nexium_sd_repair.py \

@@ -86,6 +86,21 @@ class TraceExtractionTests(unittest.TestCase):
             self.assertEqual(audit["failure_classes"],
                              ["malformed_trace_fields"])
 
+    def test_isolated_guest_sdmc_diagnostic_is_accepted(self):
+        with tempfile.TemporaryDirectory() as td:
+            file=Path(td)/"fourth-save-phase.txt"
+            file.write_text(
+                "WA_SAVE_TRACE v1 result=6 ready=1 step=9 "
+                "oldA=1 oldB=3 tmp=2 pub=2 gen=2 "
+                "tries=0 renamed=0 equal=0 errno=5\n")
+            report=extract([file])
+            self.assertTrue(report["found"])
+            self.assertTrue(report["all_fields_valid"])
+            self.assertEqual(report["failure_classes"],
+                             ["temporary_write_sync_or_close_failed"])
+            self.assertEqual(report["records"][0]["source"],
+                             "fourth-save-phase.txt")
+
     def test_wrong_marker_does_not_create_false_evidence(self):
         with tempfile.TemporaryDirectory() as td:
             file=Path(td)/"host.log"

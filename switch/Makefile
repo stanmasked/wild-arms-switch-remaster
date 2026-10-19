@@ -16,6 +16,11 @@ INCLUDES := ../include
 ARCH     := -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 CFLAGS   := -g -O2 -Wall -ffunction-sections $(ARCH) -D__SWITCH__ $(INCLUDE)
 CXXFLAGS := $(CFLAGS) -std=gnu++20 -fno-rtti -fno-exceptions
+# Only experimental NeXium builds can emit an auxiliary SD diagnostic file.
+# Normal Switch NRO builds never define WA_NEXIUM_SAVE_TRACE.
+ifeq ($(WA_NEXIUM_SAVE_TRACE),1)
+CXXFLAGS += -DWA_NEXIUM_SAVE_TRACE=1
+endif
 ASFLAGS  := -g $(ARCH)
 LDFLAGS  := -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 LIBS     := -lnx

@@ -167,8 +167,23 @@ int main() {
           static_cast<unsigned>(detail.read_attempts),
           detail.rename_succeeded ? 1 : 0,
           detail.published_bytes_equal ? 1 : 0, detail.os_error_code);
-      if (len > 0 && len < static_cast<int>(sizeof(trace)))
+      if (len > 0 && len < static_cast<int>(sizeof(trace))) {
         (void)svcOutputDebugString(trace, static_cast<std::size_t>(len));
+#if defined(WA_NEXIUM_SAVE_TRACE)
+        // NeXium's debug syscall may not surface guest strings on the
+        // selected nightly. Keep a tiny, non-sensitive second evidence
+        // channel in the isolated guest SDMC. This macro is enabled ONLY
+        // in the experimental workflow, never the normal Switch build.
+        std::FILE* diagnostic = std::fopen(
+            "sdmc:/switch/wild_arms_field/save-phase.txt", "wb");
+        if (diagnostic != nullptr) {
+          (void)std::fwrite(trace, 1, static_cast<std::size_t>(len),
+                            diagnostic);
+          (void)std::fputc('\n', diagnostic);
+          (void)std::fclose(diagnostic);
+        }
+#endif
+      }
       begin_storage_notice(feedback,
           storage_save_notice(storage_ready, written));
     } else if (result.snapshot_restored) {
