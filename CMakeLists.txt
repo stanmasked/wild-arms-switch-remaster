@@ -47,6 +47,8 @@ target_link_libraries(wa_field_save_feedback_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_save_feedback_tests COMMAND wa_field_save_feedback_tests)
 
 # Stage 297: actual separate OS processes verify journal persistence.
+# Python is needed here before the earlier independent GTE fixture block.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_executable(wa_field_save_process tests/field_save_process.cpp)
 target_link_libraries(wa_field_save_process PRIVATE wa_field_core)
 add_test(NAME wa_field_save_process_restart
