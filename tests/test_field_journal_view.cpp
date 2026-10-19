@@ -30,6 +30,41 @@ struct Screen {
   }
 };
 
+void test_all_authored_and_fallback_note_glyphs_are_complete() {
+  // Cover *every* letter of the two current original demo clues and
+  // of the neutral fallback for future author-created map events.
+  // An unsupported character would otherwise silently vanish.
+  const FieldClue clues[]{{0, 4, 1}, {1, 4, 3}, {0, 0, 0}};
+  for (const FieldClue& clue : clues) {
+    const FieldClueNote note = field_clue_note(clue);
+    const char* texts[]{note.title, note.detail};
+    for (const char* text : texts) {
+      for (const char* c = text; *c; ++c) {
+        if (*c == ' ') continue;
+        bool ink = false;
+        for (std::uint8_t bits : journal_glyph(*c))
+          if (bits != 0) ink = true;
+        require(ink);
+      }
+    }
+  }
+  require(journal_glyph('F')[0] == 31 &&
+          journal_glyph('F')[3] == 30);
+  require(journal_glyph('B')[0] == 30 &&
+          journal_glyph('B')[3] == 30);
+  const FieldClueNote fallback = field_clue_note({0, 0, 0});
+  Screen screen;
+  draw_journal_text(screen.target, 100, 100, fallback.title);
+  draw_journal_text(screen.target, 100, 124, fallback.detail);
+  constexpr std::uint32_t white = rgba(246, 247, 252);
+  // First character F and the B of "FIELD OBSERVATION" both render.
+  require(screen.at(100, 100) == white);
+  require(screen.at(100 + 7 * 14 + 2, 100) == white);
+  require(screen.at(100, 124) == white); // N in "NO FIELD NOTES"
+  require(screen.at(100 + 3 * 14, 124) == white); // F in detail
+  screen.assert_guards();
+}
+
 void test_journal_authored_notes_glyphs_and_layout() {
   const FieldWorld world = make_demo_world();
   FieldDiscoveryJournal notes{};
@@ -193,6 +228,7 @@ void test_corruption_or_target_rejected_without_pixel_mutation() {
 } // namespace
 
 int main() {
+  test_all_authored_and_fallback_note_glyphs_are_complete();
   test_journal_authored_notes_glyphs_and_layout();
   test_empty_and_recorded_views_are_distinct_and_repeatable();
   test_discovered_marker_is_read_only_area_specific_and_bounded();

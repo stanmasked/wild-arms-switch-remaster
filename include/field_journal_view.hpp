@@ -69,6 +69,8 @@ journal_glyph(char symbol) noexcept {
   static constexpr std::array<std::uint8_t, 7> y{17,17,10,4,4,4,4};
   static constexpr std::array<std::uint8_t, 7> slash{1,1,2,4,8,16,16};
   // Glyphs missing from the original inspection-caption subset.
+  static constexpr std::array<std::uint8_t, 7> b{30,17,17,30,17,17,30};
+  static constexpr std::array<std::uint8_t, 7> f{31,16,16,30,16,16,16};
   static constexpr std::array<std::uint8_t, 7> g{14,17,16,23,17,17,14};
   static constexpr std::array<std::uint8_t, 7> r{30,17,17,30,20,18,17};
   static constexpr std::array<std::uint8_t, 7> w{17,17,17,21,21,21,10};
@@ -77,6 +79,8 @@ journal_glyph(char symbol) noexcept {
   if (symbol == 'S') return s;
   if (symbol == 'Y') return y;
   if (symbol == '/') return slash;
+  if (symbol == 'B') return b;
+  if (symbol == 'F') return f;
   if (symbol == 'G') return g;
   if (symbol == 'R') return r;
   if (symbol == 'W') return w;
