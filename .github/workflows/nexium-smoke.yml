@@ -345,8 +345,24 @@ jobs:
             sleep 0.14
             import -display :99 -window root \
               nexium-probe/field-journal/06_one_closed.png
+            # Stage 323: A reinspection of the ALREADY recorded clue
+            # must immediately show blue CLUE NOTED (not yellow AHEAD).
+            # Do not press B again; reopening L must still read 1/2.
+            xdotool keydown --clearmodifiers c
+            sleep 0.12
+            xdotool keyup c
+            sleep 0.08
+            import -display :99 -window root \
+              nexium-probe/field-journal/07_revisited_noted.png
+            xdotool keydown --clearmodifiers q
+            sleep 0.12
+            import -display :99 -window root \
+              nexium-probe/field-journal/08_revisit_journal.png
+            xdotool keyup q
             # Existing reference audit must see no stale clue caption.
             sleep 1.20
+            import -display :99 -window root \
+              nexium-probe/field-journal/09_revisit_expired.png
             walk_to_event
             capture_manual 04_event_again
             send_manual_key z save-event     # Store pending event in quicksave slot

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage 309: independent, strict observed-Xvfb audit of the L-held clue ledger.
+"""Stages 309/323: strict observed-Xvfb audit of the L journal and revisited clue caption.
 
 This checks actual NeXium desktop pixels, not a host-generated screenshot.
 The font/sample oracle is deliberately independent of the C++ UI renderer.
@@ -28,6 +28,10 @@ GLYPHS = {
     "S": (15, 16, 16, 14, 1, 1, 30),
     "/": (1, 1, 2, 4, 8, 16, 16),
     "A": (14, 17, 17, 31, 17, 17, 17),
+    "N": (17, 25, 21, 19, 17, 17, 17),
+    "O": (14, 17, 17, 17, 17, 17, 14),
+    "T": (31, 4, 4, 4, 4, 4, 4),
+    "D": (30, 17, 17, 17, 17, 17, 30),
     "X": (17, 17, 10, 4, 10, 17, 17),
     "Y": (17, 17, 10, 4, 4, 4, 4),
 }
@@ -42,7 +46,8 @@ MAX_IMAGE_BYTES = 32 * 1024 * 1024
 SCREENSHOTS = (
     "00_empty_open", "01_empty_closed", "02_at_marker",
     "03_inspected", "04_one_open", "05_one_open_right_held",
-    "06_one_closed",
+    "06_one_closed", "07_revisited_noted",
+    "08_revisit_journal", "09_revisit_expired",
 )
 
 
@@ -100,6 +105,33 @@ def panel_valid(image, clue_count):
     return ImageChops.multiply(delta, mask_rgb).getbbox() is None
 
 
+def revisited_caption_valid(image):
+    # Independent full-panel pixel oracle for the blue CLUE NOTED caption.
+    # A border-only test would accept missing/incorrect glyphs.
+    native = Image.new("RGB", (1280, 720), NO_PANEL)
+    draw = ImageDraw.Draw(native)
+    draw.rectangle((20, 34, 257, 88), fill=BLUE)
+    draw.rectangle((23, 37, 254, 85), fill=DARK)
+    for index, symbol in enumerate("CLUE NOTED"):
+        if symbol == " ":
+            continue
+        for row, pattern in enumerate(GLYPHS[symbol]):
+            for col in range(5):
+                if (pattern >> (4 - col)) & 1:
+                    x = 40 + index * 15 + col * 2
+                    y = 54 + row * 2
+                    draw.rectangle((x, y, x + 1, y + 1), fill=WHITE)
+
+    projected = native.resize((VIEW_W, VIEW_H), Image.Resampling.NEAREST)
+    observed = image.crop((VIEW_X, 0, VIEW_X + VIEW_W, VIEW_H))
+    mask_native = Image.new("L", (1280, 720))
+    ImageDraw.Draw(mask_native).rectangle((20, 34, 257, 88), fill=255)
+    mask = mask_native.resize((VIEW_W, VIEW_H), Image.Resampling.NEAREST)
+    delta = ImageChops.difference(projected, observed)
+    return ImageChops.multiply(
+        delta, Image.merge("RGB", (mask, mask, mask))).getbbox() is None
+
+
 def audit_journal(screenshot_dir, report_file):
     screenshot_dir = Path(screenshot_dir)
     found = {p.name for p in screenshot_dir.glob("*.png")}
@@ -122,12 +154,23 @@ def audit_journal(screenshot_dir, report_file):
         "journal_released_and_player_did_not_move":
             native_pixel(images["06_one_closed"], 305, 81) == NO_PANEL
             and native_pixel(images["06_one_closed"], 500, 220) == SPRITE_RED,
+        "revisited_clue_noted_entire_caption_rgb":
+            revisited_caption_valid(images["07_revisited_noted"]),
+        "revisited_still_outlines_authored_event":
+            native_pixel(images["07_revisited_noted"], 552, 208) ==
+            EVENT_YELLOW,
+        "revisited_journal_remains_one_of_two":
+            panel_valid(images["08_revisit_journal"], 1),
+        "revisited_caption_expires_without_player_movement":
+            native_pixel(images["09_revisit_expired"], 20, 34) == NO_PANEL
+            and native_pixel(images["09_revisit_expired"], 500, 220) ==
+            SPRITE_RED,
     }
     success = all(checks.values())
     report = {
         "kind": "nexium_real_xvfb_manual_clue_journal",
         "provenance": "emulator_desktop_observation_not_hardware_or_native_buffer",
-        "switch_inputs": ["L", "DRight", "A", "B"],
+        "switch_inputs": ["L", "DRight", "A", "B", "A_reinspect", "L_reopen"],
         "open_release_collect_reopen_confirmed": success,
         "checks": checks,
         "observed_png_sha256": {

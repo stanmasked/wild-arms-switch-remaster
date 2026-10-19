@@ -35,18 +35,27 @@ def journal_panel(draw, count):
             glyph(draw, symbol, 340 + 14 * i, 168)
 
 
-def make_desktop(name, false_count=False, changed_player=False):
+def make_desktop(name, false_count=False, changed_player=False,
+                 missing_caption_glyphs=False):
     native = Image.new("RGB", (1280, 720), NO_PANEL)
     draw = ImageDraw.Draw(native)
-    if name in ("02_at_marker", "03_inspected", "06_one_closed"):
+    if name in ("02_at_marker", "03_inspected", "06_one_closed",
+                "07_revisited_noted", "09_revisit_expired"):
         draw.rectangle((494, 214, 529, 249), fill=SPRITE_RED)
-    if name == "03_inspected":
+    if name in ("03_inspected", "07_revisited_noted"):
         draw.rectangle((551, 207, 602, 211), fill=EVENT_YELLOW)
+    if name == "07_revisited_noted":
+        draw.rectangle((20, 34, 257, 88), fill=BLUE)
+        draw.rectangle((23, 37, 254, 85), fill=DARK)
+        if not missing_caption_glyphs:
+            for i, symbol in enumerate("CLUE NOTED"):
+                glyph(draw, symbol, 40 + 15 * i, 54)
     if name == "00_empty_open":
         journal_panel(draw, 0)
-    if name in ("04_one_open", "05_one_open_right_held"):
+    if name in ("04_one_open", "05_one_open_right_held",
+                "08_revisit_journal"):
         journal_panel(draw, 0 if false_count else 1)
-    if name == "06_one_closed" and changed_player:
+    if name in ("06_one_closed", "09_revisit_expired") and changed_player:
         draw.rectangle((494, 214, 529, 249), fill=NO_PANEL)
         draw.rectangle((558, 214, 593, 249), fill=SPRITE_RED)
     projected = native.resize((VIEW_W, VIEW_H), Image.Resampling.NEAREST)
@@ -67,7 +76,11 @@ class GuestJournalAuditTests(unittest.TestCase):
             make_folder(tmp)
             result = audit_journal(tmp, Path(tmp) / "audit.json")
             self.assertTrue(result["open_release_collect_reopen_confirmed"])
-            self.assertEqual(len(result["checks"]), 7)
+            self.assertEqual(len(result["checks"]), 11)
+            self.assertTrue(
+                result["checks"]["revisited_clue_noted_entire_caption_rgb"])
+            self.assertTrue(
+                result["checks"]["revisited_journal_remains_one_of_two"])
 
     def test_false_clue_count_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -100,6 +113,35 @@ class GuestJournalAuditTests(unittest.TestCase):
             self.assertFalse(result["open_release_collect_reopen_confirmed"])
             self.assertFalse(
                 result["checks"]["journal_released_and_player_did_not_move"])
+
+    def test_missing_blue_clue_noted_glyphs_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_folder(tmp)
+            make_desktop(
+                "07_revisited_noted", missing_caption_glyphs=True).save(
+                    Path(tmp) / "07_revisited_noted.png")
+            report = audit_journal(tmp, Path(tmp) / "audit.json")
+            self.assertFalse(report["open_release_collect_reopen_confirmed"])
+            self.assertFalse(
+                report["checks"]["revisited_clue_noted_entire_caption_rgb"])
+
+    def test_revisit_changed_clue_count_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_folder(tmp)
+            make_desktop("08_revisit_journal", false_count=True).save(
+                Path(tmp) / "08_revisit_journal.png")
+            report = audit_journal(tmp, Path(tmp) / "audit.json")
+            self.assertFalse(
+                report["checks"]["revisited_journal_remains_one_of_two"])
+
+    def test_revisit_must_not_move_player(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_folder(tmp)
+            make_desktop("09_revisit_expired", changed_player=True).save(
+                Path(tmp) / "09_revisit_expired.png")
+            report = audit_journal(tmp, Path(tmp) / "audit.json")
+            self.assertFalse(
+                report["checks"]["revisited_caption_expires_without_player_movement"])
 
     def test_missing_and_wrong_dimensions_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
