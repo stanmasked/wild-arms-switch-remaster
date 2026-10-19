@@ -38,6 +38,9 @@ enum class DiscoveryResult {
   // terrain never become clues. Validation happens before mutation.
   if (map.tile(x, y) != '!') return DiscoveryResult::Invalid;
 
+  // Validate the *entire* ledger before reporting a repeated clue.
+  // An early return would hide malformed later entries in a corrupt log.
+  bool already_recorded = false;
   for (std::size_t i = 0; i < journal.count; ++i) {
     const FieldClue& previous = journal.entries[i];
     if (previous.area < 0 || previous.area >= kFieldAreaCount ||
@@ -50,8 +53,9 @@ enum class DiscoveryResult {
           journal.entries[j].y == previous.y)
         return DiscoveryResult::Invalid;
     if (previous.area == area && previous.x == x && previous.y == y)
-      return DiscoveryResult::PreviouslyRecorded;
+      already_recorded = true;
   }
+  if (already_recorded) return DiscoveryResult::PreviouslyRecorded;
   if (journal.count == journal.entries.size()) return DiscoveryResult::Full;
   journal.entries[journal.count++] = {area, x, y};
   return DiscoveryResult::Recorded;
