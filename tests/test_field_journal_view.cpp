@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <vector>
 
 namespace {
@@ -28,6 +29,41 @@ struct Screen {
       require(data[i] == 0xBADCAFEu);
   }
 };
+
+void test_journal_authored_notes_glyphs_and_layout() {
+  const FieldWorld world = make_demo_world();
+  FieldDiscoveryJournal notes{};
+  const FieldClueNote first = field_clue_note({0, 4, 1});
+  const FieldClueNote second = field_clue_note({1, 4, 3});
+  require(std::strcmp(first.title, "OLD RADIO NOTE") == 0);
+  require(std::strcmp(first.detail, "SIGNAL IN STATIC") == 0);
+  require(std::strcmp(second.title, "SILENT RELAY") == 0);
+  require(std::strcmp(second.detail, "AN ECHO ANSWERS") == 0);
+  require(std::strcmp(field_clue_note({0, 1, 1}).title,
+                      "FIELD OBSERVATION") == 0);
+  const auto& g = journal_glyph('G');
+  const auto& r = journal_glyph('R');
+  const auto& w = journal_glyph('W');
+  require(g[3] == 23 && r[4] == 20 && w[6] == 10);
+  require(record_discovery(world, notes, 0, 4, 1) ==
+          DiscoveryResult::Recorded);
+  Screen screen;
+  require(draw_discovery_journal(screen.target, world, notes));
+  const auto first_render = screen.data;
+  // At x=340, each newly-authored title/detail paints visible glyphs.
+  require(screen.at(340 + 2, 168) == rgba(246, 247, 252));
+  require(screen.at(340 + 2, 188) == rgba(246, 247, 252));
+  // Detail is an independent second line, separated from title.
+  require(screen.at(340 + 2, 184) == rgba(17, 26, 40));
+  require(record_discovery(world, notes, 1, 4, 3) ==
+          DiscoveryResult::Recorded);
+  require(draw_discovery_journal(screen.target, world, notes));
+  require(first_render != screen.data);
+  require(screen.at(340 + 2, 220) == rgba(246, 247, 252));
+  require(screen.at(340 + 2, 240) == rgba(246, 247, 252));
+  require(screen.at(340 + 2, 188) == rgba(246, 247, 252));
+  screen.assert_guards();
+}
 
 void test_empty_and_recorded_views_are_distinct_and_repeatable() {
   const FieldWorld world = make_demo_world();
@@ -157,6 +193,7 @@ void test_corruption_or_target_rejected_without_pixel_mutation() {
 } // namespace
 
 int main() {
+  test_journal_authored_notes_glyphs_and_layout();
   test_empty_and_recorded_views_are_distinct_and_repeatable();
   test_discovered_marker_is_read_only_area_specific_and_bounded();
   test_corruption_or_target_rejected_without_pixel_mutation();

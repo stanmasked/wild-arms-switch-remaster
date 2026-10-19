@@ -35,6 +35,7 @@ on:
       - 'include/field_world.hpp'
       - 'include/field_inspection_ui.hpp'
       - 'include/field_discovery.hpp'
+      - 'include/field_clue_notes.hpp'
       - 'include/field_journal_view.hpp'
       - 'tools/audit_nexium_field_journal.py'
       - 'tools/test_audit_nexium_field_journal.py'

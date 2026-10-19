@@ -1,6 +1,7 @@
 #pragma once
 
 #include "field_discovery.hpp"
+#include "field_clue_notes.hpp"
 #include "field_inspection_ui.hpp"
 
 #include <array>
@@ -67,11 +68,18 @@ journal_glyph(char symbol) noexcept {
   static constexpr std::array<std::uint8_t, 7> s{15,16,16,14,1,1,30};
   static constexpr std::array<std::uint8_t, 7> y{17,17,10,4,4,4,4};
   static constexpr std::array<std::uint8_t, 7> slash{1,1,2,4,8,16,16};
+  // Glyphs missing from the original inspection-caption subset.
+  static constexpr std::array<std::uint8_t, 7> g{14,17,16,23,17,17,14};
+  static constexpr std::array<std::uint8_t, 7> r{30,17,17,30,20,18,17};
+  static constexpr std::array<std::uint8_t, 7> w{17,17,17,21,21,21,10};
   if (symbol >= '0' && symbol <= '9')
     return numerals[static_cast<unsigned>(symbol - '0')];
   if (symbol == 'S') return s;
   if (symbol == 'Y') return y;
   if (symbol == '/') return slash;
+  if (symbol == 'G') return g;
+  if (symbol == 'R') return r;
+  if (symbol == 'W') return w;
   return inspection_caption_glyph(symbol);
 }
 
@@ -146,12 +154,22 @@ inline void draw_journal_text(const PixelTarget& target,
                       journal.count, count_world_clues(world));
   draw_journal_text(target, kJournalPanelX + 36,
                     kJournalPanelY + 36, line);
+  // Every one of the 16 capacity slots remains visible: eight paired
+  // title/detail rows in each of two columns. No clipped or hidden clues.
+  constexpr std::size_t rows_per_column = 8;
+  constexpr int column_stride = 320;
+  constexpr int row_stride = 52;
   for (std::size_t i = 0; i < journal.count; ++i) {
     const FieldClue& clue = journal.entries[i];
-    (void)std::snprintf(line, sizeof(line), "A%d X%d Y%d",
-                        clue.area, clue.x, clue.y);
-    draw_journal_text(target, kJournalPanelX + 36,
-                      kJournalPanelY + 88 + static_cast<int>(i) * 27, line);
+    const FieldClueNote note = field_clue_note(clue);
+    const int x = kJournalPanelX + 36 +
+        static_cast<int>(i / rows_per_column) * column_stride;
+    const int y = kJournalPanelY + 88 +
+        static_cast<int>(i % rows_per_column) * row_stride;
+    (void)std::snprintf(line, sizeof(line), "A%d  %s",
+                        clue.area, note.title);
+    draw_journal_text(target, x, y, line);
+    draw_journal_text(target, x, y + 20, note.detail);
   }
   return true;
 }

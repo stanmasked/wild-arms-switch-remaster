@@ -1104,7 +1104,12 @@ void test_cross_area_discovery_journal_survives_world_and_snapshot_changes() {
   constexpr int glyph_x = kJournalPanelX + 36 + 2; // 'A' top row
   constexpr int glyph_y = kJournalPanelY + 88;
   require(screen.pixel(glyph_x, glyph_y) == rgba(246, 247, 252));
-  require(screen.pixel(glyph_x, glyph_y + 27) == rgba(246, 247, 252));
+  require(screen.pixel(glyph_x, glyph_y + 52) == rgba(246, 247, 252));
+  // The second-line clue descriptions must also be legible.
+  require(screen.pixel(glyph_x, glyph_y + 20) ==
+          rgba(246, 247, 252));
+  require(screen.pixel(glyph_x, glyph_y + 52 + 20) ==
+          rgba(246, 247, 252));
 
   // Neither quicksave nor quickload serializes the session journal.
   const RuntimeControls save{{}, false, false, true, false};

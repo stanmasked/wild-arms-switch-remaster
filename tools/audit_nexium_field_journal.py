@@ -32,6 +32,10 @@ GLYPHS = {
     "O": (14, 17, 17, 17, 17, 17, 14),
     "T": (31, 4, 4, 4, 4, 4, 4),
     "D": (30, 17, 17, 17, 17, 17, 30),
+    "G": (14, 17, 16, 23, 17, 17, 14),
+    "I": (14, 4, 4, 4, 4, 4, 14),
+    "R": (30, 17, 17, 30, 20, 18, 17),
+    "W": (17, 17, 17, 21, 21, 21, 10),
     "X": (17, 17, 10, 4, 10, 17, 17),
     "Y": (17, 17, 10, 4, 4, 4, 4),
 }
@@ -89,7 +93,8 @@ def _expected_panel(clue_count):
     draw.rectangle((308, 84, 971, 635), fill=DARK)
     _paint_text(draw, f"CLUES {clue_count}/2", 340, 116)
     if clue_count:
-        _paint_text(draw, "A0 X4 Y1", 340, 168)
+        _paint_text(draw, "A0  OLD RADIO NOTE", 340, 168)
+        _paint_text(draw, "SIGNAL IN STATIC", 340, 188)
     return native
 
 

@@ -31,8 +31,10 @@ def journal_panel(draw, count):
     for i, symbol in enumerate(f"CLUES {count}/2"):
         glyph(draw, symbol, 340 + 14 * i, 116)
     if count:
-        for i, symbol in enumerate("A0 X4 Y1"):
-            glyph(draw, symbol, 340 + 14 * i, 168)
+        for y, text in ((168, "A0  OLD RADIO NOTE"),
+                        (188, "SIGNAL IN STATIC")):
+            for i, symbol in enumerate(text):
+                glyph(draw, symbol, 340 + 14 * i, y)
 
 
 def make_desktop(name, false_count=False, changed_player=False,
@@ -90,6 +92,21 @@ class GuestJournalAuditTests(unittest.TestCase):
                 result["checks"]["revisited_clue_noted_entire_caption_rgb"])
             self.assertTrue(
                 result["checks"]["revisited_journal_remains_one_of_two"])
+
+    def test_wrong_clue_note_text_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_folder(tmp)
+            file = Path(tmp) / "04_one_open.png"
+            with Image.open(file) as image:
+                altered = image.convert("RGB")
+            # Native x=342,y=188 is a white pixel of 'S' detail text.
+            # Tamper a projected pixel without altering count/blue border.
+            x = VIEW_X + round(342 * VIEW_W / 1280)
+            y = round(188 * VIEW_H / 720)
+            altered.putpixel((x, y), (7, 8, 9))
+            altered.save(file)
+            report = audit_journal(tmp, Path(tmp) / "audit.json")
+            self.assertFalse(report["checks"]["recorded_panel_exact_1_of_2"])
 
     def test_false_clue_count_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
