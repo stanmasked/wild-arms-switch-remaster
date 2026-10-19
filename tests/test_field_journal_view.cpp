@@ -65,6 +65,43 @@ void test_all_authored_and_fallback_note_glyphs_are_complete() {
   screen.assert_guards();
 }
 
+void test_complete_exploration_goal_requires_all_distinct_clues() {
+  const FieldWorld world = make_demo_world();
+  FieldDiscoveryJournal journal{};
+  Screen screen;
+  constexpr auto ink = rgba(246, 247, 252);
+  constexpr auto dark = rgba(17, 26, 40);
+  constexpr int x = kJournalPanelX + 36 + 2;
+  constexpr int y = kJournalPanelY + 520;
+  require(count_world_clues(world) == 2);
+  require(draw_discovery_journal(screen.target, world, journal));
+  require(screen.at(x, y) == dark);
+  require(record_discovery(world, journal, 0, 4, 1) ==
+          DiscoveryResult::Recorded);
+  require(draw_discovery_journal(screen.target, world, journal));
+  require(screen.at(x, y) == dark);
+  require(record_discovery(world, journal, 0, 4, 1) ==
+          DiscoveryResult::PreviouslyRecorded);
+  require(draw_discovery_journal(screen.target, world, journal));
+  require(screen.at(x, y) == dark);
+  require(record_discovery(world, journal, 1, 4, 3) ==
+          DiscoveryResult::Recorded);
+  const FieldDiscoveryJournal saved = journal;
+  require(draw_discovery_journal(screen.target, world, journal));
+  require(screen.at(x, y) == ink);
+  // Verify the F in FOUND is a real bitmap glyph, not missing ink.
+  require(screen.at(kJournalPanelX + 36 + 10 * 14, y) == ink);
+  require(journal.count == saved.count &&
+          journal.entries[0].area == saved.entries[0].area &&
+          journal.entries[1].area == saved.entries[1].area);
+  FieldDiscoveryJournal broken = journal;
+  broken.entries[1] = broken.entries[0];
+  const auto before = screen.data;
+  require(!draw_discovery_journal(screen.target, world, broken));
+  require(before == screen.data);
+  screen.assert_guards();
+}
+
 void test_area_progress_counts_follow_collection_and_reject_bad_ledgers() {
   const FieldWorld world = make_demo_world();
   FieldDiscoveryJournal journal{};
@@ -274,6 +311,7 @@ void test_corruption_or_target_rejected_without_pixel_mutation() {
 
 int main() {
   test_all_authored_and_fallback_note_glyphs_are_complete();
+  test_complete_exploration_goal_requires_all_distinct_clues();
   test_area_progress_counts_follow_collection_and_reject_bad_ledgers();
   test_journal_authored_notes_glyphs_and_layout();
   test_empty_and_recorded_views_are_distinct_and_repeatable();

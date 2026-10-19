@@ -193,6 +193,13 @@ inline void draw_journal_text(const PixelTarget& target,
     draw_journal_text(target, x, y, line);
     draw_journal_text(target, x, y + 20, note.detail);
   }
+  // Show an earned completion goal only after every authored event was
+  // explicitly recorded, never for an empty world or malformed ledger.
+  // This is UI-only: there is no new serialized completion state.
+  const std::size_t authored = count_world_clues(world);
+  if (authored > 0 && journal.count == authored)
+    draw_journal_text(target, kJournalPanelX + 36,
+                      kJournalPanelY + 520, "ALL CLUES FOUND");
   return true;
 }
 
