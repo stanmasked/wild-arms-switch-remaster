@@ -80,6 +80,49 @@ void test_sixty_hz_manual_event_pause_and_acknowledgment() {
   image.assert_guards();
 }
 
+void test_manual_adjacent_inspection_renders_timed_outline() {
+  const FieldWorld world = make_demo_world();
+  FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  Surface surface;
+  constexpr std::uint64_t step = kSwitchTicksPerSecond * 160 / 1000;
+  const RuntimeControls right{PadSample{.dpad_right=true}};
+  require(advance_field_runtime(world, rt, 0, {}, surface.target).status ==
+          RuntimeStatus::Rendered);
+  for (int i=1; i<=2; ++i)
+    require(advance_field_runtime(world, rt, step*i, right,
+                                  surface.target).status ==
+            RuntimeStatus::Rendered);
+  require(rt.manual.player.x == 3 &&
+          rt.manual.player.facing == Direction::Right &&
+          rt.manual.pending == Trigger::None);
+  const RuntimeControls inspect{PadSample{.confirm=true}};
+  const auto looked = advance_field_runtime(
+      world, rt, step*3, inspect, surface.target);
+  require(looked.status == RuntimeStatus::Rendered &&
+          looked.inspected == Trigger::Event &&
+          rt.inspection.kind == Trigger::Event &&
+          rt.inspection.remaining_ms == kFieldInspectionDurationMs);
+  require(rt.manual.player.x == 3 &&
+          rt.manual.player.successful_moves == 2 &&
+          rt.manual.pending == Trigger::None);
+  // Full-sized demo map has origin (288,136), marker (4,1).
+  // Outline is drawn at left+7,top+7, unlike the original terrain fill.
+  constexpr int px = 288 + 4*64 + 7;
+  constexpr int py = 136 + 64 + 7;
+  require(surface.pixel(px,py) == rgba(255,247,172));
+  const auto held = advance_field_runtime(
+      world, rt, step*4, inspect, surface.target);
+  require(held.status == RuntimeStatus::Rendered &&
+          held.inspected == Trigger::None &&
+          surface.pixel(px,py) == rgba(255,247,172));
+  const auto elapsed = advance_field_runtime(
+      world, rt, step*10, {}, surface.target);
+  require(elapsed.status == RuntimeStatus::Rendered &&
+          rt.inspection.kind == Trigger::None &&
+          surface.pixel(px,py) == terrain_rgba(CellKind::Event));
+  surface.assert_guards();
+}
+
 void test_invalid_input_is_transactional_and_guarded() {
   const FieldWorld world = make_demo_world();
   FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 7);
@@ -234,6 +277,7 @@ void test_quicksave_pending_event_restores_pause_and_status() {
 } // namespace
 int main() {
   test_sixty_hz_manual_event_pause_and_acknowledgment();
+  test_manual_adjacent_inspection_renders_timed_outline();
   test_invalid_input_is_transactional_and_guarded();
   test_autoplay_timing_checkpoints_and_manual_cancel();
   test_quicksave_restore_manual_mode_and_autoplay_isolation();

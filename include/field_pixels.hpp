@@ -146,4 +146,37 @@ inline void fill_raster_rect(const PixelTarget& target, int x, int y,
   return RasterOutcome::Ready;
 }
 
+// A transient, asset-free inspection outline drawn inside the selected
+// event/exit tile. It never touches the canonical field raster unless
+// the player explicitly presses A while facing an adjacent marker.
+[[nodiscard]] inline bool draw_field_inspection(
+    const PixelTarget& target, const RenderFrame& frame,
+    int world_x, int world_y, Trigger kind) noexcept {
+  if (kind != Trigger::Event && kind != Trigger::Exit) return false;
+  if (validate_raster(target, frame, 0) != RasterOutcome::Ready)
+    return false;
+  const int vx = world_x - frame.world_left;
+  const int vy = world_y - frame.world_top;
+  const RenderCell* cell = frame.at(vx, vy);
+  if (!cell || cell->player ||
+      cell->terrain != (kind == Trigger::Event ?
+                        CellKind::Event : CellKind::Exit))
+    return false;
+
+  const int x = (kRasterWidth - frame.width * kRasterTileSize) / 2 +
+                vx * kRasterTileSize + 7;
+  const int y = (kRasterHeight - frame.height * kRasterTileSize) / 2 +
+                vy * kRasterTileSize + 7;
+  constexpr int side = kRasterTileSize - 14;
+  constexpr int edge = 5;
+  const std::uint32_t highlight =
+      kind == Trigger::Event ? rgba(255, 247, 172) :
+                               rgba(172, 255, 230);
+  fill_raster_rect(target, x, y, side, edge, highlight);
+  fill_raster_rect(target, x, y + side - edge, side, edge, highlight);
+  fill_raster_rect(target, x, y, edge, side, highlight);
+  fill_raster_rect(target, x + side - edge, y, edge, side, highlight);
+  return true;
+}
+
 }  // namespace wa::field

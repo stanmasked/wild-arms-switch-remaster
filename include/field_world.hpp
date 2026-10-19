@@ -41,7 +41,35 @@ struct WorldState {
 struct WorldFrameResult {
   PadFrameResult controller{};
   bool area_changed = false;
+  // Optional, non-persistent inspection of a cardinally adjacent marker.
+  // Does not acknowledge an event or trigger an area transition.
+  Trigger inspected = Trigger::None;
 };
+
+// A-facing inspection is deliberately separate from entering a trigger tile.
+// It never mutates a map, grants an item, or changes the pending event.
+[[nodiscard]] inline Trigger inspect_facing_marker(
+    const Map& map, const State& player) noexcept {
+  if (!map.valid()) return Trigger::None;
+  int dx = 0;
+  int dy = 0;
+  switch (player.facing) {
+    case Direction::Up:    dy = -1; break;
+    case Direction::Down:  dy = 1; break;
+    case Direction::Left:  dx = -1; break;
+    case Direction::Right: dx = 1; break;
+    case Direction::None:  return Trigger::None;
+  }
+  const int x = player.x + dx;
+  const int y = player.y + dy;
+  if (x < 0 || x >= map.width || y < 0 || y >= map.height)
+    return Trigger::None;
+  switch (map.tile(x, y)) {
+    case '!': return Trigger::Event;
+    case 'E': return Trigger::Exit;
+    default: return Trigger::None;
+  }
+}
 
 [[nodiscard]] inline WorldState start_world(const FieldWorld& world) noexcept {
   WorldState result{};
@@ -78,6 +106,27 @@ struct WorldFrameResult {
     const char expected = state.pending == Trigger::Exit ? 'E' : '!';
     if (map.tile(state.player.x, state.player.y) != expected)
       return {{PadFrameOutcome::Advanced, {TimedStatus::InvalidState}}, false};
+  }
+
+  // Stage 305: a fresh A press while facing an adjacent event/exit
+  // inspects it without stepping on the tile. This must be preflighted
+  // before consuming the button edge. Pending-trigger A continues to
+  // acknowledge exactly as before, preserving the canonical replay.
+  if (state.pending == Trigger::None &&
+      sample.confirm && !state.decoder.confirm_down &&
+      state.clock.valid() &&
+      elapsed_ms <= kMaximumMovementDeltaMs) {
+    const Result preflight = step(state.player, map, {});
+    if (preflight.outcome == Outcome::Idle) {
+      const Trigger marker = inspect_facing_marker(map, state.player);
+      if (marker != Trigger::None) {
+        state.decoder.confirm_down = true;
+        state.clock.carry_ms = 0;
+        state.clock.held = Direction::None;
+        return {{PadFrameOutcome::Advanced, {TimedStatus::Idle}},
+                false, marker};
+      }
+    }
   }
 
   WorldFrameResult outcome{

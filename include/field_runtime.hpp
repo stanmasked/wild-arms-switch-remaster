@@ -13,12 +13,23 @@ namespace wa::field {
 
 // Exact host/Switch field pipeline. The platform only owns the controller
 // sample, current monotonic tick, and writable linear framebuffer.
+// Inspection is ephemeral UI: never serialized to the world save record.
+constexpr std::uint32_t kFieldInspectionDurationMs = 900;
+struct FieldInspection {
+  Trigger kind = Trigger::None;
+  int area = -1;
+  int x = -1;
+  int y = -1;
+  std::uint32_t remaining_ms = 0;
+};
+
 struct FieldRuntime {
   WorldState manual{};
   FieldSnapshotSlot quicksave{};
   AutoplayTrack demo{};
   FrameTickClock timer{};
   RenderFrame view{};
+  FieldInspection inspection{};
   bool autoplay = false;
 };
 
@@ -38,6 +49,7 @@ struct RuntimeFrame {
   std::uint32_t delta_ms = 0;
   bool autoplay = false;
   bool changed_area = false;
+  Trigger inspected = Trigger::None;
   int checkpoint = -1;
   TimedStatus movement_status = TimedStatus::Idle;
   // Not a persistent save; does not write to disk.
@@ -97,6 +109,12 @@ struct RuntimeControls {
   response.tick_status = elapsed.status;
   response.delta_ms = elapsed.milliseconds;
 
+  if (elapsed.milliseconds >= next.inspection.remaining_ms) {
+    next.inspection = FieldInspection{};
+  } else {
+    next.inspection.remaining_ms -= elapsed.milliseconds;
+  }
+
   bool mode_switched = false;
   if (controls.start_demo) {
     next.demo = start_field_autoplay(world);
@@ -108,6 +126,8 @@ struct RuntimeControls {
     next.autoplay = false;
     mode_switched = true;
   }
+
+  if (mode_switched) next.inspection = FieldInspection{};
 
   if (!mode_switched && next.autoplay) {
     const AutoplayFrame outcome =
@@ -122,11 +142,13 @@ struct RuntimeControls {
     if (controls.save_snapshot && controls.load_snapshot)
       return {RuntimeStatus::InvalidSimulation};
     if (controls.save_snapshot) {
+      next.inspection = FieldInspection{};
       if (save_field_snapshot(world, next.manual, next.quicksave) !=
           SnapshotOutcome::Stored)
         return {RuntimeStatus::InvalidSimulation};
       response.snapshot_stored = true;
     } else if (controls.load_snapshot) {
+      next.inspection = FieldInspection{};
       const SnapshotOutcome restored =
           load_field_snapshot(world, next.quicksave, next.manual);
       if (restored == SnapshotOutcome::InvalidState)
@@ -139,6 +161,25 @@ struct RuntimeControls {
                               elapsed.milliseconds);
       response.movement_status = outcome.controller.movement.status;
       response.changed_area = outcome.area_changed;
+      response.inspected = outcome.inspected;
+      if (outcome.area_changed || outcome.controller.movement.trigger !=
+                                      Trigger::None)
+        next.inspection = FieldInspection{};
+      if (outcome.inspected != Trigger::None) {
+        int dx = 0;
+        int dy = 0;
+        switch (next.manual.player.facing) {
+          case Direction::Up: dy = -1; break;
+          case Direction::Down: dy = 1; break;
+          case Direction::Left: dx = -1; break;
+          case Direction::Right: dx = 1; break;
+          case Direction::None: break;
+        }
+        next.inspection = {outcome.inspected, next.manual.area,
+                           next.manual.player.x + dx,
+                           next.manual.player.y + dy,
+                           kFieldInspectionDurationMs};
+      }
       switch (response.movement_status) {
         case TimedStatus::InvalidMap:
         case TimedStatus::InvalidState:
@@ -165,6 +206,14 @@ struct RuntimeControls {
   if (draw_field_pixels(target, frame, shown.clock.paused_for_trigger,
                         shown.area) != RasterOutcome::Ready)
     return {RuntimeStatus::InvalidRaster};
+
+  if (!next.autoplay &&
+      next.inspection.kind != Trigger::None &&
+      next.inspection.remaining_ms > 0 &&
+      next.inspection.area == shown.area)
+    (void)draw_field_inspection(target, frame,
+                                next.inspection.x, next.inspection.y,
+                                next.inspection.kind);
 
   next.view = frame;
   current = next;

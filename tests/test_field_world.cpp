@@ -78,6 +78,56 @@ void test_event_then_transition_then_return() {
   require(game.player.successful_moves == 3);
 }
 
+void test_inspect_adjacent_markers_without_trigger_or_movement() {
+  const FieldWorld world = simple_world();
+  WorldState state = start_world(world);
+  state.player.facing = Direction::Right;
+  const PadSample a{.confirm = true};
+  const auto inspected = advance_world_frame(world, state, a, 160);
+  require(inspected.inspected == Trigger::Event &&
+          !inspected.area_changed &&
+          inspected.controller.movement.status == TimedStatus::Idle);
+  require(state.player.x == 1 && state.player.y == 1 &&
+          state.player.successful_moves == 0);
+  require(state.pending == Trigger::None &&
+          !state.clock.paused_for_trigger && state.decoder.confirm_down);
+  // Held A must not inspect twice. Release and move right to enter the
+  // event normally; inspection must not consume or acknowledge its trigger.
+  require(advance_world_frame(world, state, a, 160).inspected ==
+          Trigger::None);
+  require(advance_world_frame(world, state, {}, 0).inspected ==
+          Trigger::None);
+  const auto moved = advance_world_frame(
+      world, state, PadSample{.dpad_right=true}, 160);
+  require(moved.controller.movement.trigger == Trigger::Event);
+  require(state.player.x == 2 && state.pending == Trigger::Event);
+  const auto ack = advance_world_frame(world, state, a, 160);
+  require(ack.controller.outcome == PadFrameOutcome::Acknowledged &&
+          ack.inspected == Trigger::None && state.pending == Trigger::None);
+  (void)advance_world_frame(world, state, {}, 0);
+  state.player.facing = Direction::Right;
+  const auto look_exit = advance_world_frame(world, state, a, 160);
+  require(look_exit.inspected == Trigger::Exit &&
+          state.area == 0 && state.player.x == 2 &&
+          state.pending == Trigger::None);
+}
+
+void test_inspection_does_not_consume_invalid_input() {
+  const FieldWorld world = simple_world();
+  WorldState state = start_world(world);
+  state.player.facing = Direction::Right;
+  const auto invalid = advance_world_frame(
+      world, state, PadSample{.confirm=true}, 1001);
+  require(invalid.controller.movement.status == TimedStatus::InvalidDelta);
+  require(invalid.inspected == Trigger::None &&
+          !state.decoder.confirm_down && state.player.x == 1);
+  state.clock.cadence_ms = 0;
+  const auto broken = advance_world_frame(
+      world, state, PadSample{.confirm=true}, 160);
+  require(broken.controller.movement.status == TimedStatus::InvalidClock);
+  require(broken.inspected == Trigger::None && !state.decoder.confirm_down);
+}
+
 void test_rejects_bad_world_and_state_without_mutation() {
   FieldWorld world = simple_world();
   WorldState game = start_world(world);
@@ -166,6 +216,8 @@ void test_deterministic_two_area_viewport_replay() {
 int main() {
   test_world_layout_and_start();
   test_event_then_transition_then_return();
+  test_inspect_adjacent_markers_without_trigger_or_movement();
+  test_inspection_does_not_consume_invalid_input();
   test_rejects_bad_world_and_state_without_mutation();
   test_deterministic_two_area_viewport_replay();
 }

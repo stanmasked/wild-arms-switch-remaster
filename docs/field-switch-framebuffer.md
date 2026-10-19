@@ -471,3 +471,25 @@ the former `FailedReadback`; the strict unchanged NeXium green
 This protects against an interrupted redundant-target rewrite at
 the journal level, but does *not* certify FAT/SD persistence under
 physical sudden power loss on Nintendo Switch hardware.
+
+## Stage 305 — A-button field inspection (actual gameplay improvement)
+
+The asset-free host/Switch prototype now supports **inspecting an
+adjacent event or exit marker by pressing A while facing it**, without
+stepping on its tile. The resulting target is highlighted by a
+distinct gold (event) or mint (exit) pixel outline for 900 ms. The
+inspection uses only the existing world, input and raster pipeline;
+it adds no game assets, save-format fields or synthetic map tiles.
+A held A does not retrigger inspection; an actual pending event
+still requires the normal A acknowledgement and exit-transition
+behavior. A simultaneous direction and inspection does not move
+the player. Invalid clock/elapsed input never consumes the A edge.
+
+The transient highlight is not saved to RAM/SD snapshots. Starting
+or stopping autoplay, switching areas, or saving/loading a snapshot
+clears it; all reference autoplay scenes are unchanged. The new
+host tests assert held-button handling, event/exit inspection,
+invalid input atomicity, 900 ms highlight expiry, no movement, exact
+highlight pixels and framebuffer stride guards. This is an
+original synthetic exploration mechanic, not a claim that the
+original Wild Arms assets, puzzles or scenarios are present.
