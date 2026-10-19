@@ -40,11 +40,12 @@ def make_desktop(name, false_count=False, changed_player=False,
     native = Image.new("RGB", (1280, 720), NO_PANEL)
     draw = ImageDraw.Draw(native)
     if name in ("02_at_marker", "03_inspected", "06_one_closed",
-                "07_revisited_noted", "09_revisit_expired"):
+                "07_previous_caption_expired", "08_revisited_noted",
+                "10_revisit_expired"):
         draw.rectangle((494, 214, 529, 249), fill=SPRITE_RED)
-    if name in ("03_inspected", "07_revisited_noted"):
+    if name in ("03_inspected", "08_revisited_noted"):
         draw.rectangle((551, 207, 602, 211), fill=EVENT_YELLOW)
-    if name == "07_revisited_noted":
+    if name == "08_revisited_noted":
         draw.rectangle((20, 34, 257, 88), fill=BLUE)
         draw.rectangle((23, 37, 254, 85), fill=DARK)
         if not missing_caption_glyphs:
@@ -53,9 +54,9 @@ def make_desktop(name, false_count=False, changed_player=False,
     if name == "00_empty_open":
         journal_panel(draw, 0)
     if name in ("04_one_open", "05_one_open_right_held",
-                "08_revisit_journal"):
+                "09_revisit_journal"):
         journal_panel(draw, 0 if false_count else 1)
-    if name in ("06_one_closed", "09_revisit_expired") and changed_player:
+    if name in ("06_one_closed", "10_revisit_expired") and changed_player:
         draw.rectangle((494, 214, 529, 249), fill=NO_PANEL)
         draw.rectangle((558, 214, 593, 249), fill=SPRITE_RED)
     projected = native.resize((VIEW_W, VIEW_H), Image.Resampling.NEAREST)
@@ -76,7 +77,7 @@ class GuestJournalAuditTests(unittest.TestCase):
             make_folder(tmp)
             result = audit_journal(tmp, Path(tmp) / "audit.json")
             self.assertTrue(result["open_release_collect_reopen_confirmed"])
-            self.assertEqual(len(result["checks"]), 11)
+            self.assertEqual(len(result["checks"]), 12)
             self.assertTrue(
                 result["checks"]["revisited_clue_noted_entire_caption_rgb"])
             self.assertTrue(
@@ -114,12 +115,21 @@ class GuestJournalAuditTests(unittest.TestCase):
             self.assertFalse(
                 result["checks"]["journal_released_and_player_did_not_move"])
 
+    def test_stale_blue_caption_before_reinspect_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_folder(tmp)
+            make_desktop("08_revisited_noted").save(
+                Path(tmp) / "07_previous_caption_expired.png")
+            report = audit_journal(tmp, Path(tmp) / "audit.json")
+            self.assertFalse(
+                report["checks"]["old_caption_expired_before_reinspection"])
+
     def test_missing_blue_clue_noted_glyphs_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             make_folder(tmp)
             make_desktop(
-                "07_revisited_noted", missing_caption_glyphs=True).save(
-                    Path(tmp) / "07_revisited_noted.png")
+                "08_revisited_noted", missing_caption_glyphs=True).save(
+                    Path(tmp) / "08_revisited_noted.png")
             report = audit_journal(tmp, Path(tmp) / "audit.json")
             self.assertFalse(report["open_release_collect_reopen_confirmed"])
             self.assertFalse(
@@ -128,8 +138,8 @@ class GuestJournalAuditTests(unittest.TestCase):
     def test_revisit_changed_clue_count_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             make_folder(tmp)
-            make_desktop("08_revisit_journal", false_count=True).save(
-                Path(tmp) / "08_revisit_journal.png")
+            make_desktop("09_revisit_journal", false_count=True).save(
+                Path(tmp) / "09_revisit_journal.png")
             report = audit_journal(tmp, Path(tmp) / "audit.json")
             self.assertFalse(
                 report["checks"]["revisited_journal_remains_one_of_two"])
@@ -137,8 +147,8 @@ class GuestJournalAuditTests(unittest.TestCase):
     def test_revisit_must_not_move_player(self):
         with tempfile.TemporaryDirectory() as tmp:
             make_folder(tmp)
-            make_desktop("09_revisit_expired", changed_player=True).save(
-                Path(tmp) / "09_revisit_expired.png")
+            make_desktop("10_revisit_expired", changed_player=True).save(
+                Path(tmp) / "10_revisit_expired.png")
             report = audit_journal(tmp, Path(tmp) / "audit.json")
             self.assertFalse(
                 report["checks"]["revisited_caption_expires_without_player_movement"])

@@ -46,8 +46,9 @@ MAX_IMAGE_BYTES = 32 * 1024 * 1024
 SCREENSHOTS = (
     "00_empty_open", "01_empty_closed", "02_at_marker",
     "03_inspected", "04_one_open", "05_one_open_right_held",
-    "06_one_closed", "07_revisited_noted",
-    "08_revisit_journal", "09_revisit_expired",
+    "06_one_closed", "07_previous_caption_expired",
+    "08_revisited_noted", "09_revisit_journal",
+    "10_revisit_expired",
 )
 
 
@@ -154,16 +155,21 @@ def audit_journal(screenshot_dir, report_file):
         "journal_released_and_player_did_not_move":
             native_pixel(images["06_one_closed"], 305, 81) == NO_PANEL
             and native_pixel(images["06_one_closed"], 500, 220) == SPRITE_RED,
+        "old_caption_expired_before_reinspection":
+            native_pixel(images["07_previous_caption_expired"], 20, 34) ==
+            NO_PANEL and
+            native_pixel(images["07_previous_caption_expired"], 500, 220) ==
+            SPRITE_RED,
         "revisited_clue_noted_entire_caption_rgb":
-            revisited_caption_valid(images["07_revisited_noted"]),
+            revisited_caption_valid(images["08_revisited_noted"]),
         "revisited_still_outlines_authored_event":
-            native_pixel(images["07_revisited_noted"], 552, 208) ==
+            native_pixel(images["08_revisited_noted"], 552, 208) ==
             EVENT_YELLOW,
         "revisited_journal_remains_one_of_two":
-            panel_valid(images["08_revisit_journal"], 1),
+            panel_valid(images["09_revisit_journal"], 1),
         "revisited_caption_expires_without_player_movement":
-            native_pixel(images["09_revisit_expired"], 20, 34) == NO_PANEL
-            and native_pixel(images["09_revisit_expired"], 500, 220) ==
+            native_pixel(images["10_revisit_expired"], 20, 34) == NO_PANEL
+            and native_pixel(images["10_revisit_expired"], 500, 220) ==
             SPRITE_RED,
     }
     success = all(checks.values())
