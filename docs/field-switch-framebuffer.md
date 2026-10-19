@@ -237,3 +237,30 @@ Host tests cover one valid slot, both valid slots, damaged newest,
 damaged oldest, successful repair and both-damaged refusal, alongside
 UI status mapping and the new letter W glyph. Normal uncorrupted
 NeXium screenshot parity remains identical.
+
+## Stage 299 — real NeXium emulated SD corruption and third-process fallback
+
+After the already proven two successful NeXium guest processes, the
+experimental workflow now inspects the emulator's **isolated**
+`$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/field-save.{a,b}`
+files. Upstream NeXium's `nexium-common/src/paths.rs` and
+`nexium-kernel/src/fs_host.rs` map guest `sdmc:/` to this host
+directory. The audit refuses to modify unknown or incorrectly
+formatted files; it verifies 56-byte `WAJ1` records, generations 1
+and 2, CRC-32, and exact byte hashes first. It modifies exactly byte
+23 of the *newer* B record without recomputing CRC, leaving A intact.
+
+A **third fresh NeXium process** then imports from the same data root.
+Its initial and restored gameplay screenshots must exactly match
+the clean area-0 start reference. Its transient status plaque must
+be pixel-identical to amber **SD WARN**, not an ordinary healthy
+`SD LOADED` and not a same-colour `RAM ONLY`. The audit also
+re-reads the host journal: A's original SHA-256 and valid CRC must
+remain, while B's expected corrupted SHA-256 and failed CRC must
+remain. Every screenshot and manifest is retained as CI evidence.
+The scenario is deliberately gated on real guest execution rather
+than passing synthetic tests alone.
+
+This is controlled byte damage to **emulated** SDMC files, NOT a
+real Switch SD or sudden-loss power test. No user-owned game assets,
+ROM images or commercial resources are touched.
