@@ -11,7 +11,10 @@ namespace wa::field {
 // Stage 306: original asset-free contextual inspection caption. The
 // gameplay and serialized state are untouched; only the manual field
 // renderer calls this after a successful A-facing inspection.
-constexpr int kInspectionPanelX = 20;
+// Place interaction text in the unobscured upper-right of the 1280x720
+// game viewport. NeXium's non-game performance HUD covers top-left,
+// previously hiding the inspection caption from the player and auditors.
+constexpr int kInspectionPanelX = 1000;
 constexpr int kInspectionPanelY = 34;
 constexpr int kInspectionPanelWidth = 238;
 constexpr int kInspectionPanelHeight = 55;

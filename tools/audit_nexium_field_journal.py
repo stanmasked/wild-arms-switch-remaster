@@ -109,24 +109,25 @@ def panel_valid(image, clue_count):
 def revisited_caption_valid(image):
     # Independent full-panel pixel oracle for the blue CLUE NOTED caption.
     # A border-only test would accept missing/incorrect glyphs.
+    # This panel is deliberately right-aligned away from NeXium's HUD.
     native = Image.new("RGB", (1280, 720), NO_PANEL)
     draw = ImageDraw.Draw(native)
-    draw.rectangle((20, 34, 257, 88), fill=BLUE)
-    draw.rectangle((23, 37, 254, 85), fill=DARK)
+    draw.rectangle((1000, 34, 1237, 88), fill=BLUE)
+    draw.rectangle((1003, 37, 1234, 85), fill=DARK)
     for index, symbol in enumerate("CLUE NOTED"):
         if symbol == " ":
             continue
         for row, pattern in enumerate(GLYPHS[symbol]):
             for col in range(5):
                 if (pattern >> (4 - col)) & 1:
-                    x = 40 + index * 15 + col * 2
+                    x = 1020 + index * 15 + col * 2
                     y = 54 + row * 2
                     draw.rectangle((x, y, x + 1, y + 1), fill=WHITE)
 
     projected = native.resize((VIEW_W, VIEW_H), Image.Resampling.NEAREST)
     observed = image.crop((VIEW_X, 0, VIEW_X + VIEW_W, VIEW_H))
     mask_native = Image.new("L", (1280, 720))
-    ImageDraw.Draw(mask_native).rectangle((20, 34, 257, 88), fill=255)
+    ImageDraw.Draw(mask_native).rectangle((1000, 34, 1237, 88), fill=255)
     mask = mask_native.resize((VIEW_W, VIEW_H), Image.Resampling.NEAREST)
     delta = ImageChops.difference(projected, observed)
     return ImageChops.multiply(
@@ -156,7 +157,7 @@ def audit_journal(screenshot_dir, report_file):
             native_pixel(images["06_one_closed"], 305, 81) == NO_PANEL
             and native_pixel(images["06_one_closed"], 500, 220) == SPRITE_RED,
         "old_caption_expired_before_reinspection":
-            native_pixel(images["07_previous_caption_expired"], 20, 34) ==
+            native_pixel(images["07_previous_caption_expired"], 1000, 34) ==
             NO_PANEL and
             native_pixel(images["07_previous_caption_expired"], 500, 220) ==
             SPRITE_RED,
@@ -168,7 +169,7 @@ def audit_journal(screenshot_dir, report_file):
         "revisited_journal_remains_one_of_two":
             panel_valid(images["09_revisit_journal"], 1),
         "revisited_caption_expires_without_player_movement":
-            native_pixel(images["10_revisit_expired"], 20, 34) == NO_PANEL
+            native_pixel(images["10_revisit_expired"], 1000, 34) == NO_PANEL
             and native_pixel(images["10_revisit_expired"], 500, 220) ==
             SPRITE_RED,
     }

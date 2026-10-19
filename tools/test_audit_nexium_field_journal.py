@@ -46,11 +46,11 @@ def make_desktop(name, false_count=False, changed_player=False,
     if name in ("03_inspected", "08_revisited_noted"):
         draw.rectangle((551, 207, 602, 211), fill=EVENT_YELLOW)
     if name == "08_revisited_noted":
-        draw.rectangle((20, 34, 257, 88), fill=BLUE)
-        draw.rectangle((23, 37, 254, 85), fill=DARK)
+        draw.rectangle((1000, 34, 1237, 88), fill=BLUE)
+        draw.rectangle((1003, 37, 1234, 85), fill=DARK)
         if not missing_caption_glyphs:
             for i, symbol in enumerate("CLUE NOTED"):
-                glyph(draw, symbol, 40 + 15 * i, 54)
+                glyph(draw, symbol, 1020 + 15 * i, 54)
     if name == "00_empty_open":
         journal_panel(draw, 0)
     if name in ("04_one_open", "05_one_open_right_held",
@@ -123,6 +123,22 @@ class GuestJournalAuditTests(unittest.TestCase):
             report = audit_journal(tmp, Path(tmp) / "audit.json")
             self.assertFalse(
                 report["checks"]["old_caption_expired_before_reinspection"])
+
+    def test_single_wrong_visible_caption_pixel_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_folder(tmp)
+            file = Path(tmp) / "08_revisited_noted.png"
+            with Image.open(file) as png:
+                altered = png.convert("RGB")
+            # An actual unobscured panel pixel, outside all text glyphs.
+            # Native (1210,65) -> projected NeXium desktop coordinates.
+            x = VIEW_X + round(1210 * VIEW_W / 1280)
+            y = round(65 * VIEW_H / 720)
+            altered.putpixel((x, y), (7, 8, 9))
+            altered.save(file)
+            report = audit_journal(tmp, Path(tmp) / "audit.json")
+            self.assertFalse(
+                report["checks"]["revisited_clue_noted_entire_caption_rgb"])
 
     def test_missing_blue_clue_noted_glyphs_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
