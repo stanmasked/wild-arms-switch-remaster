@@ -451,6 +451,52 @@ void test_held_journal_freezes_inputs_and_shows_session_clues() {
 }
 
 
+
+void test_l_held_journal_freezes_inspection_timeout() {
+  const FieldWorld world = make_demo_world();
+  FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  Surface image;
+  constexpr std::uint64_t step = kSwitchTicksPerSecond * 160 / 1000;
+  require(advance_field_runtime(world, rt, 0, {}, image.target).status ==
+          RuntimeStatus::Rendered);
+  rt.manual.player.x = 3;
+  rt.manual.player.y = 1;
+  rt.manual.player.facing = Direction::Right;
+  const RuntimeControls inspect{PadSample{.confirm = true}};
+  const RuntimeFrame looked = advance_field_runtime(
+      world, rt, step, inspect, image.target);
+  require(looked.inspected == Trigger::Event &&
+          rt.inspection.remaining_ms == kFieldInspectionDurationMs);
+  const RuntimeControls held{{}, false, false, false, false, true};
+  for (int i = 2; i <= 9; ++i) {
+    const RuntimeFrame frame = advance_field_runtime(
+        world, rt, step * static_cast<std::uint64_t>(i), held, image.target);
+    require(frame.status == RuntimeStatus::Rendered &&
+            frame.journal_visible && frame.inspected == Trigger::None);
+    require(rt.inspection.kind == Trigger::Event &&
+            rt.inspection.remaining_ms == kFieldInspectionDurationMs);
+  }
+  // More than 900ms has elapsed in wall-clock time, but the inspection
+  // still has time left because L was held throughout.
+  const RuntimeFrame released = advance_field_runtime(
+      world, rt, step * 10, {}, image.target);
+  require(released.status == RuntimeStatus::Rendered &&
+          !released.journal_visible &&
+          rt.inspection.kind == Trigger::Event &&
+          rt.inspection.remaining_ms ==
+              kFieldInspectionDurationMs - 160);
+  constexpr int inspected_pixel_x = 288 + 4 * 64 + 7;
+  constexpr int inspected_pixel_y = 136 + 64 + 7;
+  require(image.pixel(inspected_pixel_x, inspected_pixel_y) ==
+          rgba(255, 247, 172));
+  const RuntimeFrame expired = advance_field_runtime(
+      world, rt, step * 15, {}, image.target);
+  require(expired.status == RuntimeStatus::Rendered &&
+          rt.inspection.kind == Trigger::None);
+  image.assert_guards();
+}
+
+
 void test_cross_area_discovery_journal_survives_world_and_snapshot_changes() {
   const FieldWorld world = make_demo_world();
   FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
@@ -546,6 +592,7 @@ int main() {
   test_manual_event_clue_recording_is_explicit_and_unique();
   test_b_does_not_record_without_inspected_event();
   test_held_journal_freezes_inputs_and_shows_session_clues();
+  test_l_held_journal_freezes_inspection_timeout();
   test_cross_area_discovery_journal_survives_world_and_snapshot_changes();
   test_invalid_input_is_transactional_and_guarded();
   test_autoplay_timing_checkpoints_and_manual_cancel();
