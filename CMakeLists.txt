@@ -62,6 +62,11 @@ add_executable(wa_field_discovery_tests tests/test_field_discovery.cpp)
 target_link_libraries(wa_field_discovery_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_discovery_tests COMMAND wa_field_discovery_tests)
 
+# Stage 308: L-held on-field read-only clue journal, validated pixel UI.
+add_executable(wa_field_journal_view_tests tests/test_field_journal_view.cpp)
+target_link_libraries(wa_field_journal_view_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_journal_view_tests COMMAND wa_field_journal_view_tests)
+
 # Host validation of the exact software framebuffer algorithm used by libnx.
 add_executable(wa_field_pixels_tests tests/test_field_pixels.cpp)
 target_link_libraries(wa_field_pixels_tests PRIVATE wa_field_core)
