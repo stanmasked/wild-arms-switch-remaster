@@ -158,6 +158,24 @@ inline void draw_journal_text(const PixelTarget& target,
                       journal.count, count_world_clues(world));
   draw_journal_text(target, kJournalPanelX + 36,
                     kJournalPanelY + 36, line);
+  // Give the player a geographic overview in the free upper-right
+  // journal header. Counts are derived from authored event tiles and
+  // the validated in-session ledger; neither changes saved world state.
+  // The two rows end above the first narrative-note row at y=168.
+  for (int area = 0; area < kFieldAreaCount; ++area) {
+    const Map& map = world.areas[static_cast<std::size_t>(area)].map;
+    std::size_t total = 0;
+    for (int y = 0; y < map.height; ++y)
+      for (int x = 0; x < map.width; ++x)
+        if (map.tile(x, y) == '!') ++total;
+    std::size_t discovered = 0;
+    for (std::size_t i = 0; i < journal.count; ++i)
+      if (journal.entries[i].area == area) ++discovered;
+    (void)std::snprintf(line, sizeof(line), "AREA %d %zu/%zu",
+                        area, discovered, total);
+    draw_journal_text(target, kJournalPanelX + 356,
+                      kJournalPanelY + 36 + area * 24, line);
+  }
   // Every one of the 16 capacity slots remains visible: eight paired
   // title/detail rows in each of two columns. No clipped or hidden clues.
   constexpr std::size_t rows_per_column = 8;

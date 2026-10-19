@@ -30,6 +30,9 @@ def journal_panel(draw, count):
     draw.rectangle((308, 84, 971, 635), fill=DARK)
     for i, symbol in enumerate(f"CLUES {count}/2"):
         glyph(draw, symbol, 340 + 14 * i, 116)
+    for y, text in ((116, f"AREA 0 {count}/1"), (140, "AREA 1 0/1")):
+        for i, symbol in enumerate(text):
+            glyph(draw, symbol, 660 + 14 * i, y)
     if count:
         for y, text in ((168, "A0  OLD RADIO NOTE"),
                         (188, "SIGNAL IN STATIC")):
@@ -92,6 +95,22 @@ class GuestJournalAuditTests(unittest.TestCase):
                 result["checks"]["revisited_clue_noted_entire_caption_rgb"])
             self.assertTrue(
                 result["checks"]["revisited_journal_remains_one_of_two"])
+
+    def test_wrong_area_progress_rejected_without_changing_clue_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_folder(tmp)
+            path = Path(tmp) / "04_one_open.png"
+            with Image.open(path) as png:
+                changed = png.convert("RGB")
+            # Region 1 must be 0/1 because the first guest is still
+            # in region 0. Tamper one lit pixel of that local count.
+            native_x = 660 + 7 * 14 + 2
+            x = VIEW_X + round(native_x * VIEW_W / 1280)
+            y = round(140 * VIEW_H / 720)
+            changed.putpixel((x, y), (7, 8, 9))
+            changed.save(path)
+            report = audit_journal(tmp, Path(tmp) / "audit.json")
+            self.assertFalse(report["checks"]["recorded_panel_exact_1_of_2"])
 
     def test_wrong_clue_note_text_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:

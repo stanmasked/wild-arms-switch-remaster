@@ -65,6 +65,51 @@ void test_all_authored_and_fallback_note_glyphs_are_complete() {
   screen.assert_guards();
 }
 
+void test_area_progress_counts_follow_collection_and_reject_bad_ledgers() {
+  const FieldWorld world = make_demo_world();
+  FieldDiscoveryJournal journal{};
+  Screen screen;
+  constexpr std::uint32_t white = rgba(246, 247, 252);
+  constexpr std::uint32_t dark = rgba(17, 26, 40);
+  constexpr int first_digit_x = kJournalPanelX + 356 + 7 * 14 + 2;
+  constexpr int area_zero_y = kJournalPanelY + 36;
+  constexpr int area_one_y = kJournalPanelY + 60;
+  // AREA 0 0/1, AREA 1 0/1: top-bit x+2 is lit for 0, not 1.
+  require(draw_discovery_journal(screen.target, world, journal));
+  require(screen.at(first_digit_x, area_zero_y) == white);
+  require(screen.at(first_digit_x, area_one_y) == white);
+  const auto empty = screen.data;
+
+  // Record only the first region, and ensure only that region changes.
+  require(record_discovery(world, journal, 0, 4, 1) ==
+          DiscoveryResult::Recorded);
+  require(draw_discovery_journal(screen.target, world, journal));
+  require(screen.at(first_digit_x, area_zero_y) == dark);
+  require(screen.at(first_digit_x, area_one_y) == white);
+  const auto first = screen.data;
+  require(first != empty);
+
+  // Re-collecting cannot inflate local or global progress.
+  require(record_discovery(world, journal, 0, 4, 1) ==
+          DiscoveryResult::PreviouslyRecorded);
+  require(draw_discovery_journal(screen.target, world, journal));
+  require(screen.data == first);
+  require(journal.count == 1);
+
+  // With two distinct clues, both regions independently reach 1/1.
+  require(record_discovery(world, journal, 1, 4, 3) ==
+          DiscoveryResult::Recorded);
+  require(draw_discovery_journal(screen.target, world, journal));
+  require(screen.at(first_digit_x, area_zero_y) == dark);
+  require(screen.at(first_digit_x, area_one_y) == dark);
+  const auto completed = screen.data;
+  FieldDiscoveryJournal invalid = journal;
+  invalid.entries[1] = invalid.entries[0];
+  require(!draw_discovery_journal(screen.target, world, invalid));
+  require(screen.data == completed);
+  screen.assert_guards();
+}
+
 void test_journal_authored_notes_glyphs_and_layout() {
   const FieldWorld world = make_demo_world();
   FieldDiscoveryJournal notes{};
@@ -229,6 +274,7 @@ void test_corruption_or_target_rejected_without_pixel_mutation() {
 
 int main() {
   test_all_authored_and_fallback_note_glyphs_are_complete();
+  test_area_progress_counts_follow_collection_and_reject_bad_ledgers();
   test_journal_authored_notes_glyphs_and_layout();
   test_empty_and_recorded_views_are_distinct_and_repeatable();
   test_discovered_marker_is_read_only_area_specific_and_bounded();

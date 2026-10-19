@@ -1101,6 +1101,12 @@ void test_cross_area_discovery_journal_survives_world_and_snapshot_changes() {
       world, rt, tick, view, screen.target);
   require(opened.status == RuntimeStatus::Rendered &&
           opened.journal_visible && opened.clue_count == 2);
+  // Two real controller-collected clues: both regions display 1/1.
+  constexpr int local_digit_x = kJournalPanelX + 356 + 7 * 14 + 2;
+  require(screen.pixel(local_digit_x, kJournalPanelY + 36) ==
+          rgba(17, 26, 40));
+  require(screen.pixel(local_digit_x, kJournalPanelY + 60) ==
+          rgba(17, 26, 40));
   constexpr int glyph_x = kJournalPanelX + 36 + 2; // 'A' top row
   constexpr int glyph_y = kJournalPanelY + 88;
   require(screen.pixel(glyph_x, glyph_y) == rgba(246, 247, 252));
