@@ -132,7 +132,7 @@ struct RuntimeControls {
   }
 
   bool mode_switched = false;
-  if (controls.start_demo) {
+  if (controls.start_demo && !(controls.view_journal && !next.autoplay)) {
     next.demo = start_field_autoplay(world);
     if (next.demo.failed) return {RuntimeStatus::InvalidSimulation};
     next.autoplay = true;
