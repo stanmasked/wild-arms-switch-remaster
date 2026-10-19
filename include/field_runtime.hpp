@@ -1,6 +1,7 @@
 #pragma once
 
 #include "field_autoplay.hpp"
+#include "field_discovery.hpp"
 #include "field_frame_ticks.hpp"
 #include "field_inspection_ui.hpp"
 #include "field_pixels.hpp"
@@ -22,6 +23,7 @@ struct FieldInspection {
   int x = -1;
   int y = -1;
   std::uint32_t remaining_ms = 0;
+  bool logged = false;
 };
 
 struct FieldRuntime {
@@ -31,6 +33,7 @@ struct FieldRuntime {
   FrameTickClock timer{};
   RenderFrame view{};
   FieldInspection inspection{};
+  FieldDiscoveryJournal discoveries{};
   bool autoplay = false;
 };
 
@@ -51,6 +54,9 @@ struct RuntimeFrame {
   bool autoplay = false;
   bool changed_area = false;
   Trigger inspected = Trigger::None;
+  bool clue_recorded = false;
+  bool clue_already_recorded = false;
+  std::size_t clue_count = 0;
   int checkpoint = -1;
   TimedStatus movement_status = TimedStatus::Idle;
   // Not a persistent save; does not write to disk.
@@ -109,6 +115,7 @@ struct RuntimeControls {
   RuntimeFrame response{};
   response.tick_status = elapsed.status;
   response.delta_ms = elapsed.milliseconds;
+  response.clue_count = next.discoveries.count;
 
   if (elapsed.milliseconds >= next.inspection.remaining_ms) {
     next.inspection = FieldInspection{};
@@ -187,7 +194,31 @@ struct RuntimeControls {
         next.inspection = {outcome.inspected, next.manual.area,
                            next.manual.player.x + dx,
                            next.manual.player.y + dy,
-                           kFieldInspectionDurationMs};
+                           kFieldInspectionDurationMs, false};
+      }
+      // In manual mode B records a clue only from a still-visible
+      // inspection of an adjacent event. It is a separate, explicit
+      // action: merely looking at an object grants no progress.
+      if (controls.cancel_demo && !next.autoplay &&
+          next.inspection.kind == Trigger::Event &&
+          next.inspection.remaining_ms > 0 &&
+          next.inspection.area == next.manual.area &&
+          next.manual.pending == Trigger::None &&
+          next.manual.player.x == old_x &&
+          next.manual.player.y == old_y &&
+          next.manual.player.facing == old_facing) {
+        const DiscoveryResult discovery = record_discovery(
+            world, next.discoveries, next.inspection.area,
+            next.inspection.x, next.inspection.y);
+        if (discovery == DiscoveryResult::Recorded ||
+            discovery == DiscoveryResult::PreviouslyRecorded) {
+          next.inspection.logged = true;
+          next.inspection.remaining_ms = kFieldInspectionDurationMs;
+          response.clue_recorded = discovery == DiscoveryResult::Recorded;
+          response.clue_already_recorded =
+              discovery == DiscoveryResult::PreviouslyRecorded;
+          response.clue_count = next.discoveries.count;
+        }
       }
       switch (response.movement_status) {
         case TimedStatus::InvalidMap:
@@ -224,7 +255,8 @@ struct RuntimeControls {
         target, frame, next.inspection.x, next.inspection.y,
         next.inspection.kind);
     if (target_visible)
-      (void)draw_inspection_caption(target, next.inspection.kind);
+      (void)draw_inspection_caption(target, next.inspection.kind,
+                                    next.inspection.logged);
     else
       next.inspection = FieldInspection{};
   }

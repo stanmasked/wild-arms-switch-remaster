@@ -17,7 +17,8 @@ constexpr int kInspectionPanelWidth = 238;
 constexpr int kInspectionPanelHeight = 55;
 
 [[nodiscard]] constexpr const char* inspection_caption(
-    Trigger marker) noexcept {
+    Trigger marker, bool logged = false) noexcept {
+  if (marker == Trigger::Event && logged) return "CLUE NOTED";
   return marker == Trigger::Event ? "EVENT AHEAD" :
          marker == Trigger::Exit ? "EXIT AHEAD" : "";
 }
@@ -28,6 +29,10 @@ constexpr int kInspectionPanelHeight = 55;
 inspection_caption_glyph(char c) noexcept {
   static constexpr std::array<std::uint8_t, 7> empty{0,0,0,0,0,0,0};
   static constexpr std::array<std::uint8_t, 7> a{14,17,17,31,17,17,17};
+  static constexpr std::array<std::uint8_t, 7> c{14,17,16,16,16,17,14};
+  static constexpr std::array<std::uint8_t, 7> l{16,16,16,16,16,16,31};
+  static constexpr std::array<std::uint8_t, 7> o{14,17,17,17,17,17,14};
+  static constexpr std::array<std::uint8_t, 7> u{17,17,17,17,17,17,14};
   static constexpr std::array<std::uint8_t, 7> d{30,17,17,17,17,17,30};
   static constexpr std::array<std::uint8_t, 7> e{31,16,16,30,16,16,31};
   static constexpr std::array<std::uint8_t, 7> h{17,17,17,31,17,17,17};
@@ -38,6 +43,10 @@ inspection_caption_glyph(char c) noexcept {
   static constexpr std::array<std::uint8_t, 7> x{17,17,10,4,10,17,17};
   switch (c) {
     case 'A': return a;
+    case 'C': return c;
+    case 'L': return l;
+    case 'O': return o;
+    case 'U': return u;
     case 'D': return d;
     case 'E': return e;
     case 'H': return h;
@@ -51,20 +60,23 @@ inspection_caption_glyph(char c) noexcept {
 }
 
 [[nodiscard]] inline bool draw_inspection_caption(
-    const PixelTarget& target, Trigger marker) noexcept {
+    const PixelTarget& target, Trigger marker,
+    bool logged = false) noexcept {
   if (marker != Trigger::Event && marker != Trigger::Exit) return false;
   if (target.pixels == nullptr ||
       target.width != kRasterWidth || target.height != kRasterHeight ||
       target.stride_pixels < kRasterWidth ||
       target.stride_pixels > 8192) return false;
-  const std::uint32_t accent = marker == Trigger::Event ?
-      rgba(255, 247, 172) : rgba(172, 255, 230);
+  const std::uint32_t accent =
+      marker == Trigger::Event && logged ? rgba(105, 160, 230) :
+      marker == Trigger::Event ? rgba(255, 247, 172) :
+                                 rgba(172, 255, 230);
   fill_raster_rect(target, kInspectionPanelX, kInspectionPanelY,
                    kInspectionPanelWidth, kInspectionPanelHeight, accent);
   fill_raster_rect(target, kInspectionPanelX + 3, kInspectionPanelY + 3,
                    kInspectionPanelWidth - 6, kInspectionPanelHeight - 6,
                    rgba(17, 26, 40));
-  const char* label = inspection_caption(marker);
+  const char* label = inspection_caption(marker, logged);
   for (std::size_t i = 0; label[i] != '\0' && i < 16; ++i) {
     const auto& glyph = inspection_caption_glyph(label[i]);
     for (int y = 0; y < 7; ++y)

@@ -174,6 +174,74 @@ void test_caption_kind_guard_and_exit_glyphs() {
   require(!draw_inspection_caption(invalid,Trigger::Exit));
 }
 
+
+void test_manual_event_clue_recording_is_explicit_and_unique() {
+  const FieldWorld world = make_demo_world();
+  FieldRuntime rt = start_field_runtime(world,kSwitchTicksPerSecond,0);
+  Surface screen;
+  constexpr std::uint64_t step = kSwitchTicksPerSecond*160/1000;
+  const RuntimeControls right{PadSample{.dpad_right=true}};
+  const RuntimeControls inspect{PadSample{.confirm=true}};
+  const RuntimeControls log_clue{{},false,true};
+  require(advance_field_runtime(world,rt,0,{},screen.target).status ==
+          RuntimeStatus::Rendered);
+  (void)advance_field_runtime(world,rt,step,right,screen.target);
+  (void)advance_field_runtime(world,rt,step*2,right,screen.target);
+  require(rt.manual.player.x==3 && rt.discoveries.count==0);
+  auto looked=advance_field_runtime(world,rt,step*3,inspect,screen.target);
+  require(looked.inspected==Trigger::Event && !looked.clue_recorded);
+  require(rt.discoveries.count==0 && rt.inspection.logged==false);
+  const auto written=advance_field_runtime(
+      world,rt,step*4,log_clue,screen.target);
+  require(written.status==RuntimeStatus::Rendered &&
+          written.clue_recorded && !written.clue_already_recorded &&
+          written.clue_count==1 && rt.discoveries.count==1 &&
+          rt.inspection.logged);
+  require(rt.manual.player.x==3 && rt.manual.player.successful_moves==2 &&
+          rt.manual.pending==Trigger::None);
+  require(inspection_caption(Trigger::Event,rt.inspection.logged)[0]=='C');
+  require(screen.pixel(kInspectionPanelX,kInspectionPanelY)==
+          rgba(105,160,230));
+  screen.assert_guards();
+
+  // B again while holding the same inspection never awards progress twice.
+  const auto duplicate=advance_field_runtime(
+      world,rt,step*5,log_clue,screen.target);
+  require(!duplicate.clue_recorded && duplicate.clue_already_recorded &&
+          duplicate.clue_count==1 && rt.discoveries.count==1);
+  // After the caption expires, A then B can revisit without incrementing.
+  (void)advance_field_runtime(world,rt,step*12,{},screen.target);
+  require(rt.inspection.kind==Trigger::None);
+  (void)advance_field_runtime(world,rt,step*13,inspect,screen.target);
+  const auto revisit=advance_field_runtime(
+      world,rt,step*14,log_clue,screen.target);
+  require(revisit.clue_already_recorded && !revisit.clue_recorded &&
+          rt.discoveries.count==1);
+  // Ordinary manual snapshot preserves only the world, not the clue
+  // ledger; in-session log remains while saving/loading.
+  const RuntimeControls save{{},false,false,true,false};
+  const auto saved=advance_field_runtime(
+      world,rt,step*15,save,screen.target);
+  require(saved.snapshot_stored && rt.discoveries.count==1);
+  const RuntimeControls load{{},false,false,false,true};
+  const auto reloaded=advance_field_runtime(
+      world,rt,step*16,load,screen.target);
+  require(reloaded.snapshot_restored && rt.discoveries.count==1 &&
+          rt.inspection.kind==Trigger::None);
+}
+
+void test_b_does_not_record_without_inspected_event() {
+  const FieldWorld world = make_demo_world();
+  FieldRuntime rt=start_field_runtime(world,kSwitchTicksPerSecond,0);
+  Surface screen;
+  const RuntimeControls b{{},false,true};
+  const auto noop=advance_field_runtime(
+      world,rt,0,b,screen.target);
+  require(noop.status==RuntimeStatus::Rendered &&
+          !noop.clue_recorded && rt.discoveries.count==0);
+  screen.assert_guards();
+}
+
 void test_invalid_input_is_transactional_and_guarded() {
   const FieldWorld world = make_demo_world();
   FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 7);
@@ -331,6 +399,8 @@ int main() {
   test_manual_adjacent_inspection_renders_timed_outline();
   test_manual_inspection_caption_and_stale_target_invalidation();
   test_caption_kind_guard_and_exit_glyphs();
+  test_manual_event_clue_recording_is_explicit_and_unique();
+  test_b_does_not_record_without_inspected_event();
   test_invalid_input_is_transactional_and_guarded();
   test_autoplay_timing_checkpoints_and_manual_cancel();
   test_quicksave_restore_manual_mode_and_autoplay_isolation();

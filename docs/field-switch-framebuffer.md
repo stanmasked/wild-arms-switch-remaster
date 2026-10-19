@@ -516,3 +516,30 @@ non-persistence of inspection, cancellation after moving away, exit
 caption glyphs, invalid buffer rejection and unchanged framebuffer
 guard regions. Strict five-scene and five-process NeXium audits remain
 in place. No proprietary Wild Arms level text is included.
+
+## Stage 307 — explicit field clue discovery with B
+
+Stage 307 adds a small **session-only event discovery ledger** to the
+synthetic exploration runtime. Manual A inspects an adjacent event
+(`EVENT AHEAD`); pressing B while the outline is still visible
+records its unique **(area, tile x, tile y)** position, changes the
+caption to `CLUE NOTED` in blue, and increments the in-session clue
+counter. Looking without B adds no progress. Repeated B or revisiting
+the same event never awards it twice. Ordinary B outside an
+inspection still has no field effect; B cancels autoplay as before.
+
+The ledger has a fixed capacity of 16, uses no allocation or external
+assets, rejects non-event tiles, invalid areas and malformed entries
+before mutation. Discoveries in two areas have independent keys. The
+game's existing A acknowledgement for events that were *entered*
+is unchanged, as are world movement, auto-demo scenes and the
+40-/56-byte snapshot/SD journal formats. **Clue discoveries are
+ephemeral for the current process**: RAM/SD world quicksaves do not
+restore them after a full restart; persistent quest data will require
+a separately versioned save format in a future stage.
+
+Host tests assert A-look/B-record, unchanged movement/pending event,
+on-screen `CLUE NOTED` pixels, exact uniqueness and cross-area keys,
+malformed journal fail-closed behavior, plus snapshot isolation and
+framebuffer guards. Switch build and five-guest strict NeXium audits
+must pass before declaring this stage verified.
