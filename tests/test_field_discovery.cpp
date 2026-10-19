@@ -58,6 +58,28 @@ void test_full_ledger_returns_error_without_insertion() {
   require(notes.count == notes.entries.size());
 }
 
+
+void test_revisit_cannot_hide_corruption_after_matching_key() {
+  const FieldWorld world = make_demo_world();
+  FieldDiscoveryJournal notes{};
+  notes.count = 2;
+  notes.entries[0] = {0, 4, 1}; // The requested clue matches first.
+  notes.entries[1] = {1, 0, 0}; // Invalid: a wall, not an event.
+  require(record_discovery(world, notes, 0, 4, 1) ==
+          DiscoveryResult::Invalid);
+  require(notes.count == 2 && notes.entries[0].x == 4 &&
+          notes.entries[1].x == 0);
+  notes.entries[1] = notes.entries[0]; // Duplicate entry later in journal.
+  require(record_discovery(world, notes, 0, 4, 1) ==
+          DiscoveryResult::Invalid);
+  require(notes.count == 2);
+  notes.entries[1] = {1, 4, 3};
+  require(record_discovery(world, notes, 0, 4, 1) ==
+          DiscoveryResult::PreviouslyRecorded);
+  require(notes.count == 2);
+}
+
+
 void test_discoveries_cannot_change_version_one_save_bytes() {
   const FieldWorld world = make_demo_world();
   const WorldState saved_world = start_world(world);
@@ -89,5 +111,6 @@ int main() {
   test_distinct_events_and_revisits_are_idempotent();
   test_invalid_markers_and_corrupt_ledgers_cannot_mutate();
   test_full_ledger_returns_error_without_insertion();
+  test_revisit_cannot_hide_corruption_after_matching_key();
   test_discoveries_cannot_change_version_one_save_bytes();
 }
