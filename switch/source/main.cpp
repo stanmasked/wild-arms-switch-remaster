@@ -16,6 +16,8 @@
 #include <sys/stat.h>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 
 namespace {
 using namespace wa::field;
@@ -145,9 +147,28 @@ int main() {
     if (result.autoplay) {
       begin_storage_notice(feedback, StorageNotice::None);
     } else if (result.snapshot_stored) {
+      JournalWriteDiagnostic detail{};
       const FileSaveStatus written = storage_ready ?
-          store_field_save_file(world, runtime.quicksave.world, kSaveBase) :
+          store_field_save_file(world, runtime.quicksave.world, kSaveBase,
+                                JournalInterruption::None, &detail) :
           FileSaveStatus::Missing;
+      // Structured non-sensitive diagnostic emitted through the Switch debug
+      // syscall. NeXium captures it only with NEXIUM_DIAG enabled.
+      char trace[260]{};
+      const int len = std::snprintf(trace, sizeof(trace),
+          "WA_SAVE_TRACE v1 result=%d ready=%d step=%d oldA=%d oldB=%d "
+          "tmp=%d pub=%d gen=%llu tries=%u renamed=%d equal=%d errno=%d",
+          static_cast<int>(written), storage_ready ? 1 : 0,
+          static_cast<int>(detail.step), static_cast<int>(detail.existing_a),
+          static_cast<int>(detail.existing_b),
+          static_cast<int>(detail.temporary_status),
+          static_cast<int>(detail.published_status),
+          static_cast<unsigned long long>(detail.intended_generation),
+          static_cast<unsigned>(detail.read_attempts),
+          detail.rename_succeeded ? 1 : 0,
+          detail.published_bytes_equal ? 1 : 0, detail.os_error_code);
+      if (len > 0 && len < static_cast<int>(sizeof(trace)))
+        (void)svcOutputDebugString(trace, static_cast<std::size_t>(len));
       begin_storage_notice(feedback,
           storage_save_notice(storage_ready, written));
     } else if (result.snapshot_restored) {

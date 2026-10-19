@@ -337,3 +337,27 @@ requires A's original bytes unchanged, and finally boots a new
 process with the redundancy warning cleared. The two cases are
 not emulator guest proof; the unchanged NeXium screenshot audit
 still gates real visible `SD SAVED` confirmation.
+
+## Stage 302 — determine why real guest shows SD ERROR after valid repair
+
+The Stage-301 rerun still showed `SD ERROR` on the fourth guest
+while the fifth guest successfully loaded the new, CRC-valid B. The
+postpublication readback retries and five separate process host tests
+were green, so the cause cannot safely be inferred from the finished
+journal alone.
+
+Added optional `JournalWriteDiagnostic` stage markers to
+`store_field_save_file` covering: previous-slot read statuses,
+temporary file open/write/fsync/validation, old slot removal,
+rename result, actual post-publication status, exact-byte equality,
+number of attempted reopens and the OS error code. The diagnostics
+contain no gameplay data or private paths, and do not modify the
+journal record format, write ordering or success/failure policy.
+
+The Switch frontend reports one `WA_SAVE_TRACE v1` line on a Y save
+via `svcOutputDebugString`. For the fourth experimental NeXium guest,
+the workflow enables `NEXIUM_DIAG` and targeted Rust logging of the
+svc module, and preserves available logs and screenshot evidence.
+Host tests assert exact phases on an ordinary commit, a corrupted
+older slot replacement and a blocked temporary destination. This
+is an investigation stage: **no new green guest result is asserted**.

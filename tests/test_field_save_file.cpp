@@ -425,6 +425,52 @@ void test_restart_import_matches_event_frame_and_confirm_edge() {
          restarted.manual.pending == Trigger::Event);
   expect(pixels == reference_event);
 }
+void test_write_diagnostic_lifecycle_and_corrupt_slot_repair() {
+  Fixture f;
+  const FieldWorld world = make_demo_world();
+  const WorldState start = start_world(world);
+  const WorldState event = to_event(world);
+  JournalWriteDiagnostic audit{};
+  expect(store_field_save_file(
+      world,start,f.prefix,JournalInterruption::None,&audit) ==
+      FileSaveStatus::Stored);
+  expect(audit.step == JournalWriteStep::VerifiedCommitted);
+  expect(audit.existing_a == FileSaveStatus::Missing &&
+         audit.existing_b == FileSaveStatus::Missing);
+  expect(audit.temporary_status == FileSaveStatus::Loaded &&
+         audit.published_status == FileSaveStatus::Loaded);
+  expect(audit.intended_generation == 1 && audit.read_attempts == 1 &&
+         audit.rename_succeeded && audit.published_bytes_equal);
+
+  expect(store_field_save_file(world,event,f.prefix) ==
+         FileSaveStatus::Stored);
+  {
+    std::FILE* fp=std::fopen((f.prefix+".b").c_str(),"r+b");
+    expect(fp!=nullptr);
+    expect(std::fseek(fp,23,SEEK_SET)==0);
+    expect(std::fputc(0xFF,fp)!=EOF);
+    expect(std::fclose(fp)==0);
+  }
+  expect(store_field_save_file(
+      world,start,f.prefix,JournalInterruption::None,&audit) ==
+      FileSaveStatus::Stored);
+  expect(audit.step == JournalWriteStep::VerifiedCommitted &&
+         audit.existing_a == FileSaveStatus::Loaded &&
+         audit.existing_b == FileSaveStatus::Corrupt &&
+         audit.intended_generation == 2);
+  expect(audit.published_bytes_equal && audit.read_attempts > 0);
+
+  // The audit may observe a blocked path but may never claim the record
+  // is published. No valid save is overwritten by the test.
+  expect(::mkdir((f.prefix+".a.tmp").c_str(),0700)==0);
+  expect(store_field_save_file(
+      world,event,f.prefix,JournalInterruption::None,&audit) ==
+      FileSaveStatus::IoError);
+  expect(audit.step == JournalWriteStep::PreviousSlotsRead ||
+         audit.step == JournalWriteStep::TemporaryOpened);
+  expect(::rmdir((f.prefix+".a.tmp").c_str())==0);
+}
+
 void test_postpublish_false_negative_error_reports() {
   Fixture f;
   const FieldWorld world=make_demo_world();
@@ -483,6 +529,7 @@ int main() {
   test_restart_import_matches_event_frame_and_confirm_edge();
   test_interrupted_journal_publication_recovery();
   test_interrupted_first_save_never_accepts_temporary_file();
+  test_write_diagnostic_lifecycle_and_corrupt_slot_repair();
   test_postpublish_false_negative_error_reports();
   test_postpublish_never_accepts_blocked_destination();
 }

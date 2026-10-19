@@ -452,7 +452,8 @@ jobs:
           export WGPU_BACKEND=vulkan
           export LIBGL_ALWAYS_SOFTWARE=1
           export RUST_BACKTRACE=1
-          export RUST_LOG=info
+          export RUST_LOG=info,nexium_kernel::kernel::svc=debug
+          export NEXIUM_DIAG=1
           if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
             export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
           fi
@@ -556,6 +557,16 @@ jobs:
             "same_emulator_data_root":True},sort_keys=True))' \
             > nexium-probe/repaired-restart/processes.json
 
+      - name: Extract guest SAVE phase diagnostics for the fourth process
+        if: always()
+        run: |
+          set +e
+          printf 'Fourth guest trace from host log:\n'
+          grep 'WA_SAVE_TRACE' nexium-probe/repaired-sd/fourth-process.log | tail -n 12 || true
+          printf 'Fourth guest trace from internal NeXium logs:\n'
+          if test -d "$RUNNER_TEMP/nexium-wild-arms-data/logs"; then
+            grep -h 'WA_SAVE_TRACE' "$RUNNER_TEMP"/nexium-wild-arms-data/logs/*.log               | tail -n 12 || true
+          fi
       - name: Audit actual fourth guest SD repair and fifth guest clean SD load
         run: |
           /usr/bin/python3 tools/audit_nexium_sd_repair.py \

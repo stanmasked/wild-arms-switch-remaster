@@ -48,6 +48,28 @@ struct FileSaveSlot {
   FieldJournalBytes bytes{};
 };
 
+// Stage 302: optional, bounded diagnostics of one write attempt. No host
+// paths, game data, or memory addresses are recorded. Caller may inspect
+// these even when the result is IoError. Production save rules are unchanged.
+enum class JournalWriteStep : std::uint8_t {
+  Preflight, PreviousSlotsRead, TemporaryOpened, TemporarySynced,
+  TemporaryValidated, OldSlotRemoved, RenameAttempted,
+  PostPublishReadback, VerifiedCommitted, FailedTemporaryWrite,
+  FailedTemporaryVerification, FailedTargetRemoval, FailedReadback
+};
+struct JournalWriteDiagnostic {
+  JournalWriteStep step = JournalWriteStep::Preflight;
+  FileSaveStatus existing_a = FileSaveStatus::Missing;
+  FileSaveStatus existing_b = FileSaveStatus::Missing;
+  FileSaveStatus temporary_status = FileSaveStatus::Missing;
+  FileSaveStatus published_status = FileSaveStatus::Missing;
+  std::uint64_t intended_generation = 0;
+  std::uint8_t read_attempts = 0;
+  bool rename_succeeded = false;
+  bool published_bytes_equal = false;
+  int os_error_code = 0;
+};
+
 [[nodiscard]] inline FileSaveSlot read_field_journal_slot(
     const FieldWorld& world, const std::string& path) noexcept {
   FileSaveSlot slot{};
@@ -137,7 +159,9 @@ struct FileSaveLoadResult {
 [[nodiscard]] inline FileSaveStatus store_field_save_file(
     const FieldWorld& world, const WorldState& state,
     const std::string& base_path,
-    JournalInterruption simulate = JournalInterruption::None) noexcept {
+    JournalInterruption simulate = JournalInterruption::None,
+    JournalWriteDiagnostic* trace = nullptr) noexcept {
+  if (trace) *trace = JournalWriteDiagnostic{};
   if (!world.valid()) return FileSaveStatus::InvalidWorld;
   FieldSaveRecord encoded{};
   if (encode_field_save(world, state, encoded) != FieldSaveStatus::Encoded)
@@ -145,6 +169,11 @@ struct FileSaveLoadResult {
 
   const FileSaveSlot a = read_field_journal_slot(world, base_path + ".a");
   const FileSaveSlot b = read_field_journal_slot(world, base_path + ".b");
+  if (trace) {
+    trace->step = JournalWriteStep::PreviousSlotsRead;
+    trace->existing_a = a.status;
+    trace->existing_b = b.status;
+  }
   if (a.status == FileSaveStatus::IoError ||
       b.status == FileSaveStatus::IoError)
     return FileSaveStatus::IoError;
@@ -166,13 +195,18 @@ struct FileSaveLoadResult {
   FieldJournalBytes payload{};
   payload[0] = 'W'; payload[1] = 'A'; payload[2] = 'J'; payload[3] = '1';
   save_put_u64(payload.data() + 4, latest + 1);
+  if (trace) trace->intended_generation = latest + 1;
   for (std::size_t i = 0; i < encoded.size(); ++i)
     payload[12 + i] = encoded[i];
   save_put_u32(payload.data() + 52, save_crc32(payload.data(), 52));
 
   // The temporary file is never considered a committed save at load time.
   std::FILE* f = std::fopen(temporary.c_str(), "wb");
-  if (!f) return FileSaveStatus::IoError;
+  if (!f) {
+    if (trace) trace->os_error_code = errno;
+    return FileSaveStatus::IoError;
+  }
+  if (trace) trace->step = JournalWriteStep::TemporaryOpened;
   if (simulate == JournalInterruption::AfterShortTemporaryWrite) {
     // A process stop while writing the 56 bytes: a deliberately incomplete
     // .tmp is left. Neither .a nor .b is touched; readers never load .tmp.
@@ -185,19 +219,30 @@ struct FileSaveLoadResult {
       std::fflush(f) == 0 && ::fsync(::fileno(f)) == 0;
   const bool closed = std::fclose(f) == 0;
   if (!complete || !closed) {
+    if (trace) {
+      trace->step = JournalWriteStep::FailedTemporaryWrite;
+      trace->os_error_code = errno;
+    }
     (void)std::remove(temporary.c_str());
     return FileSaveStatus::IoError;
   }
+  if (trace) trace->step = JournalWriteStep::TemporarySynced;
   if (simulate == JournalInterruption::AfterTemporarySynced)
     return FileSaveStatus::IoError;  // Complete uncommitted .tmp survives.
 
   // Re-open and validate from storage before making the new file visible.
   const FileSaveSlot verified = read_field_journal_slot(world, temporary);
+  if (trace) trace->temporary_status = verified.status;
   if (verified.status != FileSaveStatus::Loaded ||
       verified.bytes != payload) {
+    if (trace) {
+      trace->step = JournalWriteStep::FailedTemporaryVerification;
+      trace->os_error_code = errno;
+    }
     (void)std::remove(temporary.c_str());
     return FileSaveStatus::IoError;
   }
+  if (trace) trace->step = JournalWriteStep::TemporaryValidated;
   if (simulate == JournalInterruption::AfterTemporaryValidated)
     return FileSaveStatus::IoError;
 
@@ -205,9 +250,14 @@ struct FileSaveLoadResult {
   // slot can be deleted; the newest valid generation survives any failure.
   errno = 0;
   if (std::remove(target.c_str()) != 0 && errno != ENOENT) {
+    if (trace) {
+      trace->step = JournalWriteStep::FailedTargetRemoval;
+      trace->os_error_code = errno;
+    }
     (void)std::remove(temporary.c_str());
     return FileSaveStatus::IoError;
   }
+  if (trace) trace->step = JournalWriteStep::OldSlotRemoved;
   if (simulate == JournalInterruption::AfterPreviousSlotRemoved)
     return FileSaveStatus::IoError;
   // NeXium's emulated filesystem can return a false-negative publishing
@@ -215,6 +265,11 @@ struct FileSaveLoadResult {
   // *fully validated record*, never the API return code alone, proves
   // durability at this emulated-filesystem level.
   const bool renamed = std::rename(temporary.c_str(), target.c_str()) == 0;
+  if (trace) {
+    trace->step = JournalWriteStep::RenameAttempted;
+    trace->rename_succeeded = renamed;
+    trace->os_error_code = renamed ? 0 : errno;
+  }
   const bool rename_reported_success =
       renamed &&
       simulate != JournalInterruption::AfterNewSlotRenamedReportedFailure;
@@ -232,8 +287,17 @@ struct FileSaveLoadResult {
     } else {
       published = read_field_journal_slot(world, target);
     }
+    if (trace) {
+      trace->step = JournalWriteStep::PostPublishReadback;
+      trace->read_attempts = static_cast<std::uint8_t>(attempt + 1);
+      trace->published_status = published.status;
+      trace->published_bytes_equal =
+          published.status == FileSaveStatus::Loaded &&
+          published.bytes == payload;
+    }
     if (published.status == FileSaveStatus::Loaded &&
         published.bytes == payload) {
+      if (trace) trace->step = JournalWriteStep::VerifiedCommitted;
       // A non-successful rename report cannot override exact committed
       // content. If the move actually failed, discard any leftover .tmp.
       if (!rename_reported_success)
@@ -242,6 +306,7 @@ struct FileSaveLoadResult {
     }
   }
   // If no read proved the expected committed record, fail closed.
+  if (trace) trace->step = JournalWriteStep::FailedReadback;
   (void)std::remove(temporary.c_str());
   return FileSaveStatus::IoError;
 }
