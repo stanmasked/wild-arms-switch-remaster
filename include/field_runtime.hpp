@@ -2,6 +2,7 @@
 
 #include "field_autoplay.hpp"
 #include "field_frame_ticks.hpp"
+#include "field_inspection_ui.hpp"
 #include "field_pixels.hpp"
 #include "field_snapshot.hpp"
 #include "field_view.hpp"
@@ -156,14 +157,22 @@ struct RuntimeControls {
       response.snapshot_restored = restored == SnapshotOutcome::Restored;
       response.snapshot_empty = restored == SnapshotOutcome::Empty;
     } else {
+      const int old_x = next.manual.player.x;
+      const int old_y = next.manual.player.y;
+      const Direction old_facing = next.manual.player.facing;
       const WorldFrameResult outcome =
           advance_world_frame(world, next.manual, controls.pad,
                               elapsed.milliseconds);
       response.movement_status = outcome.controller.movement.status;
       response.changed_area = outcome.area_changed;
       response.inspected = outcome.inspected;
-      if (outcome.area_changed || outcome.controller.movement.trigger !=
-                                      Trigger::None)
+      // Do not leave a stale target highlighted if the player has
+      // moved or turned to a different direction, even into a wall.
+      if (outcome.area_changed ||
+          outcome.controller.movement.trigger != Trigger::None ||
+          next.manual.player.x != old_x ||
+          next.manual.player.y != old_y ||
+          next.manual.player.facing != old_facing)
         next.inspection = FieldInspection{};
       if (outcome.inspected != Trigger::None) {
         int dx = 0;
@@ -210,10 +219,15 @@ struct RuntimeControls {
   if (!next.autoplay &&
       next.inspection.kind != Trigger::None &&
       next.inspection.remaining_ms > 0 &&
-      next.inspection.area == shown.area)
-    (void)draw_field_inspection(target, frame,
-                                next.inspection.x, next.inspection.y,
-                                next.inspection.kind);
+      next.inspection.area == shown.area) {
+    const bool target_visible = draw_field_inspection(
+        target, frame, next.inspection.x, next.inspection.y,
+        next.inspection.kind);
+    if (target_visible)
+      (void)draw_inspection_caption(target, next.inspection.kind);
+    else
+      next.inspection = FieldInspection{};
+  }
 
   next.view = frame;
   current = next;

@@ -123,6 +123,57 @@ void test_manual_adjacent_inspection_renders_timed_outline() {
   surface.assert_guards();
 }
 
+void test_manual_inspection_caption_and_stale_target_invalidation() {
+  const FieldWorld world = make_demo_world();
+  FieldRuntime rt = start_field_runtime(world,kSwitchTicksPerSecond,0);
+  Surface display;
+  constexpr std::uint64_t step = kSwitchTicksPerSecond*160/1000;
+  const RuntimeControls right{PadSample{.dpad_right=true}};
+  require(advance_field_runtime(world,rt,0,{},display.target).status==
+          RuntimeStatus::Rendered);
+  (void)advance_field_runtime(world,rt,step,right,display.target);
+  (void)advance_field_runtime(world,rt,step*2,right,display.target);
+  require(rt.manual.player.x==3);
+  const RuntimeControls inspect{PadSample{.confirm=true}};
+  auto result=advance_field_runtime(world,rt,step*3,inspect,display.target);
+  require(result.inspected==Trigger::Event);
+  require(rt.inspection.kind==Trigger::Event);
+  require(display.pixel(kInspectionPanelX,kInspectionPanelY)==
+          rgba(255,247,172));
+  require(display.pixel(kInspectionPanelX+3,kInspectionPanelY+3)==
+          rgba(17,26,40));
+  // First glyph "E": top row is five white pixels after raster scale.
+  require(display.pixel(kInspectionPanelX+20,
+                        kInspectionPanelY+20)==rgba(246,247,252));
+  // Separate overlay is not serialized into the canonical world state.
+  require(rt.manual.player.x==3 && rt.manual.player.successful_moves==2);
+  // Move away from the inspected target before the 900-ms timer expires.
+  const RuntimeControls left{PadSample{.dpad_left=true}};
+  (void)advance_field_runtime(world,rt,step*4,left,display.target);
+  require(rt.manual.player.x==2 &&
+          rt.inspection.kind==Trigger::None);
+  require(display.pixel(kInspectionPanelX,kInspectionPanelY)==
+          rgba(14,20,34));
+  display.assert_guards();
+}
+
+void test_caption_kind_guard_and_exit_glyphs() {
+  Surface display;
+  const auto untouched=display.buffer;
+  require(!draw_inspection_caption(display.target,Trigger::None));
+  require(display.buffer==untouched);
+  require(inspection_caption(Trigger::Event)[0]=='E');
+  require(inspection_caption(Trigger::Exit)[1]=='X');
+  require(draw_inspection_caption(display.target,Trigger::Exit));
+  require(display.pixel(kInspectionPanelX,kInspectionPanelY)==
+          rgba(172,255,230));
+  require(display.pixel(kInspectionPanelX+20+15,
+                        kInspectionPanelY+20)==rgba(246,247,252));
+  display.assert_guards();
+  const PixelTarget invalid{nullptr,kRasterWidth,kRasterHeight,kRasterWidth};
+  require(!draw_inspection_caption(invalid,Trigger::Exit));
+}
+
 void test_invalid_input_is_transactional_and_guarded() {
   const FieldWorld world = make_demo_world();
   FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 7);
@@ -278,6 +329,8 @@ void test_quicksave_pending_event_restores_pause_and_status() {
 int main() {
   test_sixty_hz_manual_event_pause_and_acknowledgment();
   test_manual_adjacent_inspection_renders_timed_outline();
+  test_manual_inspection_caption_and_stale_target_invalidation();
+  test_caption_kind_guard_and_exit_glyphs();
   test_invalid_input_is_transactional_and_guarded();
   test_autoplay_timing_checkpoints_and_manual_cancel();
   test_quicksave_restore_manual_mode_and_autoplay_isolation();

@@ -493,3 +493,26 @@ invalid input atomicity, 900 ms highlight expiry, no movement, exact
 highlight pixels and framebuffer stride guards. This is an
 original synthetic exploration mechanic, not a claim that the
 original Wild Arms assets, puzzles or scenarios are present.
+
+## Stage 306 — contextual captions for A-facing field inspection
+
+Stage 305 added manual A-button inspection and a 900-ms target outline.
+Stage 306 adds original **EVENT AHEAD** / **EXIT AHEAD** contextual
+captions in a separate upper-left HUD panel, with handcrafted,
+dependency-free 5×7 glyphs and gold/mint target colours. These captions
+appear only on the validated manual inspection path and do not change
+the existing screen when playing the canonical automated scenario,
+loading saves, or acknowledging an event.
+
+The inspection now expires immediately when the character changes
+position or facing, including a direction change caused by a blocked
+wall step. This avoids stale visual cues pointing to an object that
+is no longer ahead of the player. It already clears on scene changes,
+snapshot operations and 900-ms timeout. The overlay is **not part of
+persistent WorldState** and does not modify on-disk journal bytes.
+
+Host runtime regression tests verify exact caption and border pixels,
+non-persistence of inspection, cancellation after moving away, exit
+caption glyphs, invalid buffer rejection and unchanged framebuffer
+guard regions. Strict five-scene and five-process NeXium audits remain
+in place. No proprietary Wild Arms level text is included.
