@@ -233,6 +233,48 @@ void test_manual_event_clue_recording_is_explicit_and_unique() {
           rt.inspection.kind==Trigger::None);
 }
 
+void test_simultaneous_A_and_B_cannot_collect_before_inspection() {
+  const FieldWorld world = make_demo_world();
+  FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  Surface screen;
+  constexpr std::uint64_t step = kSwitchTicksPerSecond * 160 / 1000;
+  require(advance_field_runtime(world, rt, 0, {}, screen.target).status ==
+          RuntimeStatus::Rendered);
+  rt.manual.player.x = 3;
+  rt.manual.player.y = 1;
+  rt.manual.player.facing = Direction::Right;
+
+  // Two edges sampled together must produce only the inspection.
+  const RuntimeControls a_and_b{PadSample{.confirm = true}, false, true};
+  const RuntimeFrame simultaneous = advance_field_runtime(
+      world, rt, step, a_and_b, screen.target);
+  require(simultaneous.status == RuntimeStatus::Rendered &&
+          simultaneous.inspected == Trigger::Event &&
+          !simultaneous.clue_recorded &&
+          !simultaneous.clue_already_recorded &&
+          simultaneous.clue_count == 0 &&
+          rt.discoveries.count == 0 &&
+          !rt.inspection.logged &&
+          rt.inspection.kind == Trigger::Event &&
+          rt.manual.player.x == 3);
+
+  // A second, independently sampled B press collects the displayed clue.
+  require(advance_field_runtime(world, rt, step * 2, {},
+                                screen.target).status ==
+          RuntimeStatus::Rendered);
+  const RuntimeControls b{{}, false, true};
+  const RuntimeFrame recorded = advance_field_runtime(
+      world, rt, step * 3, b, screen.target);
+  require(recorded.status == RuntimeStatus::Rendered &&
+          recorded.inspected == Trigger::None &&
+          recorded.clue_recorded && recorded.clue_count == 1 &&
+          rt.inspection.logged && rt.discoveries.count == 1 &&
+          rt.discoveries.entries[0].area == 0 &&
+          rt.discoveries.entries[0].x == 4 &&
+          rt.discoveries.entries[0].y == 1);
+  screen.assert_guards();
+}
+
 void test_b_does_not_record_without_inspected_event() {
   const FieldWorld world = make_demo_world();
   FieldRuntime rt=start_field_runtime(world,kSwitchTicksPerSecond,0);
@@ -817,6 +859,7 @@ int main() {
   test_caption_kind_guard_and_exit_glyphs();
   test_manual_event_clue_recording_is_explicit_and_unique();
   test_b_does_not_record_without_inspected_event();
+  test_simultaneous_A_and_B_cannot_collect_before_inspection();
   test_held_journal_freezes_inputs_and_shows_session_clues();
   test_l_held_journal_freezes_inspection_timeout();
   test_manual_preflight_rejects_corrupt_ledger_without_L();

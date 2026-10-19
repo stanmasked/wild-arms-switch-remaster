@@ -237,7 +237,11 @@ struct RuntimeControls {
       // In manual mode B records a clue only from a still-visible
       // inspection of an adjacent event. It is a separate, explicit
       // action: merely looking at an object grants no progress.
-      if (controls.cancel_demo && !next.autoplay &&
+      // A+B in the SAME sampled frame is an inspection, not a record:
+      // B must be a separate later press after the player has first
+      // seen the authored event. This preserves two intentional actions.
+      if (controls.cancel_demo && outcome.inspected == Trigger::None &&
+          !next.autoplay &&
           next.inspection.kind == Trigger::Event &&
           next.inspection.remaining_ms > 0 &&
           next.inspection.area == next.manual.area &&
