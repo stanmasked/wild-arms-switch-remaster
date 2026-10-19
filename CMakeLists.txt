@@ -46,6 +46,15 @@ add_executable(wa_field_save_feedback_tests tests/test_field_save_feedback.cpp)
 target_link_libraries(wa_field_save_feedback_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_save_feedback_tests COMMAND wa_field_save_feedback_tests)
 
+# Stage 297: actual separate OS processes verify journal persistence.
+add_executable(wa_field_save_process tests/field_save_process.cpp)
+target_link_libraries(wa_field_save_process PRIVATE wa_field_core)
+add_test(NAME wa_field_save_process_restart
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_field_save_process_restart.py
+                 $<TARGET_FILE:wa_field_save_process>)
+set_tests_properties(wa_field_save_process_restart PROPERTIES
+                     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 # Host validation of the exact software framebuffer algorithm used by libnx.
 add_executable(wa_field_pixels_tests tests/test_field_pixels.cpp)
 target_link_libraries(wa_field_pixels_tests PRIVATE wa_field_core)
