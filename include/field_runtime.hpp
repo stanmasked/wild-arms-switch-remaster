@@ -110,8 +110,13 @@ struct RuntimeControls {
   if (!current.timer.valid()) return {RuntimeStatus::InvalidClock};
   if (!runtime_has_valid_target(target))
     return {RuntimeStatus::InvalidTarget};
-  if (controls.view_journal && !current.autoplay &&
-      !valid_discovery_journal(world, current.discoveries))
+  // In manual mode a corrupt clue ledger or world snapshot must fail
+  // before sampling the clock, accepting B, or drawing *any* framebuffer.
+  // Checking only on L would let an invalid ledger run unnoticed until
+  // the player first opened the journal.
+  if (!current.autoplay &&
+      (!valid_field_snapshot(world, current.manual) ||
+       !valid_discovery_journal(world, current.discoveries)))
     return {RuntimeStatus::InvalidSimulation};
 
   FieldRuntime next = current;
