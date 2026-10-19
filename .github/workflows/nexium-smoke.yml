@@ -28,6 +28,10 @@ on:
       - 'include/field_save_feedback.hpp'
       - 'tools/audit_nexium_storage_feedback.py'
       - 'tools/test_audit_nexium_storage_feedback.py'
+      - 'tools/audit_nexium_process_restart.py'
+      - 'tools/test_audit_nexium_process_restart.py'
+      - 'tests/field_save_process.cpp'
+      - 'tests/test_field_save_process_restart.py'
       - 'switch/source/main.cpp'
   workflow_dispatch:
 
@@ -108,6 +112,8 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_pixel_parity.py' -v
       - name: Unit-test short-lived manual save feedback screenshots
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_storage_feedback.py' -v
+      - name: Unit-test independent NeXium process SD-restore auditor
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_process_restart.py' -v
       - name: Unit-test manual quicksave and event restore desktop audit
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_manual_snapshot.py' -v
       - name: Unit-test ordered five-checkpoint reference matcher
@@ -170,6 +176,7 @@ jobs:
             "$PWD/nexium-probe/ne_loader_probe_only.nro" \
             > nexium-probe/nexium.log 2>&1 &
           emulator_pid=$!
+          echo "$emulator_pid" > nexium-probe/first-process.pid
           (
             while kill -0 "$emulator_pid" 2>/dev/null; do
               date -u +'%Y-%m-%dT%H:%M:%SZ'
@@ -278,6 +285,79 @@ jobs:
           set -e
           echo "$result" > nexium-probe/process-exit-code.txt
           exit 0
+      - name: Launch SECOND fresh NeXium process and reload event from SD
+        id: restart
+        timeout-minutes: 3
+        run: |
+          set -eu
+          mkdir -p nexium-probe/independent-restart
+          test -s nexium-probe/first-process.pid
+          test -s nexium-probe/process-exit-code.txt
+          test -f nexium-probe/status-feedback-audit.json || true
+          export DISPLAY=:99
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-wild-arms-data"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          export RUST_LOG=info
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          timeout --signal=TERM --kill-after=8 75s \
+            ./nexium-dist/NeXium/nexium \
+            "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+            > nexium-probe/independent-restart/second-process.log 2>&1 &
+          second_pid=$!
+          printf '%s\n' "$second_pid" > nexium-probe/independent-restart/second.pid
+          sleep 15
+          wid=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null | tail -n 1) || true
+          test -n "$wid"
+          xdotool windowfocus "$wid"
+          import -display :99 -window root \
+            nexium-probe/independent-restart/01_fresh_process_start.png
+          # Second process has never received Y or X: its RAM save is empty.
+          # NeXium maps Switch Minus to the host N key.
+          xdotool keydown --clearmodifiers n
+          sleep 0.23
+          xdotool keyup n
+          sleep 0.19
+          import -display :99 -window root \
+            nexium-probe/independent-restart/02_sd_loaded_notice.png
+          sleep 1.3
+          import -display :99 -window root \
+            nexium-probe/independent-restart/03_restored_pending_event.png
+          # Plus (host M) cleanly exits the application when supported.
+          xdotool keydown --clearmodifiers m || true
+          sleep 0.22
+          xdotool keyup m || true
+          sleep 2
+          # The application may exit while the GUI remains; stop the GUI.
+          kill -TERM "$second_pid" 2>/dev/null || true
+          set +e
+          wait "$second_pid"
+          result=$?
+          set -e
+          echo "$result" > nexium-probe/independent-restart/exit-code.txt
+          FIRST_PID=$(cat nexium-probe/first-process.pid) \
+          SECOND_PID="$second_pid" /usr/bin/python3 -c '
+          import json, os
+          first=int(os.environ["FIRST_PID"])
+          second=int(os.environ["SECOND_PID"])
+          print(json.dumps({"first_pid":first,"second_pid":second,
+              "first_wait_completed":True,
+              "same_emulator_data_root":True},sort_keys=True))' \
+            > nexium-probe/independent-restart/processes.json
+      - name: Prove first-process SD write restored in SECOND guest process
+        run: |
+          /usr/bin/python3 tools/audit_nexium_process_restart.py \
+            --reference same-commit-host-references \
+            --screenshots nexium-probe/independent-restart \
+            --first-notice-json nexium-probe/storage-feedback-audit.json \
+            --first-saved nexium-probe/manual-snapshot/05_event_saved.png \
+            --processes nexium-probe/independent-restart/processes.json \
+            --output nexium-probe/independent-restart-audit.json
       - name: Launch GUI-only control without NRO and compare screen state
         id: control
         continue-on-error: true
@@ -405,6 +485,10 @@ jobs:
           if test -f nexium-probe/five-checkpoints.json; then
             echo "Five-scene structural evidence:" >> "$GITHUB_STEP_SUMMARY"
             /usr/bin/python3 -c 'import json; x=json.load(open("nexium-probe/five-checkpoints.json")); print("validated scenes:",len(x["verified_scenes"]),"complete:",x["full_five_checkpoint_sequence_observed"] )' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/independent-restart-audit.json; then
+            echo "Independent process SD reload:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/independent-restart-audit.json")); print("complete:",r["all_checks_passed"],"mismatches:",r["notice_rgb_mismatches"])' >> "$GITHUB_STEP_SUMMARY"
           fi
           if test -f nexium-probe/storage-feedback-audit.json; then
             echo "Real on-screen storage notices:" >> "$GITHUB_STEP_SUMMARY"

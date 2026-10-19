@@ -23,6 +23,10 @@ SAVE_COLORS = {
     (231, 77, 91): "sd_error",
 }
 LOAD_COLORS = {(104, 149, 244): "ram_loaded"}
+# This color must NOT be accepted in same-process quicksave tests: fresh
+# process SD import is proved only by the dedicated Stage-297 audit.
+SD_LOADED_COLOR = (73, 181, 225)
+RESTART_COLORS = {SD_LOADED_COLOR: "sd_loaded"}
 CAPTURES = (
     ("save-start", SAVE_COLORS),
     ("load-start", LOAD_COLORS),
@@ -34,6 +38,7 @@ MESSAGES = {
     "ram_only": "RAM ONLY",
     "sd_error": "SD ERROR",
     "ram_loaded": "RAM LOADED",
+    "sd_loaded": "SD LOADED",
 }
 # Independent reference to the seven-row glyphs in field_save_feedback.hpp.
 GLYPHS = {
@@ -64,7 +69,8 @@ GAME_ROI = (LEFT + 3, TOP + 3, RIGHT - 3, BOTTOM - 3)
 
 def projected_notice(color, label=None):
     """Pure reference drawing, independent from the game's output buffer."""
-    notice = SAVE_COLORS.get(color, LOAD_COLORS.get(color))
+    notice = SAVE_COLORS.get(
+        color, LOAD_COLORS.get(color, RESTART_COLORS.get(color)))
     if notice is None:
         raise ValueError("unknown status accent")
     wording = MESSAGES[notice] if label is None else label

@@ -184,3 +184,31 @@ the middle of an SD write, simulate FAT/exFAT metadata corruption, prove
 `fsync`/rename durability on the physical Switch, or protect against
 concurrent writing processes. As before, the synthetic five-scene
 field visuals and on-screen notification colours are untouched.
+
+## Stage 297 — independent process SD-backed event reload
+
+A separate experimental NeXium guest process now launches after the
+first NeXium process has completed and after it saved an **event** via
+Switch Y with the visible `SD SAVED` indication. Both processes use
+the same emulator data root, but each launches the NRO anew with
+`FieldRuntime` and the in-RAM quicksave slot initially empty.
+The first screenshot of the second run must exactly match the native
+host's fresh manual start scene. The second process then receives
+only Switch Minus; its transient notice must be pixel-identical to
+`SD LOADED` (not `RAM LOADED`), and its final frame must exactly
+match the first process's previously saved pending event scene and
+the same-commit host reference. Distinct runner process IDs and the
+first run's completed wait are written into an auditable manifest.
+The dedicated audit is fail-closed for missing screenshots, wrong
+PID identity, missing first-process SD-save evidence, mismatched
+host references, or even one mismatched storage plaque RGB pixel.
+
+Host CTest also creates **two real OS processes**: the first writes
+the 56-byte journal, and the next starts with empty memory, imports
+the pending event, and acknowledges it. Additional subprocess tests
+reject a stale incomplete temporary file and corrupted committed
+record without changing live state.
+
+The NeXium guest proof is still an experimental emulated SD mount.
+It does not prove physical Nintendo Switch SD hardware durability,
+abrupt power-cut safety, or proprietary original Wild Arms saves.
