@@ -155,6 +155,15 @@ struct RuntimeControls {
 
   if (mode_switched) next.inspection = FieldInspection{};
 
+  if (!mode_switched && !next.autoplay && controls.view_journal) {
+    // Opening the modal discards any partially accumulated movement tick.
+    // D-pad held through the journal must earn a fresh full cadence on
+    // release instead of triggering an early, visually surprising step.
+    // A pending trigger already requires both fields to be neutral.
+    next.manual.clock.carry_ms = 0;
+    next.manual.clock.held = Direction::None;
+  }
+
   if (!mode_switched && next.autoplay) {
     const AutoplayFrame outcome =
         advance_field_autoplay(world, next.demo, elapsed.milliseconds);

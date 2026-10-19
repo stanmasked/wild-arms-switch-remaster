@@ -508,6 +508,56 @@ void test_l_held_journal_freezes_inspection_timeout() {
 }
 
 
+void test_journal_releases_old_partial_movement_cadence() {
+  const FieldWorld world = make_demo_world();
+  FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  Surface surface;
+  constexpr std::uint64_t half_cadence_ticks =
+      kSwitchTicksPerSecond * 80 / 1000;
+  const RuntimeControls right{PadSample{.dpad_right = true}};
+  const RuntimeControls held_journal{
+      PadSample{.dpad_right = true}, false, false, false, false, true};
+  require(advance_field_runtime(world, rt, 0, {}, surface.target).status ==
+          RuntimeStatus::Rendered);
+
+  // An 80ms D-pad hold pays only half the required 160ms cadence.
+  const RuntimeFrame waiting = advance_field_runtime(
+      world, rt, half_cadence_ticks, right, surface.target);
+  require(waiting.status == RuntimeStatus::Rendered &&
+          rt.manual.player.x == 1 &&
+          rt.manual.clock.carry_ms == 80 &&
+          rt.manual.clock.held == Direction::Right);
+
+  // L opens the journal and intentionally drops that stale 80ms debt.
+  for (std::uint64_t frame = 2; frame <= 8; ++frame) {
+    const RuntimeFrame modal = advance_field_runtime(
+        world, rt, half_cadence_ticks * frame, held_journal,
+        surface.target);
+    require(modal.status == RuntimeStatus::Rendered &&
+            modal.journal_visible &&
+            rt.manual.player.x == 1 &&
+            rt.manual.clock.carry_ms == 0 &&
+            rt.manual.clock.held == Direction::None);
+  }
+
+  // 80ms after L release is not enough to move: the old half-period
+  // must not be replayed. A second 80ms is required for one step.
+  const RuntimeFrame resumed = advance_field_runtime(
+      world, rt, half_cadence_ticks * 9, right, surface.target);
+  require(resumed.status == RuntimeStatus::Rendered &&
+          !resumed.journal_visible &&
+          rt.manual.player.x == 1 &&
+          rt.manual.clock.carry_ms == 80 &&
+          rt.manual.clock.held == Direction::Right);
+  const RuntimeFrame moved = advance_field_runtime(
+      world, rt, half_cadence_ticks * 10, right, surface.target);
+  require(moved.status == RuntimeStatus::Rendered &&
+          rt.manual.player.x == 2 &&
+          rt.manual.player.successful_moves == 1 &&
+          rt.manual.clock.carry_ms == 0);
+  surface.assert_guards();
+}
+
 void test_manual_preflight_rejects_corrupt_ledger_without_L() {
   const FieldWorld world = make_demo_world();
   FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
@@ -665,6 +715,7 @@ int main() {
   test_held_journal_freezes_inputs_and_shows_session_clues();
   test_l_held_journal_freezes_inspection_timeout();
   test_manual_preflight_rejects_corrupt_ledger_without_L();
+  test_journal_releases_old_partial_movement_cadence();
   test_cross_area_discovery_journal_survives_world_and_snapshot_changes();
   test_invalid_input_is_transactional_and_guarded();
   test_autoplay_timing_checkpoints_and_manual_cancel();
