@@ -125,10 +125,15 @@ struct RuntimeControls {
   response.delta_ms = elapsed.milliseconds;
   response.clue_count = next.discoveries.count;
 
-  if (elapsed.milliseconds >= next.inspection.remaining_ms) {
-    next.inspection = FieldInspection{};
-  } else {
-    next.inspection.remaining_ms -= elapsed.milliseconds;
+  // The L-held modal freezes gameplay *and* the inspection highlight
+  // clock. Otherwise a player can lose a still-readable A inspection
+  // simply by consulting the clue journal.
+  if (!(controls.view_journal && !next.autoplay)) {
+    if (elapsed.milliseconds >= next.inspection.remaining_ms) {
+      next.inspection = FieldInspection{};
+    } else {
+      next.inspection.remaining_ms -= elapsed.milliseconds;
+    }
   }
 
   bool mode_switched = false;
