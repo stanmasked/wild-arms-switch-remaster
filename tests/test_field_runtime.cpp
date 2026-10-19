@@ -508,6 +508,70 @@ void test_l_held_journal_freezes_inspection_timeout() {
 }
 
 
+void test_l_modal_does_not_replay_held_A_on_release() {
+  const FieldWorld world = make_demo_world();
+  Surface surface;
+  constexpr std::uint64_t step = kSwitchTicksPerSecond * 160 / 1000;
+  const RuntimeControls held_a{
+      PadSample{.confirm = true}, false, false, false, false, true};
+  const RuntimeControls just_a{PadSample{.confirm = true}};
+
+  // A pressed under the journal must not inspect an adjacent ! when
+  // L is released while A remains down. A genuine re-press does inspect.
+  FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  rt.manual.player.x = 3;
+  rt.manual.player.y = 1;
+  rt.manual.player.facing = Direction::Right;
+  require(advance_field_runtime(world, rt, 0, {}, surface.target).status ==
+          RuntimeStatus::Rendered);
+  const RuntimeFrame held = advance_field_runtime(
+      world, rt, step, held_a, surface.target);
+  require(held.status == RuntimeStatus::Rendered &&
+          held.journal_visible && held.inspected == Trigger::None &&
+          rt.manual.decoder.confirm_down);
+  const RuntimeFrame still_a = advance_field_runtime(
+      world, rt, step * 2, just_a, surface.target);
+  require(still_a.status == RuntimeStatus::Rendered &&
+          !still_a.journal_visible && still_a.inspected == Trigger::None &&
+          rt.inspection.kind == Trigger::None);
+  require(advance_field_runtime(world, rt, step * 3, {},
+                                surface.target).status ==
+          RuntimeStatus::Rendered);
+  const RuntimeFrame repressed = advance_field_runtime(
+      world, rt, step * 4, just_a, surface.target);
+  require(repressed.status == RuntimeStatus::Rendered &&
+          repressed.inspected == Trigger::Event &&
+          rt.manual.player.x == 3 && rt.manual.pending == Trigger::None);
+
+  // The same edge-suppression policy protects pending event acknowledgement.
+  FieldRuntime pending = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  pending.manual.player.x = 4;
+  pending.manual.player.y = 1;
+  pending.manual.pending = Trigger::Event;
+  pending.manual.clock.carry_ms = 0;
+  pending.manual.clock.held = Direction::None;
+  pending.manual.clock.paused_for_trigger = true;
+  require(advance_field_runtime(world, pending, 0, {},
+                                surface.target).status ==
+          RuntimeStatus::Rendered);
+  require(advance_field_runtime(world, pending, step, held_a,
+                                surface.target).journal_visible);
+  const RuntimeFrame no_ack = advance_field_runtime(
+      world, pending, step * 2, just_a, surface.target);
+  require(no_ack.status == RuntimeStatus::Rendered &&
+          pending.manual.pending == Trigger::Event &&
+          pending.manual.clock.paused_for_trigger);
+  require(advance_field_runtime(world, pending, step * 3, {},
+                                surface.target).status ==
+          RuntimeStatus::Rendered);
+  const RuntimeFrame acknowledged = advance_field_runtime(
+      world, pending, step * 4, just_a, surface.target);
+  require(acknowledged.status == RuntimeStatus::Rendered &&
+          pending.manual.pending == Trigger::None &&
+          !pending.manual.clock.paused_for_trigger);
+  surface.assert_guards();
+}
+
 void test_journal_releases_old_partial_movement_cadence() {
   const FieldWorld world = make_demo_world();
   FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
@@ -716,6 +780,7 @@ int main() {
   test_l_held_journal_freezes_inspection_timeout();
   test_manual_preflight_rejects_corrupt_ledger_without_L();
   test_journal_releases_old_partial_movement_cadence();
+  test_l_modal_does_not_replay_held_A_on_release();
   test_cross_area_discovery_journal_survives_world_and_snapshot_changes();
   test_invalid_input_is_transactional_and_guarded();
   test_autoplay_timing_checkpoints_and_manual_cancel();

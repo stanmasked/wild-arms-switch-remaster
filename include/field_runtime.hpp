@@ -162,6 +162,10 @@ struct RuntimeControls {
     // A pending trigger already requires both fields to be neutral.
     next.manual.clock.carry_ms = 0;
     next.manual.clock.held = Direction::None;
+    // Consume A button-edge bookkeeping while modal. Otherwise an A
+    // press begun under L is misread as a new edge immediately when L
+    // is released, possibly inspecting or acknowledging an event.
+    next.manual.decoder.confirm_down = controls.pad.confirm;
   }
 
   if (!mode_switched && next.autoplay) {

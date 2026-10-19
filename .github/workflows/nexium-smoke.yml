@@ -44,6 +44,7 @@ on:
       - 'docs/field-journal-regressions-stage312.md'
       - 'docs/field-manual-preflight-stage313.md'
       - 'docs/field-journal-movement-cadence-stage314.md'
+      - 'docs/field-journal-confirm-edges-stage315.md'
       - 'include/field_save_feedback.hpp'
       - 'tools/audit_nexium_storage_feedback.py'
       - 'tools/test_audit_nexium_storage_feedback.py'
