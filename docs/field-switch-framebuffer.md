@@ -212,3 +212,28 @@ record without changing live state.
 The NeXium guest proof is still an experimental emulated SD mount.
 It does not prove physical Nintendo Switch SD hardware durability,
 abrupt power-cut safety, or proprietary original Wild Arms saves.
+
+## Stage 298 — warn on degraded two-generation SD journal
+
+A successful SD load no longer always reports `SD LOADED`. The new
+`load_field_save_file_detailed` adapter returns both the unchanged
+`Loaded` status and a `degraded` flag when **one journal generation
+was invalid but the other was fully verified**. In that case the game
+restores the intact state and briefly shows the amber **SD WARN**
+message, advising that the redundant backup was damaged. It does not
+claim which generation failed unless its integrity and sequence data
+were independently validated; the warning applies even if the damaged
+slot is older than the loaded slot.
+
+The original public `load_field_save_file` continues to return the
+same `FileSaveStatus` values, and the journal layout and two-slot
+writer are unchanged. A missing older generation (normal after the
+first ever save) does not count as corruption. No valid generation
+still returns a failure without modifying the world; an I/O error
+remains fail-closed. A subsequent normal save can replace the
+damaged slot and restore the two-generation health state.
+
+Host tests cover one valid slot, both valid slots, damaged newest,
+damaged oldest, successful repair and both-damaged refusal, alongside
+UI status mapping and the new letter W glyph. Normal uncorrupted
+NeXium screenshot parity remains identical.

@@ -13,7 +13,7 @@ namespace wa::field {
 // The canonical field raster and both host reference captures are unchanged.
 enum class StorageNotice {
   None, SdSaved, RamOnly, SdLoaded, RamLoaded,
-  SdError, BadSave, NoSave
+  SdError, BadSave, NoSave, SdWarning
 };
 // Keep error/success mapping independent from libnx so host can test it.
 [[nodiscard]] constexpr StorageNotice storage_save_notice(
@@ -24,10 +24,11 @@ enum class StorageNotice {
 }
 [[nodiscard]] constexpr StorageNotice storage_load_notice(
     bool restored, bool imported_from_sd, bool sd_accessible,
-    FileSaveStatus disk_result) noexcept {
+    FileSaveStatus disk_result, bool degraded = false) noexcept {
   if (restored)
-    return imported_from_sd ? StorageNotice::SdLoaded :
-                              StorageNotice::RamLoaded;
+    return imported_from_sd ?
+           (degraded ? StorageNotice::SdWarning : StorageNotice::SdLoaded) :
+           StorageNotice::RamLoaded;
   if (!sd_accessible || disk_result == FileSaveStatus::IoError)
     return StorageNotice::SdError;
   if (disk_result == FileSaveStatus::Corrupt)
@@ -73,6 +74,7 @@ inline void advance_storage_notice(
     case StorageNotice::SdError: return rgba(231, 77, 91);
     case StorageNotice::BadSave: return rgba(231, 77, 91);
     case StorageNotice::NoSave: return rgba(154, 160, 175);
+    case StorageNotice::SdWarning: return rgba(244, 178, 64);
     case StorageNotice::None: break;
   }
   return rgba(0, 0, 0);
@@ -88,12 +90,13 @@ inline void advance_storage_notice(
     case StorageNotice::SdError: return "SD ERROR";
     case StorageNotice::BadSave: return "BAD SAVE";
     case StorageNotice::NoSave: return "NO SAVE";
+    case StorageNotice::SdWarning: return "SD WARN";
     case StorageNotice::None: break;
   }
   return "";
 }
 
-// Minimal 5x7 glyphs used exclusively for seven storage messages.
+// Minimal 5x7 glyphs used for the storage status messages.
 // No fonts or licensed imagery; all glyphs are authored pixel bitmaps.
 [[nodiscard]] inline const std::array<std::uint8_t, 7>&
 storage_notice_glyph(char c) noexcept {
@@ -109,6 +112,7 @@ storage_notice_glyph(char c) noexcept {
   static constexpr std::array<std::uint8_t, 7> r{30,17,17,30,20,18,17};
   static constexpr std::array<std::uint8_t, 7> s{15,16,16,14,1,1,30};
   static constexpr std::array<std::uint8_t, 7> v{17,17,17,17,17,10,4};
+  static constexpr std::array<std::uint8_t, 7> w{17,17,17,21,21,21,10};
   static constexpr std::array<std::uint8_t, 7> y{17,17,10,4,4,4,4};
   switch (c) {
     case 'A': return a;
@@ -122,6 +126,7 @@ storage_notice_glyph(char c) noexcept {
     case 'R': return r;
     case 'S': return s;
     case 'V': return v;
+    case 'W': return w;
     case 'Y': return y;
     default: return empty;
   }

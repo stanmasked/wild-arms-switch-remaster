@@ -85,30 +85,50 @@ struct FileSaveSlot {
   return slot;
 }
 
-// No caller receives a partial state. Valid newer generations take precedence.
-// If one slot has been damaged, fall back to the previous complete generation.
-[[nodiscard]] inline FileSaveStatus load_field_save_file(
+// A readable slot plus a damaged peer is still a successful load, but its
+// redundancy is compromised. Preserve the original FileSaveStatus ABI and
+// expose a separate diagnostic for the frontend; never replace the world
+// unless a complete validated journal is available.
+struct FileSaveLoadResult {
+  FileSaveStatus status = FileSaveStatus::Missing;
+  bool degraded = false;  // Another committed slot was unreadable/corrupt.
+  std::uint64_t selected_generation = 0;
+};
+
+// Valid newer generations take precedence. A damaged peer can be bypassed,
+// but never interpreted as a valid save or used to modify the destination.
+[[nodiscard]] inline FileSaveLoadResult load_field_save_file_detailed(
     const FieldWorld& world, const std::string& base_path,
     WorldState& destination) noexcept {
-  if (!world.valid()) return FileSaveStatus::InvalidWorld;
+  if (!world.valid()) return {FileSaveStatus::InvalidWorld};
   const FileSaveSlot a = read_field_journal_slot(world, base_path + ".a");
   const FileSaveSlot b = read_field_journal_slot(world, base_path + ".b");
   if (a.status == FileSaveStatus::IoError ||
       b.status == FileSaveStatus::IoError)
-    return FileSaveStatus::IoError;
+    return {FileSaveStatus::IoError};
   const bool av = a.status == FileSaveStatus::Loaded;
   const bool bv = b.status == FileSaveStatus::Loaded;
   if (av && bv && a.generation == b.generation &&
       a.bytes != b.bytes)
-    return FileSaveStatus::Corrupt;
+    return {FileSaveStatus::Corrupt};
   if (av || bv) {
-    destination = (!bv || (av && a.generation >= b.generation))
-                      ? a.world : b.world;
-    return FileSaveStatus::Loaded;
+    const FileSaveSlot& selected =
+        (!bv || (av && a.generation >= b.generation)) ? a : b;
+    destination = selected.world;
+    return {FileSaveStatus::Loaded,
+            a.status == FileSaveStatus::Corrupt ||
+            b.status == FileSaveStatus::Corrupt,
+            selected.generation};
   }
-  return (a.status == FileSaveStatus::Missing &&
-          b.status == FileSaveStatus::Missing)
-             ? FileSaveStatus::Missing : FileSaveStatus::Corrupt;
+  return {(a.status == FileSaveStatus::Missing &&
+           b.status == FileSaveStatus::Missing)
+              ? FileSaveStatus::Missing : FileSaveStatus::Corrupt};
+}
+
+[[nodiscard]] inline FileSaveStatus load_field_save_file(
+    const FieldWorld& world, const std::string& base_path,
+    WorldState& destination) noexcept {
+  return load_field_save_file_detailed(world, base_path, destination).status;
 }
 
 [[nodiscard]] inline FileSaveStatus store_field_save_file(

@@ -23,6 +23,14 @@ void test_actual_storage_outcome_mapping() {
          StorageNotice::SdLoaded);
   expect(storage_load_notice(true,false,true,FileSaveStatus::Loaded) ==
          StorageNotice::RamLoaded);
+  expect(storage_load_notice(true,true,true,FileSaveStatus::Loaded,true) ==
+         StorageNotice::SdWarning);
+  expect(storage_load_notice(true,false,true,FileSaveStatus::Loaded,true) ==
+         StorageNotice::RamLoaded);
+  expect(storage_notice_color(StorageNotice::SdWarning) ==
+         rgba(244,178,64));
+  expect(storage_notice_glyph('W')[0] == 17);
+  expect(storage_notice_label(StorageNotice::SdWarning)[3] == 'W');
   expect(storage_load_notice(false,false,true,FileSaveStatus::Missing) ==
          StorageNotice::NoSave);
   expect(storage_load_notice(false,false,false,FileSaveStatus::Missing) ==
@@ -61,7 +69,8 @@ void test_feedback_codes_and_lifecycle() {
   constexpr StorageNotice all[]{
     StorageNotice::SdSaved, StorageNotice::RamOnly,
     StorageNotice::SdLoaded, StorageNotice::RamLoaded,
-    StorageNotice::SdError, StorageNotice::BadSave, StorageNotice::NoSave};
+    StorageNotice::SdError, StorageNotice::BadSave, StorageNotice::NoSave,
+    StorageNotice::SdWarning};
   for (const auto notice : all) {
     expect(storage_notice_label(notice)[0] != '\0');
     expect(storage_notice_color(notice) != rgba(0,0,0));
@@ -85,7 +94,7 @@ void test_onscreen_messages_only_touch_status_corner() {
   for (const auto code : {StorageNotice::SdSaved,StorageNotice::RamOnly,
                           StorageNotice::SdLoaded,StorageNotice::RamLoaded,
                           StorageNotice::SdError,StorageNotice::BadSave,
-                          StorageNotice::NoSave}) {
+                          StorageNotice::NoSave,StorageNotice::SdWarning}) {
     begin_storage_notice(feedback,code);
     expect(draw_storage_notice(surface,feedback));
     expect(at(kStorageNoticeX,kStorageNoticeY) ==

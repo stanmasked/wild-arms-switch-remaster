@@ -117,6 +117,74 @@ void test_corrupt_latest_falls_back_to_previous_save() {
   same(second, received);
 }
 
+void test_degraded_journal_warning_and_redundancy_repair() {
+  Fixture f;
+  const FieldWorld world = make_demo_world();
+  const WorldState start = start_world(world);
+  const WorldState event = to_event(world);
+  WorldState out = event;
+  auto initial = load_field_save_file_detailed(world,f.prefix,out);
+  expect(initial.status == FileSaveStatus::Missing && !initial.degraded);
+  same(event,out);
+  expect(store_field_save_file(world,start,f.prefix)==FileSaveStatus::Stored);
+  auto one = load_field_save_file_detailed(world,f.prefix,out);
+  expect(one.status == FileSaveStatus::Loaded &&
+         !one.degraded && one.selected_generation == 1);
+  same(start,out);
+  expect(store_field_save_file(world,event,f.prefix)==FileSaveStatus::Stored);
+  auto both = load_field_save_file_detailed(world,f.prefix,out);
+  expect(both.status == FileSaveStatus::Loaded &&
+         !both.degraded && both.selected_generation == 2);
+  same(event,out);
+
+  // A committed generation is torn; older intact generation is recovered.
+  {
+    std::FILE* fp=std::fopen((f.prefix+".b").c_str(),"wb");
+    expect(fp!=nullptr);
+    expect(std::fwrite("WAJ1",1,4,fp)==4);
+    expect(std::fclose(fp)==0);
+  }
+  auto fallback = load_field_save_file_detailed(world,f.prefix,out);
+  expect(fallback.status == FileSaveStatus::Loaded &&
+         fallback.degraded && fallback.selected_generation == 1);
+  same(start,out);
+
+  // A normal save heals the bad backup without damaging the good one.
+  expect(store_field_save_file(world,event,f.prefix)==FileSaveStatus::Stored);
+  auto healed=load_field_save_file_detailed(world,f.prefix,out);
+  expect(healed.status == FileSaveStatus::Loaded &&
+         !healed.degraded && healed.selected_generation == 2);
+  same(event,out);
+
+  // Damage the *older* backup: load the newer intact version but warn,
+  // because the pair no longer offers a usable fallback generation.
+  {
+    std::FILE* fp=std::fopen((f.prefix+".a").c_str(),"r+b");
+    expect(fp!=nullptr);
+    expect(std::fseek(fp,20,SEEK_SET)==0);
+    expect(std::fputc(0xA5,fp)!=EOF);
+    expect(std::fclose(fp)==0);
+  }
+  auto degraded=load_field_save_file_detailed(world,f.prefix,out);
+  expect(degraded.status == FileSaveStatus::Loaded &&
+         degraded.degraded && degraded.selected_generation == 2);
+  same(event,out);
+
+  // Invalid journal data never mutates the caller, even when both
+  // generations are compromised.
+  {
+    std::FILE* fp=std::fopen((f.prefix+".b").c_str(),"wb");
+    expect(fp!=nullptr);
+    expect(std::fwrite("torn",1,4,fp)==4);
+    expect(std::fclose(fp)==0);
+  }
+  out=start;
+  auto corrupt=load_field_save_file_detailed(world,f.prefix,out);
+  expect(corrupt.status == FileSaveStatus::Corrupt &&
+         !corrupt.degraded && corrupt.selected_generation == 0);
+  same(start,out);
+}
+
 void test_stale_temporary_is_not_published_and_failed_publish_keeps_old() {
   Fixture f;
   const FieldWorld world = make_demo_world();
@@ -362,6 +430,7 @@ void test_restart_import_matches_event_frame_and_confirm_edge() {
 int main() {
   test_no_file_and_persistent_generation_round_trip();
   test_corrupt_latest_falls_back_to_previous_save();
+  test_degraded_journal_warning_and_redundancy_repair();
   test_stale_temporary_is_not_published_and_failed_publish_keeps_old();
   test_invalid_state_and_invalid_world_do_not_overwrite();
   test_io_error_and_generation_exhaustion();

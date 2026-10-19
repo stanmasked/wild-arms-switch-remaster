@@ -115,13 +115,17 @@ int main() {
     // the newest independently validated SD journal entry. Failed reads
     // NEVER change the live world or a currently occupied RAM quicksave.
     bool imported_from_sd = false;
+    bool degraded_sd_journal = false;
     FileSaveStatus attempted_read = FileSaveStatus::Missing;
     const bool fresh_load = input.load_snapshot && !runtime.autoplay &&
         !input.start_demo && !runtime.quicksave.occupied;
     if (fresh_load && storage_ready) {
       WorldState recovered{};
-      attempted_read = load_field_save_file(world, kSaveBase, recovered);
-      if (attempted_read == FileSaveStatus::Loaded) {
+      const FileSaveLoadResult read =
+          load_field_save_file_detailed(world, kSaveBase, recovered);
+      attempted_read = read.status;
+      if (read.status == FileSaveStatus::Loaded) {
+        degraded_sd_journal = read.degraded;
         runtime.quicksave.world = recovered;
         runtime.quicksave.occupied = true;
         imported_from_sd = true;
@@ -149,7 +153,7 @@ int main() {
     } else if (result.snapshot_restored) {
       begin_storage_notice(feedback,
           storage_load_notice(true, imported_from_sd, storage_ready,
-                              attempted_read));
+                              attempted_read, degraded_sd_journal));
     } else if (result.snapshot_empty) {
       begin_storage_notice(feedback,
           storage_load_notice(false, false, storage_ready,
