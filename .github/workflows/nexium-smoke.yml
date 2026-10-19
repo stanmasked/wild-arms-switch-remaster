@@ -41,6 +41,7 @@ on:
       - 'tests/test_field_journal_view.cpp'
       - 'tests/test_field_runtime.cpp'
       - 'tests/test_field_discovery.cpp'
+      - 'docs/field-journal-regressions-stage312.md'
       - 'include/field_save_feedback.hpp'
       - 'tools/audit_nexium_storage_feedback.py'
       - 'tools/test_audit_nexium_storage_feedback.py'
