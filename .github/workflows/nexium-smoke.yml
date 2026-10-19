@@ -28,6 +28,10 @@ on:
       - 'include/field_world.hpp'
       - 'include/field_inspection_ui.hpp'
       - 'include/field_discovery.hpp'
+      - 'include/field_journal_view.hpp'
+      - 'tools/audit_nexium_field_journal.py'
+      - 'tools/test_audit_nexium_field_journal.py'
+      - 'tests/test_field_journal_view.cpp'
       - 'tests/test_field_runtime.cpp'
       - 'tests/test_field_discovery.cpp'
       - 'include/field_save_feedback.hpp'
@@ -133,6 +137,8 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_sd_repair.py' -v
       - name: Unit-test manual quicksave and event restore desktop audit
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_manual_snapshot.py' -v
+      - name: Unit-test independent NeXium L journal Xvfb audit
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_field_journal.py' -v
       - name: Unit-test ordered five-checkpoint reference matcher
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_checkpoints.py' -v
       - name: Verify synthetic frame evidence classifier
@@ -281,6 +287,52 @@ jobs:
             capture_manual 02_event_after_walk
             send_manual_key n load-start     # Switch Minus restores x1 / no event
             capture_manual 03_start_restored
+            # Stage 309: collect one synthetic clue in the FIRST guest
+            # before returning to the existing second pending-event save.
+            # Official NeXium default keyboard maps Switch L to Q.
+            mkdir -p nexium-probe/field-journal
+            xdotool keydown --clearmodifiers q
+            sleep 0.25
+            import -display :99 -window root \
+              nexium-probe/field-journal/00_empty_open.png
+            xdotool keyup q
+            sleep 0.20
+            import -display :99 -window root \
+              nexium-probe/field-journal/01_empty_closed.png
+            # Two 160ms cadence steps from x1 to x3, stopping before ! at x4.
+            xdotool keydown --clearmodifiers Right
+            sleep 0.38
+            xdotool keyup Right
+            sleep 0.12
+            import -display :99 -window root \
+              nexium-probe/field-journal/02_at_marker.png
+            # Real A inspection followed by B within the 900ms timeout.
+            xdotool keydown --clearmodifiers c
+            sleep 0.12
+            xdotool keyup c
+            sleep 0.08
+            import -display :99 -window root \
+              nexium-probe/field-journal/03_inspected.png
+            xdotool keydown --clearmodifiers x
+            sleep 0.12
+            xdotool keyup x
+            sleep 0.08
+            xdotool keydown --clearmodifiers q
+            sleep 0.12
+            import -display :99 -window root \
+              nexium-probe/field-journal/04_one_open.png
+            # Holding L prevents a movement despite 400ms of Right.
+            xdotool keydown --clearmodifiers Right
+            sleep 0.40
+            xdotool keyup Right
+            import -display :99 -window root \
+              nexium-probe/field-journal/05_one_open_right_held.png
+            xdotool keyup q
+            sleep 0.14
+            import -display :99 -window root \
+              nexium-probe/field-journal/06_one_closed.png
+            # Existing reference audit must see no stale clue caption.
+            sleep 1.20
             walk_to_event
             capture_manual 04_event_again
             send_manual_key z save-event     # Store pending event in quicksave slot
@@ -685,6 +737,12 @@ jobs:
             --reference same-commit-host-references \
             --screenshots nexium-probe/manual-snapshot \
             --report nexium-probe/manual-snapshot-audit.json
+      - name: Audit real guest L-held exploration journal screenshots
+        if: always()
+        run: |
+          /usr/bin/python3 tools/audit_nexium_field_journal.py \
+            --screenshots nexium-probe/field-journal \
+            --report nexium-probe/field-journal-audit.json
       - name: Verify intended Switch X triggers visible world changes
         if: always()
         run: |
@@ -745,6 +803,10 @@ jobs:
           if test -f nexium-probe/manual-snapshot-audit.json; then
             echo "Manual Y/Minus + event restoration audit:" >> "$GITHUB_STEP_SUMMARY"
             /usr/bin/python3 -c 'import json; d=json.load(open("nexium-probe/manual-snapshot-audit.json")); print("manual quicksave and event restore confirmed:",d["manual_quicksave_and_event_restore_confirmed"])' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/field-journal-audit.json; then
+            echo "Real first-guest L journal screenshot verification:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; d=json.load(open("nexium-probe/field-journal-audit.json")); print("complete:",d["open_release_collect_reopen_confirmed"],"checks:",len(d["checks"]))' >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "No firmware, ROM, BIOS or commercial assets used." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
