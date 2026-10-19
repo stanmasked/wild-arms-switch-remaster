@@ -210,22 +210,24 @@ void test_manual_event_clue_recording_is_explicit_and_unique() {
   require(!duplicate.clue_recorded && duplicate.clue_already_recorded &&
           duplicate.clue_count==1 && rt.discoveries.count==1);
   // After the caption expires, A then B can revisit without incrementing.
-  (void)advance_field_runtime(world,rt,step*12,{},screen.target);
+  // 960 ms is inside the allowed 1000-ms tick window. A larger
+  // single gap would intentionally be treated as a suspended applet.
+  (void)advance_field_runtime(world,rt,step*11,{},screen.target);
   require(rt.inspection.kind==Trigger::None);
-  (void)advance_field_runtime(world,rt,step*13,inspect,screen.target);
+  (void)advance_field_runtime(world,rt,step*12,inspect,screen.target);
   const auto revisit=advance_field_runtime(
-      world,rt,step*14,log_clue,screen.target);
+      world,rt,step*13,log_clue,screen.target);
   require(revisit.clue_already_recorded && !revisit.clue_recorded &&
           rt.discoveries.count==1);
   // Ordinary manual snapshot preserves only the world, not the clue
   // ledger; in-session log remains while saving/loading.
   const RuntimeControls save{{},false,false,true,false};
   const auto saved=advance_field_runtime(
-      world,rt,step*15,save,screen.target);
+      world,rt,step*14,save,screen.target);
   require(saved.snapshot_stored && rt.discoveries.count==1);
   const RuntimeControls load{{},false,false,false,true};
   const auto reloaded=advance_field_runtime(
-      world,rt,step*16,load,screen.target);
+      world,rt,step*15,load,screen.target);
   require(reloaded.snapshot_restored && rt.discoveries.count==1 &&
           rt.inspection.kind==Trigger::None);
 }
