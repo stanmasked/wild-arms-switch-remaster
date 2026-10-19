@@ -10,9 +10,9 @@ import hashlib
 import json
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageChops
 
-from audit_nexium_checkpoints import SCREEN_SIZE, screen_point
+from audit_nexium_checkpoints import SCREEN_SIZE, screen_point, VIEW_X, VIEW_W, VIEW_H
 
 # Source glyph rasters are asserted using an independently authored pixel
 # oracle. Samples use the CENTER of each 2x2 native glyph pixel.
@@ -20,6 +20,13 @@ GLYPHS = {
     "0": (14, 17, 19, 21, 25, 17, 14),
     "1": (4, 12, 4, 4, 4, 4, 14),
     "2": (14, 17, 1, 2, 4, 8, 31),
+    "4": (2, 6, 10, 18, 31, 2, 2),
+    "C": (14, 17, 16, 16, 16, 17, 14),
+    "L": (16, 16, 16, 16, 16, 16, 31),
+    "U": (17, 17, 17, 17, 17, 17, 14),
+    "E": (31, 16, 16, 30, 16, 16, 31),
+    "S": (15, 16, 16, 14, 1, 1, 30),
+    "/": (1, 1, 2, 4, 8, 16, 16),
     "A": (14, 17, 17, 31, 17, 17, 17),
     "X": (17, 17, 10, 4, 10, 17, 17),
     "Y": (17, 17, 10, 4, 4, 4, 4),
@@ -54,44 +61,43 @@ def native_pixel(image, x, y):
     return image.getpixel(screen_point(x, y))
 
 
-def glyph_matches(image, symbol, x, y):
-    rows = GLYPHS[symbol]
-    for row, pixels in enumerate(rows):
-        for col in range(5):
-            on = (pixels >> (4 - col)) & 1
-            expected = WHITE if on else DARK
-            if native_pixel(image, x + 2 * col + 1, y + 2 * row + 1) != expected:
-                return False
-    return True
+def _paint_text(draw, text, x, y):
+    for index, symbol in enumerate(text):
+        if symbol == " ":
+            continue
+        for row, pixels in enumerate(GLYPHS[symbol]):
+            for col in range(5):
+                if (pixels >> (4 - col)) & 1:
+                    left = x + index * 14 + col * 2
+                    top = y + row * 2
+                    draw.rectangle((left, top, left + 1, top + 1), fill=WHITE)
+
+
+def _expected_panel(clue_count):
+    # Independent raster oracle: the full panel, count, and all glyphs
+    # must match, not just a handful of positive sample points.
+    native = Image.new("RGB", (1280, 720), DARK)
+    draw = ImageDraw.Draw(native)
+    draw.rectangle((304, 80, 975, 639), fill=BLUE)
+    draw.rectangle((308, 84, 971, 635), fill=DARK)
+    _paint_text(draw, f"CLUES {clue_count}/2", 340, 116)
+    if clue_count:
+        _paint_text(draw, "A0 X4 Y1", 340, 168)
+    return native
 
 
 def panel_valid(image, clue_count):
-    if native_pixel(image, 305, 81) != BLUE:
-        return False
-    if native_pixel(image, 309, 85) != DARK:
-        return False
-    if not glyph_matches(image, str(clue_count), 340 + 6 * 14, 116):
-        return False
-    if not glyph_matches(image, "2", 340 + 8 * 14, 116):
-        return False
-    if clue_count == 0:
-        # Empty journal must leave the entire first-entry glyph area blank.
-        for y in range(168, 182):
-            for x in range(340, 458):
-                if native_pixel(image, x, y) != DARK:
-                    return False
-    else:
-        for symbol, position in (("A", 0), ("0", 1),
-                                 ("X", 3), ("Y", 6), ("1", 7)):
-            if not glyph_matches(image, symbol, 340 + position * 14, 168):
-                return False
-        # Two events exist in the intentionally synthetic demo world;
-        # discovering one means no second-entry line is displayed.
-        for y in range(195, 209):
-            for x in range(340, 458):
-                if native_pixel(image, x, y) != DARK:
-                    return False
-    return True
+    expected = _expected_panel(clue_count).resize(
+        (VIEW_W, VIEW_H), Image.Resampling.NEAREST)
+    observed = image.crop((VIEW_X, 0, VIEW_X + VIEW_W, VIEW_H))
+    # Compare exactly the projected native UI rectangle; the original
+    # game underneath the panel and the emulator HUD are not part of it.
+    native_mask = Image.new("L", (1280, 720))
+    ImageDraw.Draw(native_mask).rectangle((304, 80, 975, 639), fill=255)
+    mask = native_mask.resize((VIEW_W, VIEW_H), Image.Resampling.NEAREST)
+    delta = ImageChops.difference(expected, observed)
+    mask_rgb = Image.merge("RGB", (mask, mask, mask))
+    return ImageChops.multiply(delta, mask_rgb).getbbox() is None
 
 
 def audit_journal(screenshot_dir, report_file):
