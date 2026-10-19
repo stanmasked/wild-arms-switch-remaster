@@ -25,6 +25,43 @@ STEPS = {
     11: "failed_target_removal", 12: "failed_readback",
 }
 
+
+STATUS = {
+    0: "stored", 1: "loaded", 2: "missing", 3: "corrupt",
+    4: "invalid_world", 5: "invalid_state", 6: "io_error",
+    7: "sequence_exhausted"
+}
+FAILURE_STAGES = {
+    1: "preexisting_slot_read_error",
+    2: "temporary_file_open_error",
+    9: "temporary_write_sync_or_close_failed",
+    10: "temporary_record_verification_failed",
+    11: "old_slot_unlink_failed",
+    12: "published_record_not_verified",
+}
+def classify(payload):
+    """Reason from recorded stages only, never from final SD contents."""
+    if payload["ready"] == 0:
+        return "storage_unavailable"
+    if (payload["result"] == 0 and payload["step"] == 8 and
+        payload["bytes_equal"] == 1 and payload["published"] == 1):
+        return "exact_new_generation_verified"
+    if payload["result"] == 6:
+        return FAILURE_STAGES.get(payload["step"], "io_error_phase_unknown")
+    if payload["result"] == 0:
+        return "reported_success_missing_proof"
+    if payload["result"] == 3:
+        return "corrupt_prior_journal"
+    return "other_save_status"
+
+def validate_trace_payload(payload):
+    return (payload["ready"] in (0, 1) and
+            payload["renamed"] in (0, 1) and
+            payload["bytes_equal"] in (0, 1) and
+            payload["result"] in STATUS and
+            payload["step"] in STEPS and
+            0 <= payload["attempts"] <= 3)
+
 def extract(logs):
     entries = []
     for file in logs:
@@ -37,6 +74,20 @@ def extract(logs):
                 payload["step_label"] = STEPS.get(
                     payload["step"], "unknown")
                 payload["source"] = path.name
+                payload["valid_fields"] = validate_trace_payload(payload)
+                payload["result_label"] = STATUS.get(
+                    payload["result"], "unknown")
+                payload["existing_a_label"] = STATUS.get(
+                    payload["old_a"], "unknown")
+                payload["existing_b_label"] = STATUS.get(
+                    payload["old_b"], "unknown")
+                payload["temporary_label"] = STATUS.get(
+                    payload["temporary"], "unknown")
+                payload["published_label"] = STATUS.get(
+                    payload["published"], "unknown")
+                payload["failure_class"] = (
+                    classify(payload) if payload["valid_fields"]
+                    else "malformed_trace_fields")
                 entries.append(payload)
     # NeXium may mirror a single event to multiple log sinks. Preserve all
     # raw lines while allowing the report consumer to inspect source.
@@ -44,6 +95,9 @@ def extract(logs):
         "kind": "stage_302_guest_sd_write_stage_diagnostics",
         "found": len(entries) > 0,
         "records": entries,
+        "failure_classes": [x["failure_class"] for x in entries],
+        "all_fields_valid": bool(entries) and all(
+            x["valid_fields"] for x in entries),
         "production_save_result_unmodified": True,
         "strict_pixel_check_bypassed": False,
     }

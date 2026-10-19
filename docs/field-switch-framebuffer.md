@@ -374,3 +374,21 @@ error code. The parser has standalone fixture tests and cannot
 alter save state or suppress the separately enforced screenshot/CRC
 gate. If no guest debug line is available, `found:false` is
 reported rather than fabricating a phase.
+
+### Stage 302 follow-up — deterministic failure-stage classification
+
+The guest trace parser now names the specific phase of a failed write
+when a valid `WA_SAVE_TRACE v1` record exists. It distinguishes
+preexisting slot read errors, opening temporary data, write/sync/close
+failure, temporary validation failure, unlink of an older slot, and
+failure to validate the final committed record. It verifies legal
+status/flag values, carries the raw numeric diagnostics forward, and
+returns `malformed_trace_fields` or an empty record list when the
+evidence is unavailable. Only the combination of `Stored`,
+`VerifiedCommitted`, `published_status=Loaded` and exact byte
+equality is classified as a proven successful publication.
+
+This classification is a diagnostic report, not a gameplay result,
+a workaround or a replacement for the existing RGB/CRC CI gate.
+No assumptions are made about which stage the real NeXium guest
+failed at until its original debug line is obtained.
