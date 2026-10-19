@@ -147,3 +147,14 @@ all outcome colours, text drawing bounds, and deterministic expiry.
 NeXium manual screenshot capture now waits for the transient indicator
 to disappear before comparing the original scene pixels, and separate
 transient captures are kept for UI validation.
+
+### Stage 295: stronger guest plaque pixel parity
+
+The real NeXium feedback auditor now matches the *entire* projected
+storage indicator rectangle (excluding only a three-desktop-pixel
+edge margin) against an independently defined rasterization of the
+native C++ plaque and its 5×7 lettering. It reports the number of
+observed RGB mismatches and fails for even one changed visible pixel,
+including cases where the badge colour is correct but the words are
+wrong. This check is separate from the established five-scene,
+4,112,580-pixel gameplay parity audit.
