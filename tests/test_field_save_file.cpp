@@ -425,6 +425,71 @@ void test_restart_import_matches_event_frame_and_confirm_edge() {
          restarted.manual.pending == Trigger::Event);
   expect(pixels == reference_event);
 }
+void test_corrupt_postrename_crc_rescued_only_with_exact_bytes() {
+  Fixture f;
+  const FieldWorld world = make_demo_world();
+  const WorldState old_state = start_world(world);
+  const WorldState event = to_event(world);
+  expect(store_field_save_file(world, old_state, f.prefix) ==
+         FileSaveStatus::Stored);
+  const FileSaveSlot old_a = read_field_journal_slot(world, f.prefix + ".a");
+  expect(old_a.status == FileSaveStatus::Loaded && old_a.generation == 1);
+  JournalWriteDiagnostic detail{};
+  // Pretend the rename completed but a same-process re-open reads an
+  // invalid CRC, exactly as seen in the actual NeXium guest trace.
+  expect(store_field_save_file(
+      world, event, f.prefix,
+      JournalInterruption::AfterPublishedTargetCrcDamaged, &detail) ==
+      FileSaveStatus::Stored);
+  expect(detail.step == JournalWriteStep::RescueWriteVerified);
+  expect(detail.published_status == FileSaveStatus::Loaded &&
+         detail.published_bytes_equal && detail.read_attempts == 4);
+  const FileSaveSlot new_b = read_field_journal_slot(world, f.prefix + ".b");
+  expect(new_b.status == FileSaveStatus::Loaded && new_b.generation == 2);
+  same(event, new_b.world);
+  const FileSaveSlot still_a = read_field_journal_slot(world, f.prefix + ".a");
+  expect(still_a.status == FileSaveStatus::Loaded &&
+         still_a.bytes == old_a.bytes);
+  WorldState loaded{};
+  const auto healthy = load_field_save_file_detailed(world, f.prefix, loaded);
+  expect(healthy.status == FileSaveStatus::Loaded && !healthy.degraded &&
+         healthy.selected_generation == 2);
+  same(event, loaded);
+}
+
+void test_interrupted_rescue_preserves_the_last_good_generation() {
+  Fixture f;
+  const FieldWorld world = make_demo_world();
+  const WorldState initial = start_world(world);
+  const WorldState event = to_event(world);
+  expect(store_field_save_file(world, initial, f.prefix) ==
+         FileSaveStatus::Stored);
+  const FileSaveSlot old_a = read_field_journal_slot(world, f.prefix + ".a");
+  JournalWriteDiagnostic detail{};
+  expect(store_field_save_file(
+      world, event, f.prefix, JournalInterruption::AfterRescueShortWrite,
+      &detail) == FileSaveStatus::IoError);
+  expect(detail.step == JournalWriteStep::RescueWriteFailed);
+  const FileSaveSlot intact = read_field_journal_slot(world, f.prefix + ".a");
+  expect(intact.status == FileSaveStatus::Loaded &&
+         intact.bytes == old_a.bytes);
+  WorldState recovered{};
+  const auto fallback = load_field_save_file_detailed(
+      world, f.prefix, recovered);
+  expect(fallback.status == FileSaveStatus::Loaded &&
+         fallback.degraded && fallback.selected_generation == 1);
+  same(initial, recovered);
+  // No interrupted direct-write is ever loaded. A subsequent healthy
+  // save repairs the damaged slot and clears the warning.
+  expect(store_field_save_file(world, event, f.prefix) ==
+         FileSaveStatus::Stored);
+  const auto healed = load_field_save_file_detailed(
+      world, f.prefix, recovered);
+  expect(healed.status == FileSaveStatus::Loaded && !healed.degraded &&
+         healed.selected_generation == 2);
+  same(event, recovered);
+}
+
 void test_per_open_readback_evidence_is_structural_only() {
   Fixture f;
   const FieldWorld world = make_demo_world();
@@ -574,6 +639,8 @@ int main() {
   test_restart_import_matches_event_frame_and_confirm_edge();
   test_interrupted_journal_publication_recovery();
   test_interrupted_first_save_never_accepts_temporary_file();
+  test_corrupt_postrename_crc_rescued_only_with_exact_bytes();
+  test_interrupted_rescue_preserves_the_last_good_generation();
   test_per_open_readback_evidence_is_structural_only();
   test_write_diagnostic_lifecycle_and_corrupt_slot_repair();
   test_postpublish_false_negative_error_reports();

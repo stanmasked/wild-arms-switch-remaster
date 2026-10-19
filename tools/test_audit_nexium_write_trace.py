@@ -130,6 +130,35 @@ class TraceExtractionTests(unittest.TestCase):
                     self.assertTrue(report["records"][0]["extended_readback"])
                     self.assertEqual(report["failure_classes"],[label])
 
+    def test_rescue_success_requires_full_verified_publication(self):
+        with tempfile.TemporaryDirectory() as td:
+            path=Path(td)/"guest.txt"
+            path.write_text(
+                "WA_SAVE_TRACE v1 result=0 ready=1 step=14 "
+                "oldA=1 oldB=3 tmp=1 pub=1 gen=2 "
+                "tries=4 renamed=1 equal=1 errno=0 "
+                "count=56 eof=1 more=0 magic=1 crc=1 decoded=1\n")
+            a=extract([path])
+            self.assertTrue(a["all_fields_valid"])
+            self.assertEqual(a["failure_classes"],
+                             ["exact_new_generation_rescued"])
+            path.write_text(path.read_text().replace("equal=1", "equal=0"))
+            bad=extract([path])
+            self.assertEqual(bad["failure_classes"],
+                             ["reported_success_missing_proof"])
+
+    def test_rescue_failure_cannot_be_mistaken_for_success(self):
+        with tempfile.TemporaryDirectory() as td:
+            path=Path(td)/"guest.txt"
+            path.write_text(
+                "WA_SAVE_TRACE v1 result=6 ready=1 step=15 "
+                "oldA=1 oldB=3 tmp=1 pub=3 gen=2 "
+                "tries=4 renamed=1 equal=0 errno=0 "
+                "count=56 eof=1 more=0 magic=1 crc=0 decoded=0\n")
+            a=extract([path])
+            self.assertEqual(a["failure_classes"],
+                             ["redundant_slot_rescue_failed"])
+
     def test_wrong_marker_does_not_create_false_evidence(self):
         with tempfile.TemporaryDirectory() as td:
             file=Path(td)/"host.log"

@@ -440,3 +440,34 @@ No raw gameplay bytes, user files, host paths or addresses are
 included in guest diagnostic strings. The **real** fourth guest
 must still satisfy the strict exact-green `SD SAVED` screenshot
 check; stage 303 is a diagnostic refinement, not a success waiver.
+
+## Stage 304 — bounded CRC-corrupt post-rename redundant-slot rewrite
+
+The real fourth NeXium process in [run 39294222345](https://github.com/stanmasked/wild-arms-switch-remaster/actions/runs/39294222345)
+confirmed a 56-byte, WAJ1-header-correct record whose CRC failed
+on all three readbacks immediately after rename, even though the
+fifth fresh guest loaded the newly published record correctly.
+
+When (and **only** when) the target was successfully renamed,
+a separate latest-valid journal slot already exists, and the
+post-rename attempts have actually seen a CRC-corrupt record, the
+writer now allows **one** direct rewrite of the *redundant target
+slot* followed by a completely fresh read with exact byte-for-byte
+generation/payload/CRC and world validation. It reports `Stored`
+only if this postcondition succeeds; otherwise `IoError`. This
+does not replace or delete the intact previous generation. It is
+not a retry for I/O errors, missing files, unsupported worlds or
+both-corrupt saves. There is no timing-based assumption of success.
+
+New test-only fault injections reproduce the real NeXium-shaped
+post-rename CRC failure and interruption after writing the first
+11 bytes of the redundant target. Host tests verify successful
+self-healing and fail-closed recovery from the unchanged older
+journal after a simulated interrupted rewrite. Guest diagnostics
+distinguish `RescueWriteVerified` and `RescueWriteFailed` from
+the former `FailedReadback`; the strict unchanged NeXium green
+`SD SAVED` screenshot and journal hash audit still gate success.
+
+This protects against an interrupted redundant-target rewrite at
+the journal level, but does *not* certify FAT/SD persistence under
+physical sudden power loss on Nintendo Switch hardware.

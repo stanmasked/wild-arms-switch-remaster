@@ -27,6 +27,8 @@ STEPS = {
     7: "postpublish_readback", 8: "verified_committed",
     9: "failed_temporary_write", 10: "failed_temporary_verification",
     11: "failed_target_removal", 12: "failed_readback",
+    13: "rescue_write_attempted", 14: "rescue_write_verified",
+    15: "rescue_write_failed",
 }
 
 
@@ -42,14 +44,16 @@ FAILURE_STAGES = {
     10: "temporary_record_verification_failed",
     11: "old_slot_unlink_failed",
     12: "published_record_not_verified",
+    15: "redundant_slot_rescue_failed",
 }
 def classify(payload):
     """Reason from recorded stages only, never from final SD contents."""
     if payload["ready"] == 0:
         return "storage_unavailable"
-    if (payload["result"] == 0 and payload["step"] == 8 and
+    if (payload["result"] == 0 and payload["step"] in (8, 14) and
         payload["bytes_equal"] == 1 and payload["published"] == 1):
-        return "exact_new_generation_verified"
+        return ("exact_new_generation_rescued" if payload["step"] == 14
+                else "exact_new_generation_verified")
     if payload["result"] == 6:
         return FAILURE_STAGES.get(payload["step"], "io_error_phase_unknown")
     if payload["result"] == 0:
@@ -64,7 +68,7 @@ def validate_trace_payload(payload):
             payload["bytes_equal"] in (0, 1) and
             payload["result"] in STATUS and
             payload["step"] in STEPS and
-            0 <= payload["attempts"] <= 3)
+            0 <= payload["attempts"] <= 4)
 
 def extract(logs):
     entries = []
