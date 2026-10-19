@@ -19,6 +19,37 @@ int main(int argc, char** argv) {
   FieldRuntime runtime = start_field_runtime(world, frequency, 0);
   if (!runtime.timer.valid() || runtime.manual.player.x != 1 ||
       runtime.quicksave.occupied) return 4;
+  if (std::strcmp(argv[1], "save-start") == 0) {
+    const FileSaveStatus saved =
+        store_field_save_file(world, runtime.manual, path);
+    if (saved != FileSaveStatus::Stored) return 15;
+    std::puts("FIRST_PROCESS_STORED_INITIAL_LOCATION");
+    return 0;
+  }
+  if (std::strcmp(argv[1], "expect-start") == 0) {
+    WorldState imported{};
+    if (load_field_save_file(world, path, imported) !=
+        FileSaveStatus::Loaded) return 16;
+    if (imported.player.x != 1 || imported.player.y != 1 ||
+        imported.pending != Trigger::None ||
+        imported.player.successful_moves != 0)
+      return 17;
+    runtime.quicksave.world = imported;
+    runtime.quicksave.occupied = true;
+    std::vector<std::uint32_t> image(
+        static_cast<std::size_t>(kRasterWidth) * kRasterHeight);
+    PixelTarget target{image.data(), kRasterWidth, kRasterHeight, kRasterWidth};
+    RuntimeControls load{};
+    load.load_snapshot = true;
+    const RuntimeFrame restored = advance_field_runtime(
+        world, runtime, tick_step, load, target);
+    if (restored.status != RuntimeStatus::Rendered ||
+        !restored.snapshot_restored || runtime.manual.player.x != 1 ||
+        runtime.manual.pending != Trigger::None)
+      return 18;
+    std::puts("NEW_PROCESS_FELL_BACK_TO_PREVIOUS_INITIAL_SAVE");
+    return 0;
+  }
   if (std::strcmp(argv[1], "save") == 0) {
     std::vector<std::uint32_t> frame(
         static_cast<std::size_t>(kRasterWidth) * kRasterHeight);

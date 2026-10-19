@@ -57,6 +57,43 @@ class ProcessRestartTests(unittest.TestCase):
             self.invoke("load", path,
                         "SECOND_PROCESS_LOADED_AND_ACKNOWLEDGED_EVENT")
 
+    def test_fresh_process_recovers_older_generation_after_latest_damage(self):
+        with tempfile.TemporaryDirectory(prefix="wild-arms-restart-") as td:
+            path = Path(td) / "field-save"
+            a = path.with_suffix(".a")
+            b = path.with_suffix(".b")
+            # Process 1 commits the initial checkpoint to generation 1.
+            self.invoke("save-start", path,
+                        "FIRST_PROCESS_STORED_INITIAL_LOCATION")
+            initial = a.read_bytes()
+            self.assertEqual(len(initial), 56)
+            # Another OS process publishes event checkpoint generation 2.
+            self.invoke("save", path, "FIRST_PROCESS_WRITTEN_PENDING_EVENT")
+            self.assertEqual(int.from_bytes(b.read_bytes()[4:12], "little"), 2)
+            # A torn latest write must not turn an intact older save invalid.
+            b.write_bytes(b.read_bytes()[:19])
+            self.invoke("expect-start", path,
+                        "NEW_PROCESS_FELL_BACK_TO_PREVIOUS_INITIAL_SAVE")
+            self.assertEqual(a.read_bytes(), initial)
+            # A further fresh process overwrites bad slot and restarts
+            # from the new valid event checkpoint instead of stale A.
+            self.invoke("save", path, "FIRST_PROCESS_WRITTEN_PENDING_EVENT")
+            self.invoke("load", path,
+                        "SECOND_PROCESS_LOADED_AND_ACKNOWLEDGED_EVENT")
+            self.assertEqual(a.read_bytes(), initial)
+
+    def test_fresh_process_recovers_from_modified_latest_crc(self):
+        with tempfile.TemporaryDirectory(prefix="wild-arms-restart-") as td:
+            path = Path(td) / "field-save"
+            self.invoke("save-start", path,
+                        "FIRST_PROCESS_STORED_INITIAL_LOCATION")
+            self.invoke("save", path, "FIRST_PROCESS_WRITTEN_PENDING_EVENT")
+            current = bytearray(path.with_suffix(".b").read_bytes())
+            current[-1] ^= 0x80
+            path.with_suffix(".b").write_bytes(current)
+            self.invoke("expect-start", path,
+                        "NEW_PROCESS_FELL_BACK_TO_PREVIOUS_INITIAL_SAVE")
+
     def test_torn_committed_record_fails_without_state_change(self):
         with tempfile.TemporaryDirectory(prefix="wild-arms-restart-") as td:
             path = Path(td) / "field-save"
