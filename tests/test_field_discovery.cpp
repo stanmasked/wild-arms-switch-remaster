@@ -1,4 +1,5 @@
 #include "field_discovery.hpp"
+#include "field_save_codec.hpp"
 
 #include <cstdlib>
 
@@ -56,9 +57,37 @@ void test_full_ledger_returns_error_without_insertion() {
           DiscoveryResult::Invalid);
   require(notes.count == notes.entries.size());
 }
+
+void test_discoveries_cannot_change_version_one_save_bytes() {
+  const FieldWorld world = make_demo_world();
+  const WorldState saved_world = start_world(world);
+  FieldSaveRecord original{};
+  FieldSaveRecord after_discovery{};
+  FieldDiscoveryJournal journal{};
+  require(encode_field_save(world, saved_world, original) ==
+          FieldSaveStatus::Encoded);
+  require(original.size() == kFieldSaveRecordSize);
+  require(original[4] == kFieldSaveVersion);
+  require(record_discovery(world, journal, 0, 4, 1) ==
+          DiscoveryResult::Recorded);
+  require(record_discovery(world, journal, 1, 4, 3) ==
+          DiscoveryResult::Recorded);
+  require(journal.count == 2);
+  require(encode_field_save(world, saved_world, after_discovery) ==
+          FieldSaveStatus::Encoded);
+  // A session-only journal must not leak into any v1 payload byte or CRC.
+  require(original == after_discovery);
+  WorldState loaded{};
+  require(decode_field_save(world, original, loaded) ==
+          FieldSaveStatus::Decoded);
+  require(loaded.area == saved_world.area &&
+          loaded.player.x == saved_world.player.x &&
+          loaded.player.y == saved_world.player.y);
+}
 }
 int main() {
   test_distinct_events_and_revisits_are_idempotent();
   test_invalid_markers_and_corrupt_ledgers_cannot_mutate();
   test_full_ledger_returns_error_without_insertion();
+  test_discoveries_cannot_change_version_one_save_bytes();
 }
