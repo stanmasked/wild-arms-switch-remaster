@@ -26,6 +26,18 @@ enum class FileSaveStatus {
   IoError, SequenceExhausted
 };
 
+// Test-only simulated interruption points. Production calls use the default
+// None: no storage hooks, no deliberate errors. These are deterministic
+// host-file-system simulations, not a substitute for physical power cuts.
+enum class JournalInterruption {
+  None,
+  AfterShortTemporaryWrite,
+  AfterTemporarySynced,
+  AfterTemporaryValidated,
+  AfterPreviousSlotRemoved,
+  AfterNewSlotRenamed
+};
+
 struct FileSaveSlot {
   FileSaveStatus status = FileSaveStatus::Missing;
   std::uint64_t generation = 0;
@@ -101,7 +113,8 @@ struct FileSaveSlot {
 
 [[nodiscard]] inline FileSaveStatus store_field_save_file(
     const FieldWorld& world, const WorldState& state,
-    const std::string& base_path) noexcept {
+    const std::string& base_path,
+    JournalInterruption simulate = JournalInterruption::None) noexcept {
   if (!world.valid()) return FileSaveStatus::InvalidWorld;
   FieldSaveRecord encoded{};
   if (encode_field_save(world, state, encoded) != FieldSaveStatus::Encoded)
@@ -137,6 +150,13 @@ struct FileSaveSlot {
   // The temporary file is never considered a committed save at load time.
   std::FILE* f = std::fopen(temporary.c_str(), "wb");
   if (!f) return FileSaveStatus::IoError;
+  if (simulate == JournalInterruption::AfterShortTemporaryWrite) {
+    // A process stop while writing the 56 bytes: a deliberately incomplete
+    // .tmp is left. Neither .a nor .b is touched; readers never load .tmp.
+    (void)std::fwrite(payload.data(), 1, 11, f);
+    (void)std::fclose(f);
+    return FileSaveStatus::IoError;
+  }
   const bool complete =
       std::fwrite(payload.data(), 1, payload.size(), f) == payload.size() &&
       std::fflush(f) == 0 && ::fsync(::fileno(f)) == 0;
@@ -145,6 +165,8 @@ struct FileSaveSlot {
     (void)std::remove(temporary.c_str());
     return FileSaveStatus::IoError;
   }
+  if (simulate == JournalInterruption::AfterTemporarySynced)
+    return FileSaveStatus::IoError;  // Complete uncommitted .tmp survives.
 
   // Re-open and validate from storage before making the new file visible.
   const FileSaveSlot verified = read_field_journal_slot(world, temporary);
@@ -153,6 +175,8 @@ struct FileSaveSlot {
     (void)std::remove(temporary.c_str());
     return FileSaveStatus::IoError;
   }
+  if (simulate == JournalInterruption::AfterTemporaryValidated)
+    return FileSaveStatus::IoError;
 
   // libnx's sdmc rename does not promise POSIX overwrite. Only the *older*
   // slot can be deleted; the newest valid generation survives any failure.
@@ -161,7 +185,13 @@ struct FileSaveSlot {
     (void)std::remove(temporary.c_str());
     return FileSaveStatus::IoError;
   }
-  if (std::rename(temporary.c_str(), target.c_str()) != 0)
+  if (simulate == JournalInterruption::AfterPreviousSlotRemoved)
+    return FileSaveStatus::IoError;
+  if (std::rename(temporary.c_str(), target.c_str()) != 0) {
+    (void)std::remove(temporary.c_str());
+    return FileSaveStatus::IoError;
+  }
+  if (simulate == JournalInterruption::AfterNewSlotRenamed)
     return FileSaveStatus::IoError;
   const FileSaveSlot published = read_field_journal_slot(world, target);
   if (published.status != FileSaveStatus::Loaded ||

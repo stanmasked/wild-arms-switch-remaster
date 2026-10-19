@@ -109,8 +109,9 @@ A corrupt latest slot may fall back to a valid older generation.
 
 **Important limitations:** SDMC may be unavailable (notably in
 emulators). If it is unavailable or a file write fails, RAM quicksave
-continues but there is **not yet a user-visible disk-write success/failure
-indicator**. There is no claim of full SD FAT/exFAT power-loss atomicity,
+continues but there is an explicit transient RAM-only or SD-error screen
+indicator (added at Stage 295), but this does not prove file-system
+power-loss durability. There is no claim of full SD FAT/exFAT power-loss atomicity,
 durable directory metadata, concurrent-process writer protection, or
 tested persistence across two native Switch hardware sessions. The
 journal provides recoverable independent generations in normal tested
@@ -158,3 +159,28 @@ observed RGB mismatches and fails for even one changed visible pixel,
 including cases where the badge colour is correct but the words are
 wrong. This check is separate from the established five-scene,
 4,112,580-pixel gameplay parity audit.
+
+## Stage 296 — verified interrupted-write recovery windows
+
+The generational journal now includes an **opt-in, test-only**
+`JournalInterruption` fault injector. Normal Switch calls always use
+`None`; no deliberate failures are enabled in the compiled NRO.
+Host CTest simulates interruption after (1) a partial 11-byte temporary
+write, (2) temporary flush/fsync/close, (3) temporary read-back
+verification, (4) removal of the previous older slot, and (5) final
+rename into the destination slot. Each case starts with a known-good
+generation 2, attempts generation 3, and verifies generation 2 is still
+readable byte-for-byte. Before rename, no temporary file is accepted
+as a committed save. After rename, the complete generation 3 may
+correctly load even if the process never reported success. A fresh
+write after each interruption must advance the journal and recover
+normal loading. Separate tests cover interruption of the very first
+save, with no prior committed generations. The writer now also removes
+the temporary file if a normal rename fails.
+
+**These checks use the host filesystem and deterministic stops between
+operations.** They do not emulate a real hardware power cut during
+the middle of an SD write, simulate FAT/exFAT metadata corruption, prove
+`fsync`/rename durability on the physical Switch, or protect against
+concurrent writing processes. As before, the synthetic five-scene
+field visuals and on-screen notification colours are untouched.

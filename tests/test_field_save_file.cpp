@@ -200,6 +200,105 @@ void test_io_error_and_generation_exhaustion() {
          FileSaveStatus::SequenceExhausted);
 }
 
+// Simulated power-cut windows must not make a previous *committed*
+// generation disappear. Only a complete, renamed journal is loadable.
+void test_interrupted_journal_publication_recovery() {
+  const FieldWorld world = make_demo_world();
+  const WorldState initial = start_world(world);
+  const WorldState event = to_event(world);
+  const JournalInterruption points[] = {
+    JournalInterruption::AfterShortTemporaryWrite,
+    JournalInterruption::AfterTemporarySynced,
+    JournalInterruption::AfterTemporaryValidated,
+    JournalInterruption::AfterPreviousSlotRemoved,
+    JournalInterruption::AfterNewSlotRenamed
+  };
+  for (const auto point : points) {
+    Fixture f;
+    expect(store_field_save_file(world, initial, f.prefix) ==
+           FileSaveStatus::Stored);
+    expect(store_field_save_file(world, event, f.prefix) ==
+           FileSaveStatus::Stored);
+    const FileSaveSlot latest = read_field_journal_slot(
+        world, f.prefix + ".b");
+    expect(latest.status == FileSaveStatus::Loaded &&
+           latest.generation == 2);
+
+    // The third write rotates to A, leaving B (generation 2) untouched.
+    expect(store_field_save_file(world, initial, f.prefix, point) ==
+           FileSaveStatus::IoError);
+
+    const FileSaveSlot still_good = read_field_journal_slot(
+        world, f.prefix + ".b");
+    expect(still_good.status == FileSaveStatus::Loaded &&
+           still_good.bytes == latest.bytes);
+    expect(still_good.generation == 2);
+    const FileSaveSlot target = read_field_journal_slot(
+        world, f.prefix + ".a");
+    const FileSaveSlot temporary = read_field_journal_slot(
+        world, f.prefix + ".a.tmp");
+    if (point == JournalInterruption::AfterNewSlotRenamed) {
+      // Rename completed before the simulated crash, so generation 3
+      // legitimately wins even if the writer didn't report success.
+      expect(target.status == FileSaveStatus::Loaded &&
+             target.generation == 3);
+      expect(temporary.status == FileSaveStatus::Missing);
+    } else {
+      // The old generation 1 may survive, or be unlinked just before
+      // rename; the latest generation 2 remains intact either way.
+      expect(target.status == FileSaveStatus::Loaded ||
+             target.status == FileSaveStatus::Missing);
+      if (point == JournalInterruption::AfterShortTemporaryWrite)
+        expect(temporary.status == FileSaveStatus::Corrupt);
+      else
+        expect(temporary.status == FileSaveStatus::Loaded &&
+               temporary.generation == 3);
+    }
+    WorldState result = event;
+    expect(load_field_save_file(world, f.prefix, result) ==
+           FileSaveStatus::Loaded);
+    if (point == JournalInterruption::AfterNewSlotRenamed)
+      same(initial, result);
+    else
+      same(event, result);
+
+    // A fresh application run overwrites stale .tmp, publishes a
+    // verified next generation and loads it unambiguously.
+    expect(store_field_save_file(world, initial, f.prefix) ==
+           FileSaveStatus::Stored);
+    expect(load_field_save_file(world, f.prefix, result) ==
+           FileSaveStatus::Loaded);
+    same(initial, result);
+  }
+}
+
+void test_interrupted_first_save_never_accepts_temporary_file() {
+  const FieldWorld world = make_demo_world();
+  const WorldState initial = start_world(world);
+  const JournalInterruption points[] = {
+    JournalInterruption::AfterShortTemporaryWrite,
+    JournalInterruption::AfterTemporarySynced,
+    JournalInterruption::AfterTemporaryValidated,
+    JournalInterruption::AfterPreviousSlotRemoved
+  };
+  for (const auto point : points) {
+    Fixture f;
+    expect(store_field_save_file(world, initial, f.prefix, point) ==
+           FileSaveStatus::IoError);
+    WorldState output = initial;
+    output.player.successful_moves = 67;
+    const WorldState marker = output;
+    expect(load_field_save_file(world, f.prefix, output) ==
+           FileSaveStatus::Missing);
+    same(marker, output);
+    expect(store_field_save_file(world, initial, f.prefix) ==
+           FileSaveStatus::Stored);
+    expect(load_field_save_file(world, f.prefix, output) ==
+           FileSaveStatus::Loaded);
+    same(initial, output);
+  }
+}
+
 void test_restart_import_matches_event_frame_and_confirm_edge() {
   Fixture f;
   const FieldWorld world = make_demo_world();
@@ -267,4 +366,6 @@ int main() {
   test_invalid_state_and_invalid_world_do_not_overwrite();
   test_io_error_and_generation_exhaustion();
   test_restart_import_matches_event_frame_and_confirm_edge();
+  test_interrupted_journal_publication_recovery();
+  test_interrupted_first_save_never_accepts_temporary_file();
 }
