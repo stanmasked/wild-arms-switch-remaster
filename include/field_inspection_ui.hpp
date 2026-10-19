@@ -29,7 +29,7 @@ constexpr int kInspectionPanelHeight = 55;
 inspection_caption_glyph(char c) noexcept {
   static constexpr std::array<std::uint8_t, 7> empty{0,0,0,0,0,0,0};
   static constexpr std::array<std::uint8_t, 7> a{14,17,17,31,17,17,17};
-  static constexpr std::array<std::uint8_t, 7> c{14,17,16,16,16,17,14};
+  static constexpr std::array<std::uint8_t, 7> glyph_c{14,17,16,16,16,17,14};
   static constexpr std::array<std::uint8_t, 7> l{16,16,16,16,16,16,31};
   static constexpr std::array<std::uint8_t, 7> o{14,17,17,17,17,17,14};
   static constexpr std::array<std::uint8_t, 7> u{17,17,17,17,17,17,14};
@@ -43,7 +43,7 @@ inspection_caption_glyph(char c) noexcept {
   static constexpr std::array<std::uint8_t, 7> x{17,17,10,4,10,17,17};
   switch (c) {
     case 'A': return a;
-    case 'C': return c;
+    case 'C': return glyph_c;
     case 'L': return l;
     case 'O': return o;
     case 'U': return u;
