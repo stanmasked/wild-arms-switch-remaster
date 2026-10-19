@@ -78,6 +78,19 @@ class GuestJournalAuditTests(unittest.TestCase):
             self.assertFalse(result["open_release_collect_reopen_confirmed"])
             self.assertFalse(result["checks"]["recorded_panel_exact_1_of_2"])
 
+    def test_single_wrong_journal_pixel_is_not_masked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_folder(tmp)
+            name = Path(tmp) / "04_one_open.png"
+            with Image.open(name) as png:
+                altered = png.convert("RGB")
+            # Ordinary interior journal pixel, far from text and HUD.
+            altered.putpixel((400, 240), (5, 6, 7))
+            altered.save(name)
+            result = audit_journal(tmp, Path(tmp) / "audit.json")
+            self.assertFalse(result["open_release_collect_reopen_confirmed"])
+            self.assertFalse(result["checks"]["recorded_panel_exact_1_of_2"])
+
     def test_player_moved_while_journal_held_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             make_folder(tmp)
