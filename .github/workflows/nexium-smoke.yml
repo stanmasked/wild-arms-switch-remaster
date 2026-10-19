@@ -31,6 +31,8 @@ on:
       - 'tools/audit_nexium_process_restart.py'
       - 'tools/audit_nexium_sd_recovery.py'
       - 'tools/audit_nexium_sd_repair.py'
+      - 'tools/audit_nexium_write_trace.py'
+      - 'tools/test_audit_nexium_write_trace.py'
       - 'tools/test_audit_nexium_sd_repair.py'
       - 'tools/test_audit_nexium_sd_recovery.py'
       - 'tools/test_audit_nexium_process_restart.py'
@@ -120,6 +122,8 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_process_restart.py' -v
       - name: Unit-test NeXium SD corruption and recovery auditor
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_sd_recovery.py' -v
+      - name: Unit-test guest save-trace parser
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_write_trace.py' -v
       - name: Unit-test fourth/fifth guest journal repair and fresh SD reload auditor
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_sd_repair.py' -v
       - name: Unit-test manual quicksave and event restore desktop audit
@@ -496,6 +500,11 @@ jobs:
           result=$?
           set -e
           echo "$result" > nexium-probe/repaired-sd/fourth-exit-code.txt
+          # Preserve fourth-process internal debug logs BEFORE fifth starts.
+          logfile=$(find "$NEXIUM_DATA_ROOT/logs" -maxdepth 1 -type f             -name '*.log' -printf '%T@ %p\n' 2>/dev/null             | sort -nr | head -n 1 | cut -d' ' -f2-) || true
+          if test -n "$logfile" && test -f "$logfile"; then
+            cp "$logfile" nexium-probe/repaired-sd/fourth-internal.log
+          fi
 
       - name: Launch FIFTH guest from repaired SD with no in-memory checkpoint
         timeout-minutes: 3
@@ -564,9 +573,8 @@ jobs:
           printf 'Fourth guest trace from host log:\n'
           grep 'WA_SAVE_TRACE' nexium-probe/repaired-sd/fourth-process.log | tail -n 12 || true
           printf 'Fourth guest trace from internal NeXium logs:\n'
-          if test -d "$RUNNER_TEMP/nexium-wild-arms-data/logs"; then
-            grep -h 'WA_SAVE_TRACE' "$RUNNER_TEMP"/nexium-wild-arms-data/logs/*.log               | tail -n 12 || true
-          fi
+          grep -h 'WA_SAVE_TRACE' nexium-probe/repaired-sd/fourth-internal.log             | tail -n 12 || true
+          /usr/bin/python3 tools/audit_nexium_write_trace.py             --output nexium-probe/repaired-sd/write-trace.json             nexium-probe/repaired-sd/fourth-process.log             nexium-probe/repaired-sd/fourth-internal.log || true
       - name: Audit actual fourth guest SD repair and fifth guest clean SD load
         run: |
           /usr/bin/python3 tools/audit_nexium_sd_repair.py \

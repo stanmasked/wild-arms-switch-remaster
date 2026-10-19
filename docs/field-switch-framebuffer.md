@@ -361,3 +361,16 @@ svc module, and preserves available logs and screenshot evidence.
 Host tests assert exact phases on an ordinary commit, a corrupted
 older slot replacement and a blocked temporary destination. This
 is an investigation stage: **no new green guest result is asserted**.
+
+### Stage 302 diagnostic artifact retention
+
+The fourth NeXium process now copies its own most recent internal
+log into the CI evidence bundle before the fifth process starts,
+avoiding attribution to an unrelated guest session. A versioned,
+strictly additive parser records each `WA_SAVE_TRACE v1` line as a
+machine-readable failure phase, preexisting slot statuses, temporary
+and published statuses, rename result, confirmation attempts and
+error code. The parser has standalone fixture tests and cannot
+alter save state or suppress the separately enforced screenshot/CRC
+gate. If no guest debug line is available, `found:false` is
+reported rather than fabricating a phase.
