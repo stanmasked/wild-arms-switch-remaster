@@ -154,6 +154,9 @@ struct RuntimeControls {
     if (!valid_discovery_journal(world, next.discoveries))
       return {RuntimeStatus::InvalidSimulation};
     next.manual = start_world(world);
+    // B cancels the demo while A can already be held: the fresh
+    // manual decoder must not replay that held A as a new confirm edge.
+    next.manual.decoder.confirm_down = controls.pad.confirm;
     next.autoplay = false;
     mode_switched = true;
   }
@@ -192,6 +195,9 @@ struct RuntimeControls {
       if (save_field_snapshot(world, next.manual, next.quicksave) !=
           SnapshotOutcome::Stored)
         return {RuntimeStatus::InvalidSimulation};
+      // Y owns this frame, but a concurrent held A still updates its
+      // edge state. It must not inspect/acknowledge on the next frame.
+      next.manual.decoder.confirm_down = controls.pad.confirm;
       response.snapshot_stored = true;
     } else if (controls.load_snapshot) {
       next.inspection = FieldInspection{};
@@ -199,6 +205,9 @@ struct RuntimeControls {
           load_field_snapshot(world, next.quicksave, next.manual);
       if (restored == SnapshotOutcome::InvalidState)
         return {RuntimeStatus::InvalidSimulation};
+      // The saved decoder is historical. Synchronize its A-held bit to
+      // *current* physical input even on an empty Minus quickload.
+      next.manual.decoder.confirm_down = controls.pad.confirm;
       response.snapshot_restored = restored == SnapshotOutcome::Restored;
       response.snapshot_empty = restored == SnapshotOutcome::Empty;
     } else {

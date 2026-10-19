@@ -233,6 +233,91 @@ void test_manual_event_clue_recording_is_explicit_and_unique() {
           rt.inspection.kind==Trigger::None);
 }
 
+void test_modal_save_load_and_demo_cannot_replay_held_A() {
+  const FieldWorld world = make_demo_world();
+  Surface surface;
+  constexpr std::uint64_t step = kSwitchTicksPerSecond * 160 / 1000;
+  const RuntimeControls a{PadSample{.confirm = true}};
+  const RuntimeControls save_a{
+      PadSample{.confirm = true}, false, false, true};
+  const RuntimeControls load_a{
+      PadSample{.confirm = true}, false, false, false, true};
+  const RuntimeControls save{{}, false, false, true};
+  const RuntimeControls start{{}, true};
+  const RuntimeControls cancel_a{
+      PadSample{.confirm = true}, false, true};
+
+  // Save while A is held: saving takes precedence, and A must not
+  // become a phantom new inspection when Y is released.
+  FieldRuntime saved = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  saved.manual.player.x = 3;
+  saved.manual.player.facing = Direction::Right;
+  require(advance_field_runtime(world, saved, 0, {}, surface.target).status ==
+          RuntimeStatus::Rendered);
+  const RuntimeFrame storing = advance_field_runtime(
+      world, saved, step, save_a, surface.target);
+  require(storing.snapshot_stored && storing.inspected == Trigger::None &&
+          saved.manual.decoder.confirm_down &&
+          saved.inspection.kind == Trigger::None);
+  const RuntimeFrame held_after_save = advance_field_runtime(
+      world, saved, step * 2, a, surface.target);
+  require(held_after_save.status == RuntimeStatus::Rendered &&
+          held_after_save.inspected == Trigger::None &&
+          saved.inspection.kind == Trigger::None);
+  (void)advance_field_runtime(world, saved, step * 3, {}, surface.target);
+  require(advance_field_runtime(world, saved, step * 4, a, surface.target).
+          inspected == Trigger::Event);
+
+  // A pending event was saved with A released. Reloading under held A
+  // must NOT acknowledge it using the historical decoder state.
+  FieldRuntime loaded = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  loaded.manual.player.x = 4;
+  loaded.manual.player.y = 1;
+  loaded.manual.pending = Trigger::Event;
+  loaded.manual.clock.paused_for_trigger = true;
+  require(advance_field_runtime(world, loaded, 0, {}, surface.target).status ==
+          RuntimeStatus::Rendered);
+  require(advance_field_runtime(world, loaded, step, save, surface.target).
+          snapshot_stored);
+  require(advance_field_runtime(world, loaded, step * 2, a, surface.target).
+          status == RuntimeStatus::Rendered &&
+          loaded.manual.pending == Trigger::None);
+  const RuntimeFrame restored = advance_field_runtime(
+      world, loaded, step * 3, load_a, surface.target);
+  require(restored.snapshot_restored &&
+          loaded.manual.pending == Trigger::Event &&
+          loaded.manual.decoder.confirm_down);
+  const RuntimeFrame held_after_load = advance_field_runtime(
+      world, loaded, step * 4, a, surface.target);
+  require(held_after_load.status == RuntimeStatus::Rendered &&
+          loaded.manual.pending == Trigger::Event &&
+          loaded.manual.clock.paused_for_trigger);
+  (void)advance_field_runtime(world, loaded, step * 5, {}, surface.target);
+  require(advance_field_runtime(world, loaded, step * 6, a, surface.target).
+          status == RuntimeStatus::Rendered &&
+          loaded.manual.pending == Trigger::None);
+
+  // B exits the demo while A is held. Manual mode must not replay
+  // that physical A as an inspection when its first frame is sampled.
+  FieldRuntime demo = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  require(advance_field_runtime(world, demo, 0, {}, surface.target).status ==
+          RuntimeStatus::Rendered);
+  require(advance_field_runtime(world, demo, step, start, surface.target).
+          status == RuntimeStatus::Rendered && demo.autoplay);
+  require(advance_field_runtime(world, demo, step * 2, cancel_a,
+                                surface.target).status ==
+          RuntimeStatus::Rendered && !demo.autoplay &&
+          demo.manual.decoder.confirm_down);
+  demo.manual.player.x = 3;
+  demo.manual.player.facing = Direction::Right;
+  require(advance_field_runtime(world, demo, step * 3, a, surface.target).
+          inspected == Trigger::None);
+  (void)advance_field_runtime(world, demo, step * 4, {}, surface.target);
+  require(advance_field_runtime(world, demo, step * 5, a, surface.target).
+          inspected == Trigger::Event);
+  surface.assert_guards();
+}
+
 void test_simultaneous_A_and_B_cannot_collect_before_inspection() {
   const FieldWorld world = make_demo_world();
   FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
@@ -860,6 +945,7 @@ int main() {
   test_manual_event_clue_recording_is_explicit_and_unique();
   test_b_does_not_record_without_inspected_event();
   test_simultaneous_A_and_B_cannot_collect_before_inspection();
+  test_modal_save_load_and_demo_cannot_replay_held_A();
   test_held_journal_freezes_inputs_and_shows_session_clues();
   test_l_held_journal_freezes_inspection_timeout();
   test_manual_preflight_rejects_corrupt_ledger_without_L();
