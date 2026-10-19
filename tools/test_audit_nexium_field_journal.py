@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 
 from audit_nexium_field_journal import (
     SCREENSHOTS, GLYPHS, BLUE, DARK, WHITE, NO_PANEL, SPRITE_RED,
-    EVENT_YELLOW, audit_journal,
+    EVENT_YELLOW, EVENT_GOLD, audit_journal,
 )
 from audit_nexium_checkpoints import SCREEN_SIZE, VIEW_W, VIEW_H, VIEW_X
 
@@ -36,7 +36,7 @@ def journal_panel(draw, count):
 
 
 def make_desktop(name, false_count=False, changed_player=False,
-                 missing_caption_glyphs=False):
+                 missing_caption_glyphs=False, missing_badge=False):
     native = Image.new("RGB", (1280, 720), NO_PANEL)
     draw = ImageDraw.Draw(native)
     if name in ("02_at_marker", "03_inspected", "06_one_closed",
@@ -45,6 +45,14 @@ def make_desktop(name, false_count=False, changed_player=False,
         draw.rectangle((494, 214, 529, 249), fill=SPRITE_RED)
     if name in ("03_inspected", "08_revisited_noted"):
         draw.rectangle((551, 207, 602, 211), fill=EVENT_YELLOW)
+    if name == "02_at_marker":
+        draw.point((569, 225), fill=EVENT_GOLD)
+    if name in ("06_one_closed", "07_previous_caption_expired",
+                "08_revisited_noted", "10_revisit_expired") and not missing_badge:
+        draw.rectangle((569, 225, 586, 242), fill=BLUE)
+        for box in ((573, 233, 576, 236), (577, 237, 580, 240),
+                    (581, 231, 584, 234), (585, 227, 586, 230)):
+            draw.rectangle(box, fill=WHITE)
     if name == "08_revisited_noted":
         draw.rectangle((1000, 34, 1237, 88), fill=BLUE)
         draw.rectangle((1003, 37, 1234, 85), fill=DARK)
@@ -77,7 +85,7 @@ class GuestJournalAuditTests(unittest.TestCase):
             make_folder(tmp)
             result = audit_journal(tmp, Path(tmp) / "audit.json")
             self.assertTrue(result["open_release_collect_reopen_confirmed"])
-            self.assertEqual(len(result["checks"]), 12)
+            self.assertEqual(len(result["checks"]), 14)
             self.assertTrue(
                 result["checks"]["revisited_clue_noted_entire_caption_rgb"])
             self.assertTrue(
@@ -139,6 +147,29 @@ class GuestJournalAuditTests(unittest.TestCase):
             report = audit_journal(tmp, Path(tmp) / "audit.json")
             self.assertFalse(
                 report["checks"]["revisited_clue_noted_entire_caption_rgb"])
+
+    def test_missing_discovered_clue_badge_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_folder(tmp)
+            make_desktop("06_one_closed", missing_badge=True).save(
+                Path(tmp) / "06_one_closed.png")
+            result = audit_journal(tmp, Path(tmp) / "audit.json")
+            self.assertFalse(
+                result["checks"]["collected_clue_renders_complete_in_world_badge"])
+
+    def test_badge_single_pixel_tamper_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_folder(tmp)
+            file = Path(tmp) / "10_revisit_expired.png"
+            with Image.open(file) as png:
+                altered = png.convert("RGB")
+            x = VIEW_X + round(579 * VIEW_W / 1280)
+            y = round(229 * VIEW_H / 720)
+            altered.putpixel((x, y), (7, 8, 9))
+            altered.save(file)
+            result = audit_journal(tmp, Path(tmp) / "audit.json")
+            self.assertFalse(
+                result["checks"]["collected_clue_renders_complete_in_world_badge"])
 
     def test_missing_blue_clue_noted_glyphs_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:

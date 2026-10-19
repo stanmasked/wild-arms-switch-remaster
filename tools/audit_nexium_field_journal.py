@@ -39,6 +39,7 @@ DARK = (17, 26, 40)
 WHITE = (246, 247, 252)
 BLUE = (105, 160, 230)
 EVENT_YELLOW = (255, 247, 172)
+EVENT_GOLD = (245, 183, 66)
 SPRITE_RED = (201, 67, 76)
 NO_PANEL = (14, 20, 34)
 # Bound inputs: no oversized or unbounded directory scanning.
@@ -134,6 +135,33 @@ def revisited_caption_valid(image):
         delta, Image.merge("RGB", (mask, mask, mask))).getbbox() is None
 
 
+def discovered_badge_valid(image):
+    """Full 18x18 native badge, projected to actual guest desktop pixels.
+
+    This oracle is independent of the C++ raster helper and compares all
+    checkmark/border pixels without ignoring unexpected colors.
+    """
+    native = Image.new("RGB", (1280, 720), DARK)
+    brush = ImageDraw.Draw(native)
+    brush.rectangle((569, 225, 586, 242), fill=BLUE)
+    for x0, y0, x1, y1 in (
+        (573, 233, 576, 236),
+        (577, 237, 580, 240),
+        (581, 231, 584, 234),
+        (585, 227, 586, 230),
+    ):
+        brush.rectangle((x0, y0, x1, y1), fill=WHITE)
+
+    expected = native.resize((VIEW_W, VIEW_H), Image.Resampling.NEAREST)
+    observed = image.crop((VIEW_X, 0, VIEW_X + VIEW_W, VIEW_H))
+    native_mask = Image.new("L", (1280, 720))
+    ImageDraw.Draw(native_mask).rectangle((569, 225, 586, 242), fill=255)
+    mask = native_mask.resize((VIEW_W, VIEW_H), Image.Resampling.NEAREST)
+    delta = ImageChops.difference(expected, observed)
+    return ImageChops.multiply(
+        delta, Image.merge("RGB", (mask, mask, mask))).getbbox() is None
+
+
 def audit_journal(screenshot_dir, report_file):
     screenshot_dir = Path(screenshot_dir)
     found = {p.name for p in screenshot_dir.glob("*.png")}
@@ -151,6 +179,12 @@ def audit_journal(screenshot_dir, report_file):
         "inspected_event_outline":
             native_pixel(images["03_inspected"], 552, 208) == EVENT_YELLOW,
         "recorded_panel_exact_1_of_2": panel_valid(images["04_one_open"], 1),
+        "uncollected_marker_has_no_blue_badge":
+            native_pixel(images["02_at_marker"], 569, 225) == EVENT_GOLD,
+        "collected_clue_renders_complete_in_world_badge":
+            discovered_badge_valid(images["06_one_closed"]) and
+            discovered_badge_valid(images["08_revisited_noted"]) and
+            discovered_badge_valid(images["10_revisit_expired"]),
         "held_L_plus_right_still_same_panel":
             panel_valid(images["05_one_open_right_held"], 1),
         "journal_released_and_player_did_not_move":

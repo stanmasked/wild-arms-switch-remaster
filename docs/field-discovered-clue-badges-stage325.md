@@ -44,3 +44,21 @@ modal behavior, and autoplay isolation.
 A new exact-head Host Core, Switch NRO and NeXium test suite is
 needed. This commit cannot retroactively inherit the old emulator
 pass. Experimental NeXium is not physical console testing.
+
+## Actual guest visual coverage
+
+The existing NeXium L-journal screenshots already include an A/B
+sequence before/after collecting one area-0 marker. Its *previous*
+Stage 324 guest screenshot at (569,225) was gold both before and
+after collecting: no badge feature existed then.
+
+Stage 325 extends the **independent observed NeXium screenshot audit**
+with an exact full 18×18 projected RGB oracle for the new badge.
+`02_at_marker` must still show the uncollected gold event tile;
+`06_one_closed`, `08_revisited_noted` and `10_revisit_expired`
+must display the complete blue-and-white checkmark. Synthetic
+negative fixtures reject absent badges and even one changed visible
+badge pixel. This increases the audit to 14 independent checks.
+
+This is not a claim of a passing guest test: an exact-head NeXium
+run must execute after this addition.
