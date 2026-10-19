@@ -111,7 +111,8 @@ int main() {
         read_pad(pad), (pressed & HidNpadButton_X) != 0,
         (pressed & HidNpadButton_B) != 0,
         (pressed & HidNpadButton_Y) != 0,
-        (pressed & HidNpadButton_Minus) != 0};
+        (pressed & HidNpadButton_Minus) != 0,
+        (padGetButtons(&pad) & HidNpadButton_L) != 0};
     // In-memory Y/Minus remains the single deterministic gameplay source.
     // On the first Minus after a fresh launch, seed the volatile slot from
     // the newest independently validated SD journal entry. Failed reads
@@ -120,7 +121,8 @@ int main() {
     bool degraded_sd_journal = false;
     FileSaveStatus attempted_read = FileSaveStatus::Missing;
     const bool fresh_load = input.load_snapshot && !runtime.autoplay &&
-        !input.start_demo && !runtime.quicksave.occupied;
+        !input.start_demo && !input.view_journal &&
+        !runtime.quicksave.occupied;
     if (fresh_load && storage_ready) {
       WorldState recovered{};
       const FileSaveLoadResult read =
