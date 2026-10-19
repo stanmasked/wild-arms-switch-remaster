@@ -507,6 +507,61 @@ void test_l_held_journal_freezes_inspection_timeout() {
 }
 
 
+void test_manual_preflight_rejects_corrupt_ledger_without_L() {
+  const FieldWorld world = make_demo_world();
+  FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  Surface screen;
+  constexpr std::uint64_t step = kSwitchTicksPerSecond * 160 / 1000;
+  require(advance_field_runtime(world, rt, 0, {}, screen.target).status ==
+          RuntimeStatus::Rendered);
+
+  const auto original_pixels = screen.buffer;
+  const auto original_tick = rt.timer.previous_tick;
+  const auto original_x = rt.manual.player.x;
+
+  // First entry is valid, but a later out-of-map clue is corrupt.
+  // Ordinary movement, B and L must reject the entire malformed ledger.
+  rt.discoveries.count = 2;
+  rt.discoveries.entries[0] = {0, 4, 1};
+  rt.discoveries.entries[1] = {1, -3, 3};
+  const RuntimeControls right{PadSample{.dpad_right = true}};
+  const RuntimeControls collect{{}, false, true};
+  const RuntimeControls journal{{}, false, false, false, false, true};
+  for (const RuntimeControls& attempt : {right, collect, journal}) {
+    const RuntimeFrame result =
+        advance_field_runtime(world, rt, step, attempt, screen.target);
+    require(result.status == RuntimeStatus::InvalidSimulation &&
+            screen.buffer == original_pixels &&
+            rt.timer.previous_tick == original_tick &&
+            rt.manual.player.x == original_x &&
+            rt.discoveries.count == 2 && !rt.quicksave.occupied);
+  }
+
+  // Repair the second entry and confirm input works normally again.
+  rt.discoveries.entries[1] = {1, 4, 3};
+  const RuntimeFrame repaired =
+      advance_field_runtime(world, rt, step, right, screen.target);
+  require(repaired.status == RuntimeStatus::Rendered &&
+          rt.manual.player.x == 2 && rt.discoveries.count == 2);
+
+  // Even a structurally valid journal must not mask a corrupt world
+  // pending-event state while displaying its panel.
+  const auto valid_pixels = screen.buffer;
+  const auto valid_tick = rt.timer.previous_tick;
+  rt.manual.pending = Trigger::Event;
+  rt.manual.clock.paused_for_trigger = true;
+  rt.manual.clock.carry_ms = 0;
+  rt.manual.clock.held = Direction::None;
+  const RuntimeFrame corrupt_world =
+      advance_field_runtime(world, rt, step * 2, journal, screen.target);
+  require(corrupt_world.status == RuntimeStatus::InvalidSimulation &&
+          screen.buffer == valid_pixels &&
+          rt.timer.previous_tick == valid_tick &&
+          rt.manual.player.x == 2 &&
+          rt.discoveries.count == 2);
+  screen.assert_guards();
+}
+
 void test_cross_area_discovery_journal_survives_world_and_snapshot_changes() {
   const FieldWorld world = make_demo_world();
   FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
@@ -603,6 +658,7 @@ int main() {
   test_b_does_not_record_without_inspected_event();
   test_held_journal_freezes_inputs_and_shows_session_clues();
   test_l_held_journal_freezes_inspection_timeout();
+  test_manual_preflight_rejects_corrupt_ledger_without_L();
   test_cross_area_discovery_journal_survives_world_and_snapshot_changes();
   test_invalid_input_is_transactional_and_guarded();
   test_autoplay_timing_checkpoints_and_manual_cancel();
