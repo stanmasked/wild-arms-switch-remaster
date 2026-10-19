@@ -311,3 +311,16 @@ test at `AfterNewSlotRenamed` still reports interruption as before.
 The Stage 301 NeXium workflow must pass the existing **unchanged**
 green `SD SAVED` pixel comparison; no test tolerance is relaxed.
 This is not physical Switch SD power-cut verification.
+
+### Stage 301 extension: fresh-process repair after false-negative publication
+
+The CTest subprocess suite now drives **five independent host process
+executions** on one real journal directory: initial checkpoint save,
+new event save, corrupted newer B plus fallback, new process recovery
+and rewrite after a simulated false-negative rename result, and a
+final fresh process checking that the journal is fully healthy.
+The test also requires that A remain byte-for-byte unchanged and
+the repaired B be an exact, validated generation 2; the error-result
+simulation must not corrupt game state. These tests are host-only
+confirmation of the writer's postcondition rule while the separate
+strict NeXium screenshot and SD audit remains pending.

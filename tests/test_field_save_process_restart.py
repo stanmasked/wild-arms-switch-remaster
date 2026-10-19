@@ -94,6 +94,31 @@ class ProcessRestartTests(unittest.TestCase):
             self.invoke("expect-start", path,
                         "NEW_PROCESS_FELL_BACK_TO_PREVIOUS_INITIAL_SAVE")
 
+    def test_false_negative_publication_repairs_b_across_processes(self):
+        with tempfile.TemporaryDirectory(prefix="wild-arms-repair-") as td:
+            path = Path(td) / "field-save"
+            a, b = path.with_suffix(".a"), path.with_suffix(".b")
+            self.invoke("save-start", path,
+                        "FIRST_PROCESS_STORED_INITIAL_LOCATION")
+            unchanged_a = a.read_bytes()
+            self.invoke("save", path,
+                        "FIRST_PROCESS_WRITTEN_PENDING_EVENT")
+            damaged = bytearray(b.read_bytes())
+            damaged[23] ^= 0x80
+            b.write_bytes(damaged)
+            self.invoke("expect-start", path,
+                        "NEW_PROCESS_FELL_BACK_TO_PREVIOUS_INITIAL_SAVE")
+            self.invoke("repair-false-negative", path,
+                        "FRESH_PROCESS_REPAIRED_B_DESPITE_FALSE_RENAME_ERROR")
+            self.assertEqual(a.read_bytes(), unchanged_a)
+            replacement = b.read_bytes()
+            self.assertEqual(len(replacement), 56)
+            self.assertNotEqual(replacement, damaged)
+            self.assertEqual(int.from_bytes(
+                replacement[4:12], "little"), 2)
+            self.invoke("expect-healthy-start", path,
+                        "FRESH_PROCESS_LOADED_REPAIRED_HEALTHY_JOURNAL")
+
     def test_torn_committed_record_fails_without_state_change(self):
         with tempfile.TemporaryDirectory(prefix="wild-arms-restart-") as td:
             path = Path(td) / "field-save"

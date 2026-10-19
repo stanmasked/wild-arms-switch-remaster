@@ -19,6 +19,57 @@ int main(int argc, char** argv) {
   FieldRuntime runtime = start_field_runtime(world, frequency, 0);
   if (!runtime.timer.valid() || runtime.manual.player.x != 1 ||
       runtime.quicksave.occupied) return 4;
+  if (std::strcmp(argv[1], "repair-false-negative") == 0) {
+    // Newly launched process: no RAM save survives. Load the valid old
+    // journal A while corrupted B remains a genuine on-disk CRC failure.
+    WorldState recovered{};
+    const FileSaveLoadResult loaded =
+        load_field_save_file_detailed(world, path, recovered);
+    if (loaded.status != FileSaveStatus::Loaded ||
+        !loaded.degraded || loaded.selected_generation != 1 ||
+        recovered.player.x != 1 || recovered.pending != Trigger::None)
+      return 19;
+    runtime.quicksave.world = recovered;
+    runtime.quicksave.occupied = true;
+    std::vector<std::uint32_t> frame(
+        static_cast<std::size_t>(kRasterWidth) * kRasterHeight);
+    PixelTarget surface{frame.data(), kRasterWidth, kRasterHeight,
+                        kRasterWidth};
+    RuntimeControls minus{};
+    minus.load_snapshot = true;
+    const RuntimeFrame applied = advance_field_runtime(
+        world, runtime, tick_step, minus, surface);
+    if (applied.status != RuntimeStatus::Rendered ||
+        !applied.snapshot_restored)
+      return 20;
+    // Reproduce a false-negative emulated rename report, but accept the
+    // write only once the exact CRC-checked committed bytes are visible.
+    if (store_field_save_file(
+            world, runtime.manual, path,
+            JournalInterruption::AfterNewSlotRenamedReportedFailure)
+        != FileSaveStatus::Stored)
+      return 21;
+    const FileSaveSlot fixed_b =
+        read_field_journal_slot(world, path + ".b");
+    if (fixed_b.status != FileSaveStatus::Loaded ||
+        fixed_b.generation != 2 ||
+        fixed_b.world.player.x != 1 ||
+        fixed_b.world.pending != Trigger::None)
+      return 22;
+    std::puts("FRESH_PROCESS_REPAIRED_B_DESPITE_FALSE_RENAME_ERROR");
+    return 0;
+  }
+  if (std::strcmp(argv[1], "expect-healthy-start") == 0) {
+    WorldState recovered{};
+    const FileSaveLoadResult loaded =
+        load_field_save_file_detailed(world, path, recovered);
+    if (loaded.status != FileSaveStatus::Loaded ||
+        loaded.degraded || loaded.selected_generation != 2 ||
+        recovered.player.x != 1 || recovered.pending != Trigger::None)
+      return 23;
+    std::puts("FRESH_PROCESS_LOADED_REPAIRED_HEALTHY_JOURNAL");
+    return 0;
+  }
   if (std::strcmp(argv[1], "save-start") == 0) {
     const FileSaveStatus saved =
         store_field_save_file(world, runtime.manual, path);
