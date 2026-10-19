@@ -285,6 +285,11 @@ jobs:
           set -e
           echo "$result" > nexium-probe/process-exit-code.txt
           exit 0
+      - name: Prove FIRST guest visibly saved the pending event on SD
+        run: |
+          /usr/bin/python3 tools/audit_nexium_storage_feedback.py \
+            --screenshots nexium-probe/status-feedback \
+            --report nexium-probe/storage-feedback-audit.json
       - name: Launch SECOND fresh NeXium process and reload event from SD
         id: restart
         timeout-minutes: 3
@@ -293,7 +298,7 @@ jobs:
           mkdir -p nexium-probe/independent-restart
           test -s nexium-probe/first-process.pid
           test -s nexium-probe/process-exit-code.txt
-          test -f nexium-probe/status-feedback-audit.json || true
+          test -f nexium-probe/storage-feedback-audit.json
           export DISPLAY=:99
           export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-wild-arms-data"
           export NEXIUM_VIDEO_FFMPEG=0

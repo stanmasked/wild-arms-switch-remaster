@@ -23,17 +23,11 @@ def fixture(directory):
     shots=root/"restart"
     shots.mkdir()
     first=root/"first-event.png"
-    with Image.open(reference/(NAMES[0]+".png")) as im:
-        im.load()
-        desktop(im).save(shots/"01_fresh_process_start.png")
-    with Image.open(reference/(NAMES[1]+".png")) as im:
-        im.load()
-        shot=desktop(im)
-        shot.save(shots/"03_restored_pending_event.png")
-        shot.save(first)
-    with Image.open(reference/(NAMES[1]+".png")) as im:
-        im.load()
-        screen=desktop(im)
+    desktop(reference/(NAMES[0]+".png")).save(shots/"01_fresh_process_start.png")
+    shot=desktop(reference/(NAMES[1]+".png"))
+    shot.save(shots/"03_restored_pending_event.png")
+    shot.save(first)
+    screen=desktop(reference/(NAMES[1]+".png"))
     notice=projected_notice(SD_LOADED_COLOR).convert("RGB")
     # Insert only the plaque pixels, do not overwrite the field viewport.
     x0,y0=screen_point(982,29)
