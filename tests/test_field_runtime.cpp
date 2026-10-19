@@ -409,6 +409,12 @@ void test_held_journal_freezes_inputs_and_shows_session_clues() {
   require(held.journal_visible && held.clue_count==0 &&
           rt.manual.player.x==1 && !held.snapshot_stored);
   require(screen.pixel(kJournalPanelX,kJournalPanelY)==rgba(105,160,230));
+  // X+L on the same frame must not bypass the modal journal.
+  const RuntimeControls journal_start{{},true,false,false,false,true};
+  const auto blocked_demo=advance_field_runtime(
+      world,rt,step,journal_start,screen.target);
+  require(blocked_demo.journal_visible && !rt.autoplay &&
+          rt.manual.player.x==1);
   (void)advance_field_runtime(world,rt,step*2,right,screen.target);
   (void)advance_field_runtime(world,rt,step*3,right,screen.target);
   require(rt.manual.player.x==3 && rt.manual.pending==Trigger::None);
