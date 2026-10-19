@@ -11,10 +11,18 @@ import sys
 import tempfile
 import unittest
 
-EXECUTABLE = Path(sys.argv[1]).resolve()
-sys.argv[1:] = []
+# This file is also discovered by the repository-wide Python unittest
+# runner, which has not built the C++ helper. Only run the subprocess tests
+# when CTest supplies the actual compiled executable argument.
+EXECUTABLE = None
+if len(sys.argv) == 2:
+    candidate = Path(sys.argv[1]).resolve()
+    if candidate.is_file() and candidate.name.startswith("wa_field_save_process"):
+        EXECUTABLE = candidate
+        sys.argv[1:] = []
 
 
+@unittest.skipUnless(EXECUTABLE is not None, "requires compiled C++ field process executable")
 class ProcessRestartTests(unittest.TestCase):
     def invoke(self, mode, path, expected):
         proc = subprocess.run(
