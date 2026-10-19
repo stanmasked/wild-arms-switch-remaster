@@ -941,6 +941,63 @@ void test_cross_area_discovery_journal_survives_world_and_snapshot_changes() {
           rt.discoveries.entries[1].x == 4 &&
           rt.discoveries.entries[1].y == 3);
 
+  // Stage 320: close the loop with *real* controls. Avoid stepping
+  // on the area-1 event tile at (4,3); route around it via x2,y5.
+  // Nine steps: (4,2) -> (2,2) -> (2,5) -> (6,5) exit.
+  const RuntimeControls left{PadSample{.dpad_left = true}};
+  const char route_back_to_exit[] = "LLDDDRRRR";
+  for (char direction : route_back_to_exit) {
+    if (direction == '\0') break;
+    tick += step;
+    const RuntimeControls controls = direction == 'L' ? left :
+                                     direction == 'D' ? down : right;
+    const RuntimeFrame moved = advance_field_runtime(
+        world, rt, tick, controls, screen.target);
+    require(moved.status == RuntimeStatus::Rendered &&
+            !moved.changed_area && rt.manual.area == 1 &&
+            rt.discoveries.count == 2);
+  }
+  require(rt.manual.player.x == 6 && rt.manual.player.y == 5 &&
+          rt.manual.pending == Trigger::Exit &&
+          rt.manual.clock.paused_for_trigger &&
+          rt.manual.player.successful_moves == 22);
+  tick += step;
+  const RuntimeFrame returned = advance_field_runtime(
+      world, rt, tick, inspect, screen.target);
+  require(returned.status == RuntimeStatus::Rendered &&
+          returned.changed_area && rt.manual.area == 0 &&
+          rt.manual.pending == Trigger::None &&
+          rt.manual.player.x == 1 && rt.manual.player.y == 1 &&
+          rt.discoveries.count == 2);
+
+  // Revisiting the original area-0 marker must not award clue #3.
+  for (int target_x = 2; target_x <= 3; ++target_x) {
+    tick += step;
+    require(advance_field_runtime(
+        world, rt, tick, right, screen.target).status ==
+            RuntimeStatus::Rendered);
+    require(rt.manual.player.x == target_x &&
+            rt.manual.player.y == 1 &&
+            rt.manual.pending == Trigger::None);
+  }
+  require(rt.manual.player.successful_moves == 24 &&
+          rt.manual.player.facing == Direction::Right);
+  tick += step;
+  const RuntimeFrame revisited = advance_field_runtime(
+      world, rt, tick, inspect, screen.target);
+  require(revisited.inspected == Trigger::Event &&
+          rt.discoveries.count == 2);
+  tick += step;
+  const RuntimeFrame duplicate = advance_field_runtime(
+      world, rt, tick, record, screen.target);
+  require(duplicate.status == RuntimeStatus::Rendered &&
+          !duplicate.clue_recorded &&
+          duplicate.clue_already_recorded &&
+          duplicate.clue_count == 2 &&
+          rt.discoveries.count == 2 &&
+          rt.discoveries.entries[0].area == 0 &&
+          rt.discoveries.entries[1].area == 1);
+
   // Confirm rendered rows in stable discovery order.
   const RuntimeControls view{{}, false, false, false, false, true};
   tick += step;
