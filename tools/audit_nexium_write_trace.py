@@ -12,10 +12,14 @@ from pathlib import Path
 PATTERN = re.compile(
     r"WA_SAVE_TRACE v1 result=(\d+) ready=(\d+) step=(\d+) "
     r"oldA=(\d+) oldB=(\d+) tmp=(\d+) pub=(\d+) gen=(\d+) "
-    r"tries=(\d+) renamed=(\d+) equal=(\d+) errno=(\d+)")
+    r"tries=(\d+) renamed=(\d+) equal=(\d+) errno=(\d+)"
+    r"(?: count=(\d+) eof=(\d+) more=(\d+) magic=(\d+)"
+    r" crc=(\d+) decoded=(\d+))?")
 FIELDS = ("result", "ready", "step", "old_a", "old_b",
           "temporary", "published", "generation",
           "attempts", "renamed", "bytes_equal", "errno")
+READBACK_FIELDS = ("bytes_read", "eof", "extra_byte",
+                   "magic_ok", "crc_ok", "decoded_ok")
 STEPS = {
     0: "preflight", 1: "previous_slots_read", 2: "temporary_opened",
     3: "temporary_synced", 4: "temporary_validated",
@@ -70,11 +74,23 @@ def extract(logs):
             continue
         for line in path.read_text(errors="replace").splitlines():
             for hit in PATTERN.finditer(line):
-                payload = dict(zip(FIELDS, map(int, hit.groups())))
+                raw = hit.groups()
+                payload = dict(zip(FIELDS, map(int, raw[:len(FIELDS)])))
+                detail = raw[len(FIELDS):]
+                if detail and all(v is not None for v in detail):
+                    payload.update(zip(READBACK_FIELDS, map(int, detail)))
+                payload["extended_readback"] = bool(
+                    detail and all(v is not None for v in detail))
                 payload["step_label"] = STEPS.get(
                     payload["step"], "unknown")
                 payload["source"] = path.name
                 payload["valid_fields"] = validate_trace_payload(payload)
+                if payload["extended_readback"]:
+                    payload["valid_fields"] = (
+                        payload["valid_fields"] and
+                        0 <= payload["bytes_read"] <= 56 and
+                        all(payload[key] in (0, 1) for key in
+                            READBACK_FIELDS[1:]))
                 payload["result_label"] = STATUS.get(
                     payload["result"], "unknown")
                 payload["existing_a_label"] = STATUS.get(
@@ -88,6 +104,21 @@ def extract(logs):
                 payload["failure_class"] = (
                     classify(payload) if payload["valid_fields"]
                     else "malformed_trace_fields")
+                if (payload["valid_fields"] and
+                    payload["extended_readback"] and
+                    payload["result"] == 6 and payload["step"] == 12):
+                    if payload["bytes_read"] != 56:
+                        payload["failure_class"] = "readback_short_record"
+                    elif payload["extra_byte"] == 1:
+                        payload["failure_class"] = "readback_extra_byte"
+                    elif payload["magic_ok"] == 0:
+                        payload["failure_class"] = "readback_header_mismatch"
+                    elif payload["crc_ok"] == 0:
+                        payload["failure_class"] = "readback_crc_mismatch"
+                    elif payload["decoded_ok"] == 0:
+                        payload["failure_class"] = "readback_decode_rejected"
+                    else:
+                        payload["failure_class"] = "readback_payload_differs"
                 entries.append(payload)
     # NeXium may mirror a single event to multiple log sinks. Preserve all
     # raw lines while allowing the report consumer to inspect source.

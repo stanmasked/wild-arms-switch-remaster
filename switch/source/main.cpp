@@ -154,10 +154,11 @@ int main() {
           FileSaveStatus::Missing;
       // Structured non-sensitive diagnostic emitted through the Switch debug
       // syscall. NeXium captures it only with NEXIUM_DIAG enabled.
-      char trace[260]{};
+      char trace[320]{};
       const int len = std::snprintf(trace, sizeof(trace),
           "WA_SAVE_TRACE v1 result=%d ready=%d step=%d oldA=%d oldB=%d "
-          "tmp=%d pub=%d gen=%llu tries=%u renamed=%d equal=%d errno=%d",
+          "tmp=%d pub=%d gen=%llu tries=%u renamed=%d equal=%d errno=%d "
+          "count=%u eof=%d more=%d magic=%d crc=%d decoded=%d",
           static_cast<int>(written), storage_ready ? 1 : 0,
           static_cast<int>(detail.step), static_cast<int>(detail.existing_a),
           static_cast<int>(detail.existing_b),
@@ -166,7 +167,13 @@ int main() {
           static_cast<unsigned long long>(detail.intended_generation),
           static_cast<unsigned>(detail.read_attempts),
           detail.rename_succeeded ? 1 : 0,
-          detail.published_bytes_equal ? 1 : 0, detail.os_error_code);
+          detail.published_bytes_equal ? 1 : 0, detail.os_error_code,
+          static_cast<unsigned>(detail.postpublish_read.bytes_read),
+          detail.postpublish_read.eof_after_probe ? 1 : 0,
+          detail.postpublish_read.extra_byte ? 1 : 0,
+          detail.postpublish_read.header_ok ? 1 : 0,
+          detail.postpublish_read.crc_ok ? 1 : 0,
+          detail.postpublish_read.decoded_ok ? 1 : 0);
       if (len > 0 && len < static_cast<int>(sizeof(trace))) {
         (void)svcOutputDebugString(trace, static_cast<std::size_t>(len));
 #if defined(WA_NEXIUM_SAVE_TRACE)

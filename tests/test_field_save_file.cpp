@@ -425,6 +425,51 @@ void test_restart_import_matches_event_frame_and_confirm_edge() {
          restarted.manual.pending == Trigger::Event);
   expect(pixels == reference_event);
 }
+void test_per_open_readback_evidence_is_structural_only() {
+  Fixture f;
+  const FieldWorld world = make_demo_world();
+  const WorldState original = start_world(world);
+  expect(store_field_save_file(world,original,f.prefix) == FileSaveStatus::Stored);
+  JournalReadDiagnostic good{};
+  const FileSaveSlot valid =
+      read_field_journal_slot(world,f.prefix+".a",&good);
+  expect(valid.status == FileSaveStatus::Loaded);
+  expect(good.bytes_read == kFieldJournalBytes && good.eof_after_probe);
+  expect(!good.extra_byte && !good.stream_error && good.closed_ok);
+  expect(good.header_ok && good.crc_ok && good.decoded_ok);
+
+  // A short record must be diagnosed as a size failure, not as a
+  // mismatched world or an invented bad CRC.
+  {
+    std::FILE* file=std::fopen((f.prefix+".a").c_str(),"wb");
+    expect(file!=nullptr);
+    expect(std::fwrite("WAJ1",1,4,file)==4);
+    expect(std::fclose(file)==0);
+  }
+  JournalReadDiagnostic short_read{};
+  const auto short_slot =
+      read_field_journal_slot(world,f.prefix+".a",&short_read);
+  expect(short_slot.status==FileSaveStatus::Corrupt);
+  expect(short_read.bytes_read==4 && short_read.eof_after_probe);
+  expect(!short_read.header_ok && !short_read.crc_ok);
+
+  // Restore a valid record and corrupt payload without updating its CRC.
+  expect(store_field_save_file(world,original,f.prefix) == FileSaveStatus::Stored);
+  {
+    std::FILE* file=std::fopen((f.prefix+".a").c_str(),"r+b");
+    expect(file!=nullptr);
+    expect(std::fseek(file,23,SEEK_SET)==0);
+    expect(std::fputc(0xA5,file)!=EOF);
+    expect(std::fclose(file)==0);
+  }
+  JournalReadDiagnostic bad_crc{};
+  const auto rejected =
+      read_field_journal_slot(world,f.prefix+".a",&bad_crc);
+  expect(rejected.status==FileSaveStatus::Corrupt);
+  expect(bad_crc.bytes_read==kFieldJournalBytes);
+  expect(bad_crc.header_ok && !bad_crc.crc_ok && !bad_crc.decoded_ok);
+}
+
 void test_write_diagnostic_lifecycle_and_corrupt_slot_repair() {
   Fixture f;
   const FieldWorld world = make_demo_world();
@@ -529,6 +574,7 @@ int main() {
   test_restart_import_matches_event_frame_and_confirm_edge();
   test_interrupted_journal_publication_recovery();
   test_interrupted_first_save_never_accepts_temporary_file();
+  test_per_open_readback_evidence_is_structural_only();
   test_write_diagnostic_lifecycle_and_corrupt_slot_repair();
   test_postpublish_false_negative_error_reports();
   test_postpublish_never_accepts_blocked_destination();

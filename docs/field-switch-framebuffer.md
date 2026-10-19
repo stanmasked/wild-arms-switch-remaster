@@ -411,3 +411,32 @@ The normal Switch workflow builds without that flag and does not
 write diagnostic files. No save status is altered, and the strict
 SD SAVED RGB gate is unchanged. The new evidence is diagnostic,
 not proof that the reported write succeeded.
+
+## Stage 303 — exact post-rename readback evidence
+
+An actual NeXium [run 39291934291](https://github.com/stanmasked/wild-arms-switch-remaster/actions/runs/39291934291)
+recorded the first guest SDMC trace through the experimental-only
+`save-phase.txt` channel:
+
+`result=6 step=12 oldA=1 oldB=3 tmp=1 pub=3 gen=2 tries=3 renamed=1 equal=0 errno=0`
+
+This proves temporary verification and rename succeeded, but all
+three reopened reads of the newly published slot were marked
+`Corrupt` **within the same guest process**. The fifth independent
+guest later read the CRC-valid file. The actual kind of transient
+corruption has not yet been established.
+
+A new optional `JournalReadDiagnostic` records *only* the most
+recent readback's byte count, whether the extra-byte/EOF probe
+observed data, header validity, CRC outcome, and decoded-world
+validity. These fields are appended to the versioned `WA_SAVE_TRACE`
+without changing the 56-byte journal format or success policy.
+The parser categorizes short records, extra data, invalid magic,
+CRC mismatch, rejected decoded world or merely unequal payload.
+Host C++ tests cover complete, truncated and CRC-modified records;
+Python tests cover the independent diagnostic classifications.
+
+No raw gameplay bytes, user files, host paths or addresses are
+included in guest diagnostic strings. The **real** fourth guest
+must still satisfy the strict exact-green `SD SAVED` screenshot
+check; stage 303 is a diagnostic refinement, not a success waiver.

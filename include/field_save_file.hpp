@@ -48,6 +48,19 @@ struct FileSaveSlot {
   FieldJournalBytes bytes{};
 };
 
+// Stage 303: physical per-open readback observations, with no bytes,
+// gameplay state, addresses or file paths captured in diagnostic output.
+struct JournalReadDiagnostic {
+  std::uint8_t bytes_read = 0;
+  bool eof_after_probe = false;
+  bool extra_byte = false;
+  bool stream_error = false;
+  bool closed_ok = false;
+  bool header_ok = false;
+  bool crc_ok = false;
+  bool decoded_ok = false;
+};
+
 // Stage 302: optional, bounded diagnostics of one write attempt. No host
 // paths, game data, or memory addresses are recorded. Caller may inspect
 // these even when the result is IoError. Production save rules are unchanged.
@@ -68,10 +81,13 @@ struct JournalWriteDiagnostic {
   bool rename_succeeded = false;
   bool published_bytes_equal = false;
   int os_error_code = 0;
+  JournalReadDiagnostic postpublish_read{};
 };
 
 [[nodiscard]] inline FileSaveSlot read_field_journal_slot(
-    const FieldWorld& world, const std::string& path) noexcept {
+    const FieldWorld& world, const std::string& path,
+    JournalReadDiagnostic* evidence = nullptr) noexcept {
+  if (evidence) *evidence = JournalReadDiagnostic{};
   FileSaveSlot slot{};
   errno = 0;
   std::FILE* f = std::fopen(path.c_str(), "rb");
@@ -83,8 +99,16 @@ struct JournalWriteDiagnostic {
   const std::size_t count =
       std::fread(slot.bytes.data(), 1, slot.bytes.size(), f);
   const int extra = std::fgetc(f);
+  const bool eof_after_probe = std::feof(f) != 0;
   const bool io_error = std::ferror(f) != 0;
   const bool closed = std::fclose(f) == 0;
+  if (evidence) {
+    evidence->bytes_read = static_cast<std::uint8_t>(count);
+    evidence->eof_after_probe = eof_after_probe;
+    evidence->extra_byte = extra != EOF;
+    evidence->stream_error = io_error;
+    evidence->closed_ok = closed;
+  }
   if (io_error || !closed) {
     slot.status = FileSaveStatus::IoError;
     return slot;
@@ -94,8 +118,15 @@ struct JournalWriteDiagnostic {
     return slot;
   }
   const auto& p = slot.bytes;
-  if (p[0] != 'W' || p[1] != 'A' || p[2] != 'J' || p[3] != '1' ||
-      save_crc32(p.data(), 52) != save_get_u32(p.data() + 52)) {
+  const bool header_ok =
+      p[0] == 'W' && p[1] == 'A' && p[2] == 'J' && p[3] == '1';
+  const bool crc_ok =
+      save_crc32(p.data(), 52) == save_get_u32(p.data() + 52);
+  if (evidence) {
+    evidence->header_ok = header_ok;
+    evidence->crc_ok = crc_ok;
+  }
+  if (!header_ok || !crc_ok) {
     slot.status = FileSaveStatus::Corrupt;
     return slot;
   }
@@ -106,6 +137,7 @@ struct JournalWriteDiagnostic {
     slot.status = FileSaveStatus::Corrupt;
     return slot;
   }
+  if (evidence) evidence->decoded_ok = true;
   slot.status = FileSaveStatus::Loaded;
   return slot;
 }
@@ -285,7 +317,9 @@ struct FileSaveLoadResult {
         attempt == 0) {
       published.status = FileSaveStatus::IoError;  // Test-only false read.
     } else {
-      published = read_field_journal_slot(world, target);
+      JournalReadDiagnostic read_evidence{};
+      published = read_field_journal_slot(world, target, &read_evidence);
+      if (trace) trace->postpublish_read = read_evidence;
     }
     if (trace) {
       trace->step = JournalWriteStep::PostPublishReadback;

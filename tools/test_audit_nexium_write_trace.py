@@ -101,6 +101,35 @@ class TraceExtractionTests(unittest.TestCase):
             self.assertEqual(report["records"][0]["source"],
                              "fourth-save-phase.txt")
 
+    def test_readback_evidence_disambiguates_corrupt_reason(self):
+        cases = (
+            ("count=9 eof=1 more=0 magic=0 crc=0 decoded=0",
+             "readback_short_record"),
+            ("count=56 eof=0 more=1 magic=0 crc=0 decoded=0",
+             "readback_extra_byte"),
+            ("count=56 eof=1 more=0 magic=0 crc=1 decoded=0",
+             "readback_header_mismatch"),
+            ("count=56 eof=1 more=0 magic=1 crc=0 decoded=0",
+             "readback_crc_mismatch"),
+            ("count=56 eof=1 more=0 magic=1 crc=1 decoded=0",
+             "readback_decode_rejected"),
+            ("count=56 eof=1 more=0 magic=1 crc=1 decoded=1",
+             "readback_payload_differs"),
+        )
+        for fields, label in cases:
+            with self.subTest(readback=label):
+                with tempfile.TemporaryDirectory() as td:
+                    path=Path(td)/"fourth-save-phase.txt"
+                    path.write_text(
+                        "WA_SAVE_TRACE v1 result=6 ready=1 step=12 "
+                        "oldA=1 oldB=3 tmp=1 pub=3 gen=2 "
+                        "tries=3 renamed=1 equal=0 errno=0 "
+                        + fields + "\n")
+                    report=extract([path])
+                    self.assertTrue(report["all_fields_valid"])
+                    self.assertTrue(report["records"][0]["extended_readback"])
+                    self.assertEqual(report["failure_classes"],[label])
+
     def test_wrong_marker_does_not_create_false_evidence(self):
         with tempfile.TemporaryDirectory() as td:
             file=Path(td)/"host.log"
