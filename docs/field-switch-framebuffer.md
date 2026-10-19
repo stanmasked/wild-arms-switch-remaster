@@ -264,3 +264,24 @@ than passing synthetic tests alone.
 This is controlled byte damage to **emulated** SDMC files, NOT a
 real Switch SD or sudden-loss power test. No user-owned game assets,
 ROM images or commercial resources are touched.
+
+## Stage 300 — fifth-process validation after repairing the journal
+
+After the Stage 299 damage/fallback test, a **fourth independent
+NeXium process** launches from a clean runtime, presses Minus to
+restore the intact generation A, and must show amber `SD WARN`.
+It then saves the recovered location with Y, replacing damaged B,
+and must display green `SD SAVED` with no gameplay scene change.
+
+A **fifth fresh guest process** starts with no RAM checkpoint and
+presses only Minus. It must now show cyan `SD LOADED` (not
+`SD WARN`), proving that a healthy journal was republished. The
+auditor requires valid generation-1 and generation-2 CRC32 records,
+an unchanged SHA-256 for the older A, a new B hash different from
+both original and intentionally damaged B, distinct guest process
+IDs, and full projected RGB equality for three status plaques and
+three gameplay screenshots. The same-commit host references are
+verified and the diagnostic files are retained as CI artifacts.
+
+As before, the scope is NeXium's isolated emulated filesystem only,
+not Nintendo Switch hardware durability or physical SD power loss.

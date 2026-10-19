@@ -30,6 +30,8 @@ on:
       - 'tools/test_audit_nexium_storage_feedback.py'
       - 'tools/audit_nexium_process_restart.py'
       - 'tools/audit_nexium_sd_recovery.py'
+      - 'tools/audit_nexium_sd_repair.py'
+      - 'tools/test_audit_nexium_sd_repair.py'
       - 'tools/test_audit_nexium_sd_recovery.py'
       - 'tools/test_audit_nexium_process_restart.py'
       - 'tests/field_save_process.cpp'
@@ -118,6 +120,8 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_process_restart.py' -v
       - name: Unit-test NeXium SD corruption and recovery auditor
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_sd_recovery.py' -v
+      - name: Unit-test fourth/fifth guest journal repair and fresh SD reload auditor
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_sd_repair.py' -v
       - name: Unit-test manual quicksave and event restore desktop audit
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_manual_snapshot.py' -v
       - name: Unit-test ordered five-checkpoint reference matcher
@@ -436,6 +440,132 @@ jobs:
             --manifest nexium-probe/sd-fault-manifest.json \
             --processes nexium-probe/damaged-sd-recovery/processes.json \
             --output nexium-probe/sd-recovery-audit.json
+      - name: Launch FOURTH independent guest to repair damaged SD journal
+        timeout-minutes: 3
+        run: |
+          set -eu
+          mkdir -p nexium-probe/repaired-sd
+          export DISPLAY=:99
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-wild-arms-data"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          export RUST_LOG=info
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          timeout --signal=TERM --kill-after=8 70s \
+            ./nexium-dist/NeXium/nexium \
+            "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+            > nexium-probe/repaired-sd/fourth-process.log 2>&1 &
+          fourth_pid=$!
+          echo "$fourth_pid" > nexium-probe/repaired-sd/fourth.pid
+          sleep 15
+          wid=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null | tail -n 1) || true
+          test -n "$wid"
+          xdotool windowfocus "$wid"
+          # Fresh RAM is empty; damaged newest B triggers fallback A + SD WARN.
+          xdotool keydown --clearmodifiers n
+          sleep 0.23
+          xdotool keyup n
+          sleep 0.19
+          import -display :99 -window root \
+            nexium-probe/repaired-sd/01_sd_warn_before_repair.png
+          sleep 1.3
+          # Save the recovered state back to disk. The repaired generation B
+          # replaces the CRC-invalid slot; A is never unlinked or rewritten.
+          xdotool keydown --clearmodifiers z
+          sleep 0.23
+          xdotool keyup z
+          sleep 0.19
+          import -display :99 -window root \
+            nexium-probe/repaired-sd/02_sd_saved_after_repair.png
+          sleep 1.3
+          import -display :99 -window root \
+            nexium-probe/repaired-sd/03_repaired_start_scene.png
+          xdotool keydown --clearmodifiers m || true
+          sleep 0.22
+          xdotool keyup m || true
+          sleep 2
+          kill -TERM "$fourth_pid" 2>/dev/null || true
+          set +e
+          wait "$fourth_pid"
+          result=$?
+          set -e
+          echo "$result" > nexium-probe/repaired-sd/fourth-exit-code.txt
+
+      - name: Launch FIFTH guest from repaired SD with no in-memory checkpoint
+        timeout-minutes: 3
+        run: |
+          set -eu
+          mkdir -p nexium-probe/repaired-restart
+          export DISPLAY=:99
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-wild-arms-data"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          export RUST_LOG=info
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          timeout --signal=TERM --kill-after=8 70s \
+            ./nexium-dist/NeXium/nexium \
+            "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+            > nexium-probe/repaired-restart/fifth-process.log 2>&1 &
+          fifth_pid=$!
+          sleep 15
+          wid=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null | tail -n 1) || true
+          test -n "$wid"
+          xdotool windowfocus "$wid"
+          import -display :99 -window root \
+            nexium-probe/repaired-restart/01_fresh_process_start.png
+          xdotool keydown --clearmodifiers n
+          sleep 0.23
+          xdotool keyup n
+          sleep 0.19
+          import -display :99 -window root \
+            nexium-probe/repaired-restart/02_sd_loaded_notice.png
+          sleep 1.3
+          import -display :99 -window root \
+            nexium-probe/repaired-restart/03_restored_start_scene.png
+          xdotool keydown --clearmodifiers m || true
+          sleep 0.22
+          xdotool keyup m || true
+          sleep 2
+          kill -TERM "$fifth_pid" 2>/dev/null || true
+          set +e
+          wait "$fifth_pid"
+          result=$?
+          set -e
+          echo "$result" > nexium-probe/repaired-restart/exit-code.txt
+          THIRD_PID=$(cat nexium-probe/damaged-sd-recovery/processes.json | \
+            /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin)["third_pid"])') \
+          FOURTH_PID=$(cat nexium-probe/repaired-sd/fourth.pid) \
+          FIFTH_PID="$fifth_pid" /usr/bin/python3 -c '
+          import json,os
+          print(json.dumps({
+            "third_pid":int(os.environ["THIRD_PID"]),
+            "fourth_pid":int(os.environ["FOURTH_PID"]),
+            "fifth_pid":int(os.environ["FIFTH_PID"]),
+            "fourth_wait_completed":True,
+            "fifth_wait_completed":True,
+            "same_emulator_data_root":True},sort_keys=True))' \
+            > nexium-probe/repaired-restart/processes.json
+
+      - name: Audit actual fourth guest SD repair and fifth guest clean SD load
+        run: |
+          /usr/bin/python3 tools/audit_nexium_sd_repair.py \
+            --reference same-commit-host-references \
+            --fourth-screens nexium-probe/repaired-sd \
+            --fifth-screens nexium-probe/repaired-restart \
+            --data-root "$RUNNER_TEMP/nexium-wild-arms-data" \
+            --damage-manifest nexium-probe/sd-fault-manifest.json \
+            --process-manifest nexium-probe/repaired-restart/processes.json \
+            --output nexium-probe/sd-repair-audit.json
       - name: Launch GUI-only control without NRO and compare screen state
         id: control
         continue-on-error: true
@@ -563,6 +693,10 @@ jobs:
           if test -f nexium-probe/five-checkpoints.json; then
             echo "Five-scene structural evidence:" >> "$GITHUB_STEP_SUMMARY"
             /usr/bin/python3 -c 'import json; x=json.load(open("nexium-probe/five-checkpoints.json")); print("validated scenes:",len(x["verified_scenes"]),"complete:",x["full_five_checkpoint_sequence_observed"] )' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/sd-repair-audit.json; then
+            echo "Fourth/fifth guest repaired SD journal and clean reload:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/sd-repair-audit.json")); print("complete:",r["all_checks_passed"],"status pixel mismatches:",sum(r["status_plaque_mismatches"].values()))' >> "$GITHUB_STEP_SUMMARY"
           fi
           if test -f nexium-probe/sd-recovery-audit.json; then
             echo "Third-process damaged-SD recovery:" >> "$GITHUB_STEP_SUMMARY"
