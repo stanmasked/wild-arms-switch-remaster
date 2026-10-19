@@ -395,6 +395,55 @@ void test_quicksave_pending_event_restores_pause_and_status() {
   (void)advance_field_runtime(world,rt,step*7,confirm,image.target);
   require(rt.manual.pending == Trigger::None && rt.manual.player.x == 4);
 }
+void test_held_journal_freezes_inputs_and_shows_session_clues() {
+  const FieldWorld world = make_demo_world();
+  FieldRuntime rt = start_field_runtime(world,kSwitchTicksPerSecond,0);
+  Surface screen;
+  constexpr std::uint64_t step = kSwitchTicksPerSecond*160/1000;
+  const RuntimeControls right{PadSample{.dpad_right=true}};
+  RuntimeControls journal_right = right;
+  journal_right.view_journal = true;
+  auto initial = advance_field_runtime(world,rt,0,{},screen.target);
+  require(initial.status==RuntimeStatus::Rendered && !initial.journal_visible);
+  auto held=advance_field_runtime(world,rt,step,journal_right,screen.target);
+  require(held.journal_visible && held.clue_count==0 &&
+          rt.manual.player.x==1 && !held.snapshot_stored);
+  require(screen.pixel(kJournalPanelX,kJournalPanelY)==rgba(105,160,230));
+  (void)advance_field_runtime(world,rt,step*2,right,screen.target);
+  (void)advance_field_runtime(world,rt,step*3,right,screen.target);
+  require(rt.manual.player.x==3 && rt.manual.pending==Trigger::None);
+  const RuntimeControls inspect{PadSample{.confirm=true}};
+  require(advance_field_runtime(world,rt,step*4,inspect,screen.target).
+          inspected==Trigger::Event);
+  RuntimeControls journal_record{{},false,true};
+  journal_record.view_journal=true;
+  const auto blocked=advance_field_runtime(
+      world,rt,step*5,journal_record,screen.target);
+  require(blocked.journal_visible && !blocked.clue_recorded &&
+          rt.discoveries.count==0 && rt.manual.player.x==3);
+  const RuntimeControls record{{},false,true};
+  const auto collected=advance_field_runtime(
+      world,rt,step*6,record,screen.target);
+  require(collected.clue_recorded && collected.clue_count==1);
+  RuntimeControls journal_save{{},false,false,true,false,true};
+  const auto view=advance_field_runtime(
+      world,rt,step*7,journal_save,screen.target);
+  require(view.journal_visible && view.clue_count==1 &&
+          !view.snapshot_stored && !rt.quicksave.occupied);
+  require(screen.pixel(kJournalPanelX,kJournalPanelY)==rgba(105,160,230));
+  screen.assert_guards();
+
+  // A tampered journal fails before any buffer write or state change.
+  rt.discoveries.count=kDiscoveryCapacity+1;
+  const auto before_pixels=screen.buffer;
+  const auto before_tick=rt.timer.previous_tick;
+  const auto invalid=advance_field_runtime(
+      world,rt,step*8,journal_right,screen.target);
+  require(invalid.status==RuntimeStatus::InvalidSimulation &&
+          screen.buffer==before_pixels &&
+          rt.timer.previous_tick==before_tick);
+}
+
 } // namespace
 int main() {
   test_sixty_hz_manual_event_pause_and_acknowledgment();
@@ -403,6 +452,7 @@ int main() {
   test_caption_kind_guard_and_exit_glyphs();
   test_manual_event_clue_recording_is_explicit_and_unique();
   test_b_does_not_record_without_inspected_event();
+  test_held_journal_freezes_inputs_and_shows_session_clues();
   test_invalid_input_is_transactional_and_guarded();
   test_autoplay_timing_checkpoints_and_manual_cancel();
   test_quicksave_restore_manual_mode_and_autoplay_isolation();
