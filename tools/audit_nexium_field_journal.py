@@ -14,8 +14,8 @@ from PIL import Image, ImageDraw, ImageChops
 
 from audit_nexium_checkpoints import SCREEN_SIZE, screen_point, VIEW_X, VIEW_W, VIEW_H
 
-# Source glyph rasters are asserted using an independently authored pixel
-# oracle. Samples use the CENTER of each 2x2 native glyph pixel.
+# Original bitmap glyph contract, reproduced independently in Python.
+# Full projected panel is compared pixel-by-pixel; no glyph samples are masked.
 GLYPHS = {
     "0": (14, 17, 19, 21, 25, 17, 14),
     "1": (4, 12, 4, 4, 4, 4, 14),
