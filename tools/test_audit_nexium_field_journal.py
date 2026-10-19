@@ -28,14 +28,11 @@ def glyph(draw, symbol, x, y):
 def journal_panel(draw, count):
     draw.rectangle((304, 80, 975, 639), fill=BLUE)
     draw.rectangle((308, 84, 971, 635), fill=DARK)
-    # Draw only glyphs directly checked by the independent oracle;
-    # no engine code or original screenshot used for test fixtures.
-    glyph(draw, str(count), 340 + 6 * 14, 116)
-    glyph(draw, "2", 340 + 8 * 14, 116)
+    for i, symbol in enumerate(f"CLUES {count}/2"):
+        glyph(draw, symbol, 340 + 14 * i, 116)
     if count:
-        for symbol, pos in (("A", 0), ("0", 1), ("X", 3),
-                            ("Y", 6), ("1", 7)):
-            glyph(draw, symbol, 340 + 14 * pos, 168)
+        for i, symbol in enumerate("A0 X4 Y1"):
+            glyph(draw, symbol, 340 + 14 * i, 168)
 
 
 def make_desktop(name, false_count=False, changed_player=False):
