@@ -89,6 +89,43 @@ inline void draw_journal_text(const PixelTarget& target,
   }
 }
 
+// A compact in-world tick marks an already-discovered event while walking.
+// The marker is purely visual: it cannot rewrite a map, advance the
+// discovery ledger or affect the deterministic autoplay reference frames.
+// Every journal entry is preflighted before any pixel can be written.
+[[nodiscard]] inline bool draw_discovered_clue_markers(
+    const PixelTarget& target, const FieldWorld& world,
+    const RenderFrame& frame, int area_index,
+    const FieldDiscoveryJournal& journal) noexcept {
+  if (!valid_discovery_journal(world, journal) ||
+      validate_raster(target, frame, area_index) != RasterOutcome::Ready)
+    return false;
+  const int origin_x = (kRasterWidth -
+                        frame.width * kRasterTileSize) / 2;
+  const int origin_y = (kRasterHeight -
+                        frame.height * kRasterTileSize) / 2;
+  for (std::size_t i = 0; i < journal.count; ++i) {
+    const FieldClue& clue = journal.entries[i];
+    if (clue.area != area_index) continue;
+    const int vx = clue.x - frame.world_left;
+    const int vy = clue.y - frame.world_top;
+    const RenderCell* cell = frame.at(vx, vy);
+    // Do not paint over the player or over non-event terrain.
+    if (!cell || cell->terrain != CellKind::Event || cell->player) continue;
+    const int tile_x = origin_x + vx * kRasterTileSize;
+    const int tile_y = origin_y + vy * kRasterTileSize;
+    constexpr std::uint32_t ink = rgba(246, 247, 252);
+    fill_raster_rect(target, tile_x + 25, tile_y + 25, 18, 18,
+                     rgba(105, 160, 230));
+    // Small white checkmark, separated from an A-inspection outline.
+    fill_raster_rect(target, tile_x + 29, tile_y + 33, 4, 4, ink);
+    fill_raster_rect(target, tile_x + 33, tile_y + 37, 4, 4, ink);
+    fill_raster_rect(target, tile_x + 37, tile_y + 31, 4, 4, ink);
+    fill_raster_rect(target, tile_x + 41, tile_y + 27, 2, 4, ink);
+  }
+  return true;
+}
+
 [[nodiscard]] inline bool draw_discovery_journal(
     const PixelTarget& target, const FieldWorld& world,
     const FieldDiscoveryJournal& journal) noexcept {

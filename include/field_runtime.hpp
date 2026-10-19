@@ -304,6 +304,11 @@ struct RuntimeControls {
                         shown.area) != RasterOutcome::Ready)
     return {RuntimeStatus::InvalidRaster};
 
+  if (!next.autoplay && !controls.view_journal &&
+      !draw_discovered_clue_markers(target, world, frame, shown.area,
+                                    next.discoveries))
+    return {RuntimeStatus::InvalidSimulation};
+
   if (!next.autoplay && controls.view_journal) {
     if (!draw_discovery_journal(target, world, next.discoveries))
       return {RuntimeStatus::InvalidSimulation};

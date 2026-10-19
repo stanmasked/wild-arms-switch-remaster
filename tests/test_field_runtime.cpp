@@ -176,6 +176,51 @@ void test_caption_kind_guard_and_exit_glyphs() {
 }
 
 
+void test_discovery_marker_only_during_manual_exploration() {
+  const FieldWorld world = make_demo_world();
+  FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  Surface screen;
+  constexpr std::uint64_t step = kSwitchTicksPerSecond * 160 / 1000;
+  // A real manual player moves right twice, inspects A, and records B.
+  const RuntimeControls right{PadSample{.dpad_right = true}};
+  const RuntimeControls inspect{PadSample{.confirm = true}};
+  const RuntimeControls record{{}, false, true};
+  constexpr int badge_x = 288 + 4 * 64 + 25;
+  constexpr int badge_y = 136 + 1 * 64 + 25;
+  require(advance_field_runtime(world, rt, 0, {}, screen.target).status ==
+          RuntimeStatus::Rendered);
+  require(screen.pixel(badge_x, badge_y) ==
+          terrain_rgba(CellKind::Event));
+  (void)advance_field_runtime(world, rt, step, right, screen.target);
+  (void)advance_field_runtime(world, rt, step * 2, right, screen.target);
+  require(advance_field_runtime(world, rt, step * 3, inspect,
+                                screen.target).inspected == Trigger::Event);
+  require(screen.pixel(badge_x, badge_y) ==
+          terrain_rgba(CellKind::Event));
+  const RuntimeFrame collected = advance_field_runtime(
+      world, rt, step * 4, record, screen.target);
+  require(collected.clue_recorded && rt.discoveries.count == 1);
+  require(screen.pixel(badge_x, badge_y) == rgba(105, 160, 230));
+
+  // L opens the modal journal without altering the discovery ledger.
+  const RuntimeControls journal{{}, false, false, false, false, true};
+  const auto modal = advance_field_runtime(
+      world, rt, step * 5, journal, screen.target);
+  require(modal.journal_visible && rt.discoveries.count == 1);
+  require(screen.pixel(kJournalPanelX,kJournalPanelY) ==
+          rgba(105, 160, 230));
+
+  // Autoplay is canonical/unannotated even with session discoveries.
+  const RuntimeControls start{{}, true};
+  const auto demo = advance_field_runtime(
+      world, rt, step * 6, start, screen.target);
+  require(demo.status == RuntimeStatus::Rendered && rt.autoplay);
+  require(screen.pixel(badge_x, badge_y) ==
+          terrain_rgba(CellKind::Event));
+  require(rt.discoveries.count == 1);
+  screen.assert_guards();
+}
+
 void test_reinspection_immediately_indicates_recorded_clue() {
   const FieldWorld world = make_demo_world();
   FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
@@ -1086,6 +1131,7 @@ int main() {
   test_manual_adjacent_inspection_renders_timed_outline();
   test_manual_inspection_caption_and_stale_target_invalidation();
   test_caption_kind_guard_and_exit_glyphs();
+  test_discovery_marker_only_during_manual_exploration();
   test_reinspection_immediately_indicates_recorded_clue();
   test_manual_event_clue_recording_is_explicit_and_unique();
   test_b_does_not_record_without_inspected_event();
