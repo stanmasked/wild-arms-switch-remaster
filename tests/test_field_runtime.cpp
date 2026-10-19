@@ -489,8 +489,18 @@ void test_l_held_journal_freezes_inspection_timeout() {
   constexpr int inspected_pixel_y = 136 + 64 + 7;
   require(image.pixel(inspected_pixel_x, inspected_pixel_y) ==
           rgba(255, 247, 172));
+  // B still records the exact inspected clue even after holding the
+  // journal longer than the normal 900-ms inspection lifetime.
+  const RuntimeControls record{{}, false, true};
+  const RuntimeFrame written = advance_field_runtime(
+      world, rt, step * 11, record, image.target);
+  require(written.status == RuntimeStatus::Rendered &&
+          written.clue_recorded && written.clue_count == 1 &&
+          rt.discoveries.entries[0].area == 0 &&
+          rt.discoveries.entries[0].x == 4 &&
+          rt.discoveries.entries[0].y == 1);
   const RuntimeFrame expired = advance_field_runtime(
-      world, rt, step * 15, {}, image.target);
+      world, rt, step * 17, {}, image.target);
   require(expired.status == RuntimeStatus::Rendered &&
           rt.inspection.kind == Trigger::None);
   image.assert_guards();
