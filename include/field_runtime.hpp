@@ -4,6 +4,7 @@
 #include "field_discovery.hpp"
 #include "field_frame_ticks.hpp"
 #include "field_inspection_ui.hpp"
+#include "field_journal_view.hpp"
 #include "field_pixels.hpp"
 #include "field_snapshot.hpp"
 #include "field_view.hpp"
@@ -57,6 +58,7 @@ struct RuntimeFrame {
   bool clue_recorded = false;
   bool clue_already_recorded = false;
   std::size_t clue_count = 0;
+  bool journal_visible = false;
   int checkpoint = -1;
   TimedStatus movement_status = TimedStatus::Idle;
   // Not a persistent save; does not write to disk.
@@ -73,6 +75,9 @@ struct RuntimeControls {
   bool cancel_demo = false;
   bool save_snapshot = false;
   bool load_snapshot = false;
+  // Hold L for a read-only, modal session journal. No gameplay input is
+  // processed while held; all five preceding aggregate fields are stable.
+  bool view_journal = false;
 };
 
 [[nodiscard]] inline FieldRuntime start_field_runtime(
@@ -105,6 +110,9 @@ struct RuntimeControls {
   if (!current.timer.valid()) return {RuntimeStatus::InvalidClock};
   if (!runtime_has_valid_target(target))
     return {RuntimeStatus::InvalidTarget};
+  if (controls.view_journal && !current.autoplay &&
+      !valid_discovery_journal(world, current.discoveries))
+    return {RuntimeStatus::InvalidSimulation};
 
   FieldRuntime next = current;
   const FrameTickDelta elapsed =
@@ -144,7 +152,9 @@ struct RuntimeControls {
         outcome.status == AutoplayStatus::InvalidDelta)
       return {RuntimeStatus::InvalidSimulation};
     response.checkpoint = outcome.checkpoint;
-  } else if (!mode_switched) {
+  } else if (!mode_switched && !controls.view_journal) {
+    // Holding L owns its entire frame, so it cannot move, inspect,
+    // acknowledge events, save, load or record new clues.
     // A snapshot operation owns its entire frame. It must neither step the
     // player nor acknowledge an event, even if movement/A is held.
     if (controls.save_snapshot && controls.load_snapshot)
@@ -247,7 +257,11 @@ struct RuntimeControls {
                         shown.area) != RasterOutcome::Ready)
     return {RuntimeStatus::InvalidRaster};
 
-  if (!next.autoplay &&
+  if (!next.autoplay && controls.view_journal) {
+    if (!draw_discovery_journal(target, world, next.discoveries))
+      return {RuntimeStatus::InvalidSimulation};
+    response.journal_visible = true;
+  } else if (!next.autoplay &&
       next.inspection.kind != Trigger::None &&
       next.inspection.remaining_ms > 0 &&
       next.inspection.area == shown.area) {
