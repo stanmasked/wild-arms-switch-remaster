@@ -25,6 +25,7 @@ on:
       - 'include/field_save_file.hpp'
       - 'include/field_snapshot.hpp'
       - 'include/field_runtime.hpp'
+      - 'include/field_save_feedback.hpp'
       - 'switch/source/main.cpp'
   workflow_dispatch:
 
@@ -216,7 +217,7 @@ jobs:
           # Actual default NeXium keyboard mappings (controller_config.rs):
           # Switch B=X, Y=Z, Minus=N, A=C, DRight=ArrowRight.
           # Independent Xvfb evidence is kept separate from autoplay PNGs.
-          mkdir -p nexium-probe/manual-snapshot
+          mkdir -p nexium-probe/manual-snapshot nexium-probe/status-feedback
           if test -n "${window_id:-}"; then
             xdotool windowfocus "$window_id" || true
             send_manual_key() {
@@ -225,7 +226,14 @@ jobs:
               xdotool keydown --clearmodifiers "$1"
               sleep 0.22
               xdotool keyup "$1"
-              sleep 0.4
+              if test "${2:-}" != ""; then
+                sleep 0.15
+                import -display :99 -window root \
+                  "nexium-probe/status-feedback/$2.png"
+              fi
+              # The 900ms gameplay indicator must expire *before* the
+              # original strict manual screenshot RGB parity check.
+              sleep 1.20
             }
             capture_manual() {
               import -display :99 -window root \
@@ -239,19 +247,19 @@ jobs:
             }
             send_manual_key x     # Switch B ends completed demo and resets manual
             capture_manual 00_manual_start
-            send_manual_key z     # Switch Y quicksave at x1
+            send_manual_key z save-start     # Switch Y quicksave at x1
             capture_manual 01_start_saved
             walk_to_event        # x1 -> x4; '!' waits for A
             capture_manual 02_event_after_walk
-            send_manual_key n     # Switch Minus restores x1 / no event
+            send_manual_key n load-start     # Switch Minus restores x1 / no event
             capture_manual 03_start_restored
             walk_to_event
             capture_manual 04_event_again
-            send_manual_key z     # Store pending event in quicksave slot
+            send_manual_key z save-event     # Store pending event in quicksave slot
             capture_manual 05_event_saved
             send_manual_key c     # Switch A acknowledges; bar becomes green
             capture_manual 06_event_acknowledged
-            send_manual_key n     # Restores pending event + yellow status
+            send_manual_key n load-event     # Restores pending event + yellow status
             capture_manual 07_event_restored
           else
             printf '%s\n' 'No NeXium guest window; manual test not performed' \

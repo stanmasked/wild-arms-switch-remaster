@@ -123,3 +123,27 @@ corrupt-latest fallback, stale temporary files, blocked replacement,
 world mismatches, and generation exhaustion. The Switch NRO must be
 cross-compiled separately and manual SD persistence must be verified
 on an actual console before being called hardware-confirmed.
+
+## Stage 295 — storage outcomes shown inside the game
+
+The Switch NRO now renders a small 900 ms **front-end-only** status plaque
+in the upper-right margin, with independently generated 5×7 pixel
+lettering. This plaque never changes the `advance_field_runtime`
+logic, the five canonical host captures, or the field map.
+
+- **SD SAVED** (green): a fully checked journal write returned success
+- **RAM ONLY** (amber): SDMC was unavailable; the Y quicksave is in RAM
+- **SD ERROR** (red): attempted SD read/write failed
+- **SD LOADED** (cyan): first Minus restored a verified SD record
+- **RAM LOADED** (blue): Minus restored the existing RAM snapshot
+- **BAD SAVE** (red): persisted generations are invalid
+- **NO SAVE** (gray): no RAM or usable persistent record is present
+
+This indication reports **only the operation observed at runtime**;
+it does not certify sudden-power-loss durability or an actual
+Nintendo Switch hardware save. It disappears during autoplay so all
+five canonical reference scenes remain unaffected. Host tests assert
+all outcome colours, text drawing bounds, and deterministic expiry.
+NeXium manual screenshot capture now waits for the transient indicator
+to disappear before comparing the original scene pixels, and separate
+transient captures are kept for UI validation.

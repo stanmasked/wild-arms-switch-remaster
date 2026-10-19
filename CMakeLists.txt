@@ -41,6 +41,11 @@ add_executable(wa_field_save_file_tests tests/test_field_save_file.cpp)
 target_link_libraries(wa_field_save_file_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_save_file_tests COMMAND wa_field_save_file_tests)
 
+# Stage 295: timed, platform-neutral storage outcome indicator.
+add_executable(wa_field_save_feedback_tests tests/test_field_save_feedback.cpp)
+target_link_libraries(wa_field_save_feedback_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_save_feedback_tests COMMAND wa_field_save_feedback_tests)
+
 # Host validation of the exact software framebuffer algorithm used by libnx.
 add_executable(wa_field_pixels_tests tests/test_field_pixels.cpp)
 target_link_libraries(wa_field_pixels_tests PRIVATE wa_field_core)

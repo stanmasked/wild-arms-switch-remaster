@@ -9,6 +9,7 @@
 #include "field_frame_ticks.hpp"
 #include "field_runtime.hpp"
 #include "field_save_file.hpp"
+#include "field_save_feedback.hpp"
 
 #include <algorithm>
 #include <cerrno>
@@ -93,6 +94,7 @@ int main() {
     return 4;
   }
 
+  StorageFeedback feedback{};
   while (appletMainLoop()) {
     padUpdate(&pad);
     const u64 pressed = padGetButtonsDown(&pad);
@@ -112,26 +114,52 @@ int main() {
     // On the first Minus after a fresh launch, seed the volatile slot from
     // the newest independently validated SD journal entry. Failed reads
     // NEVER change the live world or a currently occupied RAM quicksave.
-    if (storage_ready && input.load_snapshot && !runtime.autoplay &&
-        !input.start_demo && !runtime.quicksave.occupied) {
+    bool imported_from_sd = false;
+    FileSaveStatus attempted_read = FileSaveStatus::Missing;
+    const bool fresh_load = input.load_snapshot && !runtime.autoplay &&
+        !input.start_demo && !runtime.quicksave.occupied;
+    if (fresh_load && storage_ready) {
       WorldState recovered{};
-      if (load_field_save_file(world, kSaveBase, recovered) ==
-          FileSaveStatus::Loaded) {
+      attempted_read = load_field_save_file(world, kSaveBase, recovered);
+      if (attempted_read == FileSaveStatus::Loaded) {
         runtime.quicksave.world = recovered;
         runtime.quicksave.occupied = true;
+        imported_from_sd = true;
       }
     }
     const RuntimeFrame result = advance_field_runtime(
         world, runtime, armGetSystemTick(), input, output);
-    framebufferEnd(&fb);
-
-    // Persist only after the runtime has accepted the Y snapshot.
-    // Storage failure must not turn a successful field frame into a crash.
-    if (storage_ready && result.status == RuntimeStatus::Rendered &&
-        result.snapshot_stored) {
-      (void)store_field_save_file(world, runtime.quicksave.world, kSaveBase);
+    if (result.status != RuntimeStatus::Rendered) {
+      framebufferEnd(&fb);
+      break;
     }
-    if (result.status != RuntimeStatus::Rendered) break;
+
+    // The deterministic game-field framebuffer was drawn first.
+    // Storage feedback is an independent short-lived UI overlay, never an
+    // input to the canonical host/Switch scenario or snapshot state.
+    advance_storage_notice(feedback, result.delta_ms);
+    if (result.autoplay) {
+      begin_storage_notice(feedback, StorageNotice::None);
+    } else if (result.snapshot_stored) {
+      const FileSaveStatus written = storage_ready ?
+          store_field_save_file(world, runtime.quicksave.world, kSaveBase) :
+          FileSaveStatus::Missing;
+      begin_storage_notice(feedback,
+          !storage_ready ? StorageNotice::RamOnly :
+          written == FileSaveStatus::Stored ? StorageNotice::SdSaved :
+                                             StorageNotice::SdError);
+    } else if (result.snapshot_restored) {
+      begin_storage_notice(feedback, imported_from_sd ?
+          StorageNotice::SdLoaded : StorageNotice::RamLoaded);
+    } else if (result.snapshot_empty) {
+      begin_storage_notice(feedback,
+          attempted_read == FileSaveStatus::Corrupt ?
+              StorageNotice::BadSave :
+          attempted_read == FileSaveStatus::IoError ?
+              StorageNotice::SdError : StorageNotice::NoSave);
+    }
+    (void)draw_storage_notice(output, feedback);
+    framebufferEnd(&fb);
   }
 
   framebufferClose(&fb);
