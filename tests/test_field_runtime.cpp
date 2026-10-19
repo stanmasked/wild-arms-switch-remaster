@@ -264,6 +264,47 @@ void test_invalid_input_is_transactional_and_guarded() {
   require(rt.timer.previous_tick == 7 && image.buffer == original);
 }
 
+void test_autoplay_exit_rejects_corrupt_discoveries_transactionally() {
+  const FieldWorld world = make_demo_world();
+  FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  Surface screen;
+  constexpr std::uint64_t step = kSwitchTicksPerSecond * 160 / 1000;
+  const RuntimeControls start{{}, true};
+  const RuntimeControls cancel{{}, false, true};
+
+  require(advance_field_runtime(world, rt, 0, {}, screen.target).status ==
+          RuntimeStatus::Rendered);
+  require(record_discovery(world, rt.discoveries, 0, 4, 1) ==
+          DiscoveryResult::Recorded);
+  require(advance_field_runtime(world, rt, step, start, screen.target).
+          status == RuntimeStatus::Rendered && rt.autoplay);
+  // An invalid second entry can be introduced while autoplay is active,
+  // which intentionally ignores the dormant manual journal.
+  rt.discoveries.count = 2;
+  rt.discoveries.entries[1] = {1, 0, 0};
+  const auto before_pixels = screen.buffer;
+  const auto before_tick = rt.timer.previous_tick;
+  const int before_x = rt.manual.player.x;
+  const RuntimeFrame rejected = advance_field_runtime(
+      world, rt, step * 2, cancel, screen.target);
+  require(rejected.status == RuntimeStatus::InvalidSimulation &&
+          rt.autoplay && rt.manual.player.x == before_x &&
+          rt.timer.previous_tick == before_tick &&
+          screen.buffer == before_pixels &&
+          rt.discoveries.count == 2);
+  // Recover the journal in place; a valid first clue survives exiting
+  // autoplay, because cancellation is not a new game process.
+  rt.discoveries.entries[1] = {1, 4, 3};
+  const RuntimeFrame accepted = advance_field_runtime(
+      world, rt, step * 2, cancel, screen.target);
+  require(accepted.status == RuntimeStatus::Rendered &&
+          !rt.autoplay && rt.manual.area == 0 &&
+          rt.manual.player.x == 1 &&
+          rt.discoveries.count == 2);
+  require(valid_discovery_journal(world, rt.discoveries));
+  screen.assert_guards();
+}
+
 void test_autoplay_timing_checkpoints_and_manual_cancel() {
   const FieldWorld world = make_demo_world();
   FieldRuntime a = start_field_runtime(world,kSwitchTicksPerSecond,0);
@@ -783,6 +824,7 @@ int main() {
   test_l_modal_does_not_replay_held_A_on_release();
   test_cross_area_discovery_journal_survives_world_and_snapshot_changes();
   test_invalid_input_is_transactional_and_guarded();
+  test_autoplay_exit_rejects_corrupt_discoveries_transactionally();
   test_autoplay_timing_checkpoints_and_manual_cancel();
   test_quicksave_restore_manual_mode_and_autoplay_isolation();
   test_quicksave_pending_event_restores_pause_and_status();

@@ -148,6 +148,11 @@ struct RuntimeControls {
     next.autoplay = true;
     mode_switched = true;
   } else if (next.autoplay && controls.cancel_demo) {
+    // Returning from autoplay re-enters manual mode. Validate the
+    // session journal *before* resetting the world or consuming B:
+    // manual-only preflight was deliberately bypassed during autoplay.
+    if (!valid_discovery_journal(world, next.discoveries))
+      return {RuntimeStatus::InvalidSimulation};
     next.manual = start_world(world);
     next.autoplay = false;
     mode_switched = true;
