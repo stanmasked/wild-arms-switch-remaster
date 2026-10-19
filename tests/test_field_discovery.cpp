@@ -7,6 +7,26 @@ namespace {
 using namespace wa::field;
 void require(bool ok) { if (!ok) std::abort(); }
 
+void test_read_only_clue_membership_respects_area_and_count() {
+  const FieldWorld world = make_demo_world();
+  FieldDiscoveryJournal notes{};
+  require(!has_discovered_clue(notes, 0, 4, 1));
+  require(record_discovery(world, notes, 0, 4, 1) ==
+          DiscoveryResult::Recorded);
+  require(has_discovered_clue(notes, 0, 4, 1));
+  require(!has_discovered_clue(notes, 1, 4, 1));
+  require(!has_discovered_clue(notes, 1, 4, 3));
+  require(record_discovery(world, notes, 1, 4, 3) ==
+          DiscoveryResult::Recorded);
+  const auto original = notes;
+  require(has_discovered_clue(notes, 1, 4, 3));
+  require(notes.count == original.count &&
+          notes.entries[0].area == original.entries[0].area &&
+          notes.entries[1].y == original.entries[1].y);
+  notes.count = notes.entries.size() + 1;
+  require(!has_discovered_clue(notes, 0, 4, 1));
+}
+
 void test_distinct_events_and_revisits_are_idempotent() {
   const FieldWorld world = make_demo_world();
   FieldDiscoveryJournal notes{};
@@ -108,6 +128,7 @@ void test_discoveries_cannot_change_version_one_save_bytes() {
 }
 }
 int main() {
+  test_read_only_clue_membership_respects_area_and_count();
   test_distinct_events_and_revisits_are_idempotent();
   test_invalid_markers_and_corrupt_ledgers_cannot_mutate();
   test_full_ledger_returns_error_without_insertion();

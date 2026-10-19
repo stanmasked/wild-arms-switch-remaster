@@ -238,10 +238,16 @@ struct RuntimeControls {
           case Direction::Right: dx = 1; break;
           case Direction::None: break;
         }
+        const int target_x = next.manual.player.x + dx;
+        const int target_y = next.manual.player.y + dy;
+        // A revisit should immediately reveal the recorded clue state,
+        // without requiring a redundant B press just to see CLUE NOTED.
+        const bool already_logged = outcome.inspected == Trigger::Event &&
+            has_discovered_clue(next.discoveries, next.manual.area,
+                                target_x, target_y);
         next.inspection = {outcome.inspected, next.manual.area,
-                           next.manual.player.x + dx,
-                           next.manual.player.y + dy,
-                           kFieldInspectionDurationMs, false};
+                           target_x, target_y,
+                           kFieldInspectionDurationMs, already_logged};
       }
       // In manual mode B records a clue only from a still-visible
       // inspection of an adjacent event. It is a separate, explicit

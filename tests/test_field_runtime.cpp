@@ -176,6 +176,57 @@ void test_caption_kind_guard_and_exit_glyphs() {
 }
 
 
+void test_reinspection_immediately_indicates_recorded_clue() {
+  const FieldWorld world = make_demo_world();
+  FieldRuntime rt = start_field_runtime(world, kSwitchTicksPerSecond, 0);
+  Surface screen;
+  constexpr std::uint64_t step = kSwitchTicksPerSecond * 160 / 1000;
+  const RuntimeControls inspect{PadSample{.confirm = true}};
+  const RuntimeControls record{{}, false, true};
+  rt.manual.player.x = 3;
+  rt.manual.player.y = 1;
+  rt.manual.player.facing = Direction::Right;
+  require(advance_field_runtime(world, rt, 0, {}, screen.target).status ==
+          RuntimeStatus::Rendered);
+
+  // Before collecting, A uses the yellow EVENT AHEAD caption.
+  const RuntimeFrame first = advance_field_runtime(
+      world, rt, step, inspect, screen.target);
+  require(first.status == RuntimeStatus::Rendered &&
+          first.inspected == Trigger::Event && !rt.inspection.logged &&
+          screen.pixel(kInspectionPanelX, kInspectionPanelY) ==
+              rgba(255, 247, 172));
+  const RuntimeFrame collected = advance_field_runtime(
+      world, rt, step * 2, record, screen.target);
+  require(collected.clue_recorded && rt.discoveries.count == 1 &&
+          rt.inspection.logged);
+
+  // Let the caption expire with a single legal 960ms frame.
+  require(advance_field_runtime(world, rt, step * 8, {}, screen.target).
+          status == RuntimeStatus::Rendered);
+  require(rt.inspection.kind == Trigger::None);
+
+  // A fresh inspection of this same recorded clue must immediately
+  // display the blue CLUE NOTED caption, without another B press.
+  const RuntimeFrame revisited = advance_field_runtime(
+      world, rt, step * 9, inspect, screen.target);
+  require(revisited.status == RuntimeStatus::Rendered &&
+          revisited.inspected == Trigger::Event &&
+          !revisited.clue_recorded && !revisited.clue_already_recorded &&
+          rt.discoveries.count == 1 && rt.inspection.logged &&
+          inspection_caption(rt.inspection.kind, rt.inspection.logged)[0] == 'C' &&
+          screen.pixel(kInspectionPanelX, kInspectionPanelY) ==
+              rgba(105, 160, 230));
+
+  // B is still harmlessly idempotent when explicitly pressed again.
+  const RuntimeFrame duplicate = advance_field_runtime(
+      world, rt, step * 10, record, screen.target);
+  require(duplicate.status == RuntimeStatus::Rendered &&
+          duplicate.clue_already_recorded && !duplicate.clue_recorded &&
+          rt.discoveries.count == 1);
+  screen.assert_guards();
+}
+
 void test_manual_event_clue_recording_is_explicit_and_unique() {
   const FieldWorld world = make_demo_world();
   FieldRuntime rt = start_field_runtime(world,kSwitchTicksPerSecond,0);
@@ -1035,6 +1086,7 @@ int main() {
   test_manual_adjacent_inspection_renders_timed_outline();
   test_manual_inspection_caption_and_stale_target_invalidation();
   test_caption_kind_guard_and_exit_glyphs();
+  test_reinspection_immediately_indicates_recorded_clue();
   test_manual_event_clue_recording_is_explicit_and_unique();
   test_b_does_not_record_without_inspected_event();
   test_simultaneous_A_and_B_cannot_collect_before_inspection();

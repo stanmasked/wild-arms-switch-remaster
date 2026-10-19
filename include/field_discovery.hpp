@@ -23,6 +23,21 @@ struct FieldDiscoveryJournal {
   std::size_t count = 0;
 };
 
+// Read-only membership query. Runtime callers must first validate the
+// complete journal against the current world, as in the manual preflight.
+// Never examine beyond the bounded active entry count.
+[[nodiscard]] inline bool has_discovered_clue(
+    const FieldDiscoveryJournal& journal,
+    int area, int x, int y) noexcept {
+  if (journal.count > journal.entries.size()) return false;
+  for (std::size_t i = 0; i < journal.count; ++i) {
+    const FieldClue& clue = journal.entries[i];
+    if (clue.area == area && clue.x == x && clue.y == y)
+      return true;
+  }
+  return false;
+}
+
 enum class DiscoveryResult {
   Recorded, PreviouslyRecorded, Full, Invalid
 };
