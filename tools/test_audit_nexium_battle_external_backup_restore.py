@@ -123,6 +123,22 @@ class IsolatedGuestRestoreTests(unittest.TestCase):
             self.assertFalse(r["checks"][
                 "twentysixth_read_only_reboot_never_rewrites_new_B"])
 
+    def test_corrupt_evidence_cannot_alias_live_source(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            a[5] = a[3]  # previously vacuous "unchanged original" comparison
+            with self.assertRaisesRegex(ValueError, "independent files"):
+                audit_external_recovery(*a)
+
+    def test_original_and_live_hardlinks_are_not_independent(self):
+        import os
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            a[5].unlink()
+            os.link(a[3], a[5])
+            with self.assertRaisesRegex(ValueError, "independent files"):
+                audit_external_recovery(*a)
+
     def test_both_damaged_originals_preserved(self):
         with tempfile.TemporaryDirectory() as d:
             a=fixture(d)
