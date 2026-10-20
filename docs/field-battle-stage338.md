@@ -368,3 +368,31 @@ This is **experimental NeXium filesystem evidence**, not an actual
 Switch hardware power-cut durability guarantee. The ninth/tenth
 guests and exact-head Host Core/NRO need to complete successfully
 before restart persistence is considered confirmed.
+
+## Stage 361 — real emulator recovery from a deliberately corrupted newest battle journal
+
+After the previously independent ninth/tenth guest restart audit completes,
+the workflow deliberately flips exactly **one byte of the outer CRC32
+on battle-progress.b** (generation two). All original valid A and B
+bytes are retained in separate evidence files. An **eleventh distinct
+NeXium guest**, booted with the same isolated SDMC directory, should
+discard the damaged newest generation, recover the earlier verified
+generation-one A and show `EXITS 1 LAST RETREAT` on the **actual held-ZL
+game screen**. After another R→B retreat, the game should replace the
+corrupt B with the exact validated generation-two record containing
+two retreats. The prior A file and unrelated field saves must remain
+unchanged.
+
+A separate `audit_nexium_battle_recovery.py` independently checks the
+deliberately injected single-CRC-byte fault, verifies **both nested
+journal checksums** on all healthy bytes, compares the recovered records
+against the original saved immutable A and B, and checks exactly two
+real 1600×900 desktop captures for old-record restoration and accurate
+B-close map parity. Nine synthetic adversarial tests reject missing
+images, wrong CRC corruption, tampered healthy record, fake restart
+counter, and incorrect field return.
+
+This is an experiment that still needs exact-head GitHub Actions /
+NeXium confirmation. Neither the host filesystem unit tests nor any
+emulator guest test demonstrates physical SD/FAT crash durability on
+Nintendo Switch hardware.
