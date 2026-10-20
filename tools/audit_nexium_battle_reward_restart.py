@@ -49,7 +49,9 @@ def audit_rewards(screens, first_a, final_a, final_b, output):
             native_pixel(field, 0, 5) == MAP
             and native_pixel(field, 690, 612) != GOLD,
         "real_seven_controller_attacks_produced_victory":
-            native_pixel(victory, 320, 294) == GREEN
+            native_pixel(victory, 324, 297) == GREEN
+            and native_pixel(victory, 500, 296) == GREEN
+            and native_pixel(victory, 500, 298) == DARK
             and native_pixel(victory, 700, 249) == DARK,
         "victory_on_B_committed_only_eight_EXP_and_twelve_Gella":
             original["generation"] == 1 and original["outcome"] == 1

@@ -36,7 +36,9 @@ def picture(name):
     native=Image.new("RGB",(1280,720),DARK if name=="01_real_victory" else FIELD)
     d=ImageDraw.Draw(native)
     if name=="01_real_victory":
-        d.rectangle((319,293,335,305),fill=GREEN)
+        # Explicit left/top VICTORY border at native coordinates observed in NeXium.
+        d.rectangle((321,295,950,397),outline=GREEN,width=2)
+        d.rectangle((322,296,326,300),fill=GREEN)
     else:
         d.rectangle((0,0,1279,9),fill=MAP)
         d.rectangle((340,230,369,250),fill=RED)
@@ -105,6 +107,16 @@ class RealGuestRewardAuditorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             args=create_fixture(folder)
             picture("00_manual_before_win").save(args[0]/"01_real_victory.png")
+            result=audit_rewards(*args)
+            self.assertFalse(result["checks"]["real_seven_controller_attacks_produced_victory"])
+
+    def test_missing_top_victory_border_cannot_pass(self):
+        with tempfile.TemporaryDirectory() as folder:
+            args=create_fixture(folder)
+            path=args[0]/"01_real_victory.png"
+            with Image.open(path) as inp:im=inp.convert("RGB")
+            im.putpixel(screen_point(500,296),DARK)
+            im.save(path)
             result=audit_rewards(*args)
             self.assertFalse(result["checks"]["real_seven_controller_attacks_produced_victory"])
 

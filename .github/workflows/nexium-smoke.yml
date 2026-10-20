@@ -1291,7 +1291,7 @@ jobs:
           done
           reward_frame 01_real_victory
           # Require real terminal Victory frame BEFORE any reward record.
-          /usr/bin/python3 -c 'import sys; sys.path.insert(0,"tools"); from audit_nexium_field_journal import read_rgb,native_pixel; assert native_pixel(read_rgb("nexium-probe/battle-earned-screens/01_real_victory.png"),320,294)==(63,191,138)'
+          /usr/bin/python3 -c 'import sys; sys.path.insert(0,"tools"); from audit_nexium_field_journal import read_rgb,native_pixel; assert native_pixel(read_rgb("nexium-probe/battle-earned-screens/01_real_victory.png"),324,297)==(63,191,138) and native_pixel(read_rgb("nexium-probe/battle-earned-screens/01_real_victory.png"),500,296)==(63,191,138) and native_pixel(read_rgb("nexium-probe/battle-earned-screens/01_real_victory.png"),500,298)==(12,19,31)'
           press_reward_key x
           xdotool keydown --clearmodifiers r
           sleep 0.45
