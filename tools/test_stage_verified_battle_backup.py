@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+"""Stage371 offline recovery integrity tests (synthetic input; not guest proof)."""
+import hashlib
+import json
+import shutil
+import tempfile
+import unittest
+from pathlib import Path
+
+from stage_verified_battle_backup import prepare_recovery, _journal_from_bytes
+from test_audit_nexium_battle_two_victories import journal
+
+
+def digest(blob):
+    return hashlib.sha256(blob).hexdigest()
+
+
+def fixture(root):
+    root = Path(root)
+    good_a = root / "separate-external-gen5.a"
+    good_b = root / "separate-external-gen6.b"
+    bad_a = root / "damaged-live.a"
+    bad_b = root / "damaged-live.b"
+    journal(good_a, 5, 1, 4, 1, 32, 48)
+    journal(good_b, 6, 3, 4, 2, 32, 48)
+    for src, dest in ((good_a, bad_a), (good_b, bad_b)):
+        data = bytearray(src.read_bytes())
+        data[48] ^= 0x80
+        dest.write_bytes(data)
+    return (bad_a, bad_b, good_a, good_b, digest(good_a.read_bytes()),
+            digest(good_b.read_bytes()), root / "new-isolated-recovery")
+
+
+def call(a, execute=False):
+    return prepare_recovery(*a, execute=execute)
+
+
+class SafeOfflineRecoveryTests(unittest.TestCase):
+    def test_preview_does_not_create_any_files(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            before = [p.read_bytes() for p in a[:4]]
+            r = call(a)
+            self.assertFalse(a[-1].exists())
+            self.assertEqual(r["recovered"]["generation"], 6)
+            self.assertEqual(r["recovered"]["wins"], 4)
+            self.assertEqual(r["recovered"]["retreats"], 2)
+            self.assertEqual((r["recovered"]["experience"], r["recovered"]["gella"]), (32, 48))
+            self.assertEqual([p.read_bytes() for p in a[:4]], before)
+
+    def test_explicit_staging_preserves_all_inputs_and_recovers_gen6(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            before = [p.read_bytes() for p in a[:4]]
+            r = call(a, execute=True)
+            self.assertTrue(r["staged"])
+            self.assertEqual(sorted(x.name for x in a[-1].iterdir()),
+                             ["battle-progress.a", "recovery-manifest.json"])
+            restored = a[-1] / "battle-progress.a"
+            self.assertEqual(restored.read_bytes(), before[3])
+            self.assertEqual(_journal_from_bytes(restored.read_bytes())["generation"], 6)
+            self.assertEqual([p.read_bytes() for p in a[:4]], before)
+            manifest = json.loads((a[-1] / "recovery-manifest.json").read_text())
+            self.assertFalse(manifest["installed_to_live_sdmc"])
+            self.assertEqual(manifest["backup_used"], "b")
+            self.assertEqual(manifest["recovered"]["gella"], 48)
+
+    def test_new_output_is_not_a_live_install(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            call(a, execute=True)
+            self.assertFalse((a[-1] / "battle-progress.b").exists())
+            self.assertTrue(a[0].exists() and a[1].exists())
+
+    def test_older_backup_only_can_be_selected_explicitly(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            a[3] = None
+            a[5] = None
+            r = call(a, execute=True)
+            self.assertEqual(r["backup_used"], "a")
+            self.assertEqual(r["recovered"]["generation"], 5)
+
+    def test_latest_backup_only(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            a[2] = None
+            a[4] = None
+            r = call(a)
+            self.assertEqual(r["backup_used"], "b")
+            self.assertEqual(r["recovered"]["generation"], 6)
+
+    def test_missing_both_backups_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            a[2] = a[3] = a[4] = a[5] = None
+            with self.assertRaises(ValueError):
+                call(a)
+
+    def test_missing_backup_hash_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            a[4] = None
+            with self.assertRaises(ValueError):
+                call(a)
+
+    def test_malformed_backup_hash_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            a[5] = "00" * 31
+            with self.assertRaises(ValueError):
+                call(a)
+
+    def test_modified_but_valid_backup_needs_independent_hash(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            journal(a[3], 6, 3, 4, 3, 32, 48)
+            with self.assertRaises(ValueError):
+                call(a)
+
+    def test_corrupt_inner_WABR_checksum_fails_even_with_updated_sha(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            data = bytearray(a[3].read_bytes())
+            data[44] ^= 0x01
+            a[3].write_bytes(data)
+            a[5] = digest(data)
+            with self.assertRaises(ValueError):
+                call(a)
+
+    def test_corrupt_outer_WABJ_checksum_fails_even_with_updated_sha(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            data = bytearray(a[3].read_bytes())
+            data[48] ^= 0x01
+            a[3].write_bytes(data)
+            a[5] = digest(data)
+            with self.assertRaises(ValueError):
+                call(a)
+
+    def test_invalid_semantic_outcome_fails_even_with_new_crc(self):
+        import struct
+        import zlib
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            data = bytearray(a[3].read_bytes())
+            data[17] = 0  # LAST outcome NONE with nonzero counters
+            struct.pack_into("<I", data, 44, zlib.crc32(data[12:44]))
+            struct.pack_into("<I", data, 48, zlib.crc32(data[:48]))
+            a[3].write_bytes(data)
+            a[5] = digest(data)
+            with self.assertRaises(ValueError):
+                call(a)
+
+    def test_equally_generated_conflicting_backups_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            journal(a[3], 5, 3, 4, 2, 32, 48)
+            a[5] = digest(a[3].read_bytes())
+            with self.assertRaises(ValueError):
+                call(a)
+
+    def test_newer_generation_cannot_regress_earned_rewards(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            journal(a[3], 6, 3, 4, 2, 16, 24)
+            a[5] = digest(a[3].read_bytes())
+            with self.assertRaises(ValueError):
+                call(a)
+
+    def test_valid_current_live_slot_must_not_be_rewritten(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            shutil.copyfile(a[2], a[0])
+            with self.assertRaises(ValueError):
+                call(a)
+
+    def test_existing_destination_always_rejected_without_overwrite(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            a[-1].mkdir()
+            marker = a[-1] / "personal.txt"
+            marker.write_text("do not overwrite")
+            with self.assertRaises(FileExistsError):
+                call(a, execute=True)
+            self.assertEqual(marker.read_text(), "do not overwrite")
+
+    def test_symlink_destination_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            target = Path(d) / "elsewhere"
+            target.mkdir()
+            a[-1].symlink_to(target, target_is_directory=True)
+            with self.assertRaises(FileExistsError):
+                call(a, execute=True)
+            self.assertEqual(list(target.iterdir()), [])
+
+    def test_symlink_backup_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            link = Path(d) / "linked.a"
+            link.symlink_to(a[2])
+            a[2] = link
+            with self.assertRaises(ValueError):
+                call(a)
+
+    def test_hardlinked_live_and_backup_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            a[2].unlink()
+            import os
+            os.link(a[0], a[2])
+            with self.assertRaises(ValueError):
+                call(a)
+
+    def test_stage_does_not_include_an_unverified_second_slot(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            call(a, execute=True)
+            files = {x.name for x in a[-1].iterdir()}
+            self.assertEqual(files, {"battle-progress.a", "recovery-manifest.json"})
+            self.assertNotIn("damaged-live.a", files)
+
+
+if __name__ == "__main__":
+    unittest.main()
