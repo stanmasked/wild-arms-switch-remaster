@@ -1,6 +1,7 @@
 #include "field_battle_arm_entry.hpp"
 
 #include <cassert>
+#include <initializer_list>
 
 using namespace wa::field;
 
