@@ -283,3 +283,23 @@ exactly-once B close, saturated balances reporting actual payout,
 corrupt battle refusal, original pixel parity and an opt-in panel
 without state mutation. This feature requires its own Host Core
 and Switch NRO CI checks before claiming to work in the emulator.
+
+## Stage 358 — separate versioned battle progress record, codec only
+
+An independent, fixed-length 36-byte `WABR` binary record v1
+holds the session's three terminal outcome counters, last outcome,
+accumulated synthetic EXP and Gella, and CRC32. It does **not**
+modify or replace the 40-byte `WAFS` field/save format. The format
+uses explicit little-endian fields, reserved-zero padding and an exact
+length/CRC check; it never serializes native C++ struct padding.
+Decoding a corrupt, wrong-version, truncated, oversized or contradictory
+record never changes live `BattleProgress`.
+
+`wa_field_battle_record_tests` covers a clean empty record, an
+authentic battle-session victory and payout, byte-order checks, maximum
+32-bit counters, invalid last-phase relationships, changed CRC, wrong
+magic/version, reserved bytes and atomic failure. This is a **codec
+only**: no actual SD card read/write yet. A separate transactional
+disk-save layer will be required before suggesting that wins or EXP
+survive restarting the game. The existing exploration saves continue
+to function independently.
