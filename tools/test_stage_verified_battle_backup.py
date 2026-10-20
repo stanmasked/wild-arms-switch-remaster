@@ -266,6 +266,54 @@ class SafeOfflineRecoveryTests(unittest.TestCase):
             self.assertFalse(list(Path(d).glob(".wild-arms-stage371-*")))
             self.assertEqual([p.read_bytes() for p in a[:4]], originals)
 
+    def test_linux_exclusive_rename_uses_kernel_no_replace_flag(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        import ctypes
+        native = mock.Mock()
+        native.renameat2.return_value = 0
+        with mock.patch("sys.platform", "linux"), \
+             mock.patch.object(ctypes, "CDLL", return_value=native):
+            _publish_exclusive(Path("/tmp/recovery-stage"),
+                               Path("/tmp/recovery-final"))
+        native.renameat2.assert_called_once_with(
+            -100, b"/tmp/recovery-stage", -100, b"/tmp/recovery-final", 1)
+        native.renamex_np.assert_not_called()
+
+    def test_mac_intel_exclusive_rename_uses_rename_excl_flag(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        import ctypes
+        native = mock.Mock()
+        native.renamex_np.return_value = 0
+        with mock.patch("sys.platform", "darwin"), \
+             mock.patch.object(ctypes, "CDLL", return_value=native):
+            _publish_exclusive(Path("/tmp/recovery-stage"),
+                               Path("/tmp/recovery-final"))
+        native.renamex_np.assert_called_once_with(
+            b"/tmp/recovery-stage", b"/tmp/recovery-final", 0x4)
+        native.renameat2.assert_not_called()
+
+    def test_unsupported_platform_fails_without_rename_fallback(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        import errno
+        with mock.patch("sys.platform", "freebsd14"):
+            with self.assertRaises(OSError) as caught:
+                _publish_exclusive(Path("/tmp/stage"), Path("/tmp/dest"))
+        self.assertEqual(caught.exception.errno, errno.ENOTSUP)
+
+    def test_kernel_collision_is_reported_as_file_exists_not_success(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        import ctypes
+        import errno
+        native = mock.Mock()
+        native.renameat2.return_value = -1
+        with mock.patch("sys.platform", "linux"), \
+             mock.patch.object(ctypes, "CDLL", return_value=native), \
+             mock.patch.object(ctypes, "get_errno", return_value=errno.EEXIST):
+            with self.assertRaises(FileExistsError) as caught:
+                _publish_exclusive(Path("/tmp/stage"), Path("/tmp/dest"))
+        self.assertEqual(caught.exception.errno, errno.EEXIST)
+        native.renameat2.assert_called_once()
+
     def test_exclusive_publisher_rejects_nul_truncated_path(self):
         from stage_verified_battle_backup import _publish_exclusive
         with tempfile.TemporaryDirectory() as d:
