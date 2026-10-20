@@ -74,6 +74,13 @@ def audit_external_recovery(screens, prior_field, staged_a,
     images = [read_rgb(root / (name + ".png")) for name in FRAMES]
     initial, field25, after25, reload26 = images
     field = read_rgb(prior_field)
+    # Original damaged evidence and the live-source snapshots MUST be four
+    # distinct physical files. Aliasing them makes "unchanged" vacuous.
+    source_paths = [Path(p) for p in (
+        original_corrupt_a, original_corrupt_b, live_corrupt_a, live_corrupt_b)]
+    inode_ids = [(p.stat().st_dev, p.stat().st_ino) for p in source_paths]
+    if len(set(inode_ids)) != len(inode_ids):
+        raise ValueError("original and live corrupt evidence must be independent files")
     original = [Path(path).read_bytes() for path in
                 (original_corrupt_a, original_corrupt_b)]
     live = [Path(path).read_bytes() for path in
