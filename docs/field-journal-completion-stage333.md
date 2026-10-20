@@ -27,3 +27,26 @@ Current NeXium first-guest journal oracle only observes 0/2 and 1/2;
 it must remain unchanged. An additional 2/2 guest capture would be
 needed before claiming emulator-side completion-banner verification.
 All scene content is independently authored and not from Wild Arms.
+
+## Stage 334 — explicit guest proof of the 2/2 completion goal
+
+A dedicated continuation of the same real guest NRO process now runs
+*after* the original pending-event save and restore evidence, travels
+to the area-0 exit and area-1 clue by actual D-pad controls, inspects
+A and records B, then holds L for completion. Five extra screenshots
+in `nexium-probe/field-completion` capture the second map, pre-B
+one-clue journal, completed two-clue journal and field badge.
+
+The independent image oracle now renders **2/2** in the full 672x560
+journal overlay, including both notes, the two separate 1/1 counters
+and **ALL CLUES FOUND**, and requires exact RGB equality. A separate
+six-condition auditor also verifies the guest actually reached (4,2)
+in the second region, that the second event was uncollected before B,
+that the full second-area badge appears only after recording and that
+the player stayed put. Synthetic negative tests reject an incomplete
+journal, a changed banner pixel, an absent badge, a moved player or
+missing screenshots. All evidence is stored as hashed actual Xvfb PNGs.
+
+This is *new unverified code* until the exact-head CI executes in
+experimental NeXium. No proprietary PS1 content or physical console
+validation is asserted.

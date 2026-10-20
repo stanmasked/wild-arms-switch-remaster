@@ -39,6 +39,8 @@ on:
       - 'include/field_journal_view.hpp'
       - 'tools/audit_nexium_field_journal.py'
       - 'tools/test_audit_nexium_field_journal.py'
+      - 'tools/audit_nexium_field_completion.py'
+      - 'tools/test_audit_nexium_field_completion.py'
       - 'tests/test_field_journal_view.cpp'
       - 'tests/test_field_runtime.cpp'
       - 'tests/test_field_discovery.cpp'
@@ -153,7 +155,9 @@ jobs:
       - name: Unit-test manual quicksave and event restore desktop audit
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_manual_snapshot.py' -v
       - name: Unit-test independent NeXium L journal Xvfb audit
-        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_field_journal.py' -v
+        run: |
+          /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_field_journal.py' -v
+          /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_field_completion.py' -v
       - name: Unit-test ordered five-checkpoint reference matcher
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_checkpoints.py' -v
       - name: Verify synthetic frame evidence classifier
@@ -375,6 +379,53 @@ jobs:
             capture_manual 06_event_acknowledged
             send_manual_key n load-event     # Restores pending event + yellow status
             capture_manual 07_event_restored
+            # Preserve all existing save/restore screenshots, then run
+            # a real-controller walk to the second event. This alters
+            # only volatile live gameplay; the SD save was already made.
+            mkdir -p nexium-probe/field-completion
+            send_manual_key c       # A: acknowledge restored area-0 event
+            step_once() {
+              xdotool keydown --clearmodifiers "$1"
+              sleep 0.18
+              xdotool keyup "$1"
+              sleep 0.25
+            }
+            # x4,y1 -> exit at x6,y5 without crossing a wall.
+            for direction in Left Down Down Down Right Right Down Right; do
+              step_once "$direction"
+            done
+            import -display :99 -window root \
+              nexium-probe/field-completion/00_area0_exit.png
+            send_manual_key c       # A enters area 1 at (1,1)
+            # Walk to (4,2), facing the next event at (4,3).
+            for direction in Right Right Right Down; do
+              step_once "$direction"
+            done
+            import -display :99 -window root \
+              nexium-probe/field-completion/01_area1_adjacent.png
+            xdotool keydown --clearmodifiers q
+            sleep 0.20
+            import -display :99 -window root \
+              nexium-probe/field-completion/02_one_clue_open.png
+            xdotool keyup q
+            sleep 0.20
+            # Distinct A inspect then B record, before opening the L modal.
+            xdotool keydown --clearmodifiers c
+            sleep 0.12
+            xdotool keyup c
+            sleep 0.15
+            xdotool keydown --clearmodifiers x
+            sleep 0.12
+            xdotool keyup x
+            sleep 0.15
+            xdotool keydown --clearmodifiers q
+            sleep 0.25
+            import -display :99 -window root \
+              nexium-probe/field-completion/03_completed_open.png
+            xdotool keyup q
+            sleep 0.25
+            import -display :99 -window root \
+              nexium-probe/field-completion/04_completed_closed.png
           else
             printf '%s\n' 'No NeXium guest window; manual test not performed' \
               > nexium-probe/manual-snapshot/input-error.txt
@@ -777,6 +828,12 @@ jobs:
           /usr/bin/python3 tools/audit_nexium_field_journal.py \
             --screenshots nexium-probe/field-journal \
             --report nexium-probe/field-journal-audit.json
+      - name: Audit real two-area completion screens
+        if: always()
+        run: |
+          /usr/bin/python3 tools/audit_nexium_field_completion.py \
+            --screenshots nexium-probe/field-completion \
+            --report nexium-probe/field-completion-audit.json
       - name: Verify intended Switch X triggers visible world changes
         if: always()
         run: |
@@ -837,6 +894,10 @@ jobs:
           if test -f nexium-probe/manual-snapshot-audit.json; then
             echo "Manual Y/Minus + event restoration audit:" >> "$GITHUB_STEP_SUMMARY"
             /usr/bin/python3 -c 'import json; d=json.load(open("nexium-probe/manual-snapshot-audit.json")); print("manual quicksave and event restore confirmed:",d["manual_quicksave_and_event_restore_confirmed"])' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/field-completion-audit.json; then
+            echo "Real guest two-area 2/2 completion:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/field-completion-audit.json")); print("all checks:",r["all_checks_passed"],"count:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
           fi
           if test -f nexium-probe/field-journal-audit.json; then
             echo "Real first-guest L journal screenshot verification:" >> "$GITHUB_STEP_SUMMARY"
