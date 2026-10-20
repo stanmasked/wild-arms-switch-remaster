@@ -72,6 +72,11 @@ add_executable(wa_field_battle_tests tests/test_field_battle.cpp)
 target_link_libraries(wa_field_battle_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_battle_tests COMMAND wa_field_battle_tests)
 
+# Stage 339: standalone battle D-pad/action edge decoder.
+add_executable(wa_field_battle_controller_tests tests/test_field_battle_controller.cpp)
+target_link_libraries(wa_field_battle_controller_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_battle_controller_tests COMMAND wa_field_battle_controller_tests)
+
 # Host validation of the exact software framebuffer algorithm used by libnx.
 add_executable(wa_field_pixels_tests tests/test_field_pixels.cpp)
 target_link_libraries(wa_field_pixels_tests PRIVATE wa_field_core)
