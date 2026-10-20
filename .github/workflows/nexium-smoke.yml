@@ -125,9 +125,11 @@ jobs:
     timeout-minutes: 15
     env:
       NEXIUM_URL: https://github.com/nexium-emu/nexium-nightly/releases/download/nightly/nexium-linux-x86_64.tar.gz
-      # Official GitHub release archive digest observed 2026-10-18.
+      # Official GitHub release asset API digest observed 2026-10-20.
+      # NeXium nightly 2026.10.20 (0895625), asset 658656899, 114182978 bytes.
+      # Still SHA256-verified after downloading; no trust-on-first-use fallback.
       # Fail closed if the rolling nightly changes; re-verify before updating.
-      NEXIUM_ARCHIVE_SHA256: 0ec2da5d58b6b362a9f0a4c927af0e55d36a0b50d1ab3f035dd075ea12d76761
+      NEXIUM_ARCHIVE_SHA256: c933fbbcf8d1b011de8d4a79c9d8eb55c0678a305947af9388ddb40ce5960a66
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
