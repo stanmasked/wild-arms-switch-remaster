@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <limits>
 
 using namespace wa::field;
