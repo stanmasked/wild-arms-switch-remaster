@@ -73,6 +73,12 @@ def audit_battle(directory, report):
         "kind": "real_nexium_sixth_process_battle_input_audit",
         "provenance": "emulator_xvfb_desktop_not_hardware_or_native_framebuffer",
         "checks": checks,
+        "battle_open_probe_rgb": {
+            "selected_hero_border": native_pixel(opened, 70, 120),
+            "selected_foe_border": native_pixel(opened, 670, 165),
+            "full_foe_health_bar": native_pixel(opened, 692 + 230, 249),
+            "map_status_before": native_pixel(before, 0, 5),
+        },
         "all_checks_passed": all(checks.values()),
         "sha256": {
             name: hashlib.sha256((directory / (name + ".png")).read_bytes()).hexdigest()
