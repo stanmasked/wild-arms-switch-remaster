@@ -173,7 +173,7 @@ void test_actual_field_movement_activates_optional_battle() {
   // Movement pacing may need more than three 160-ms samples to accept
   // three tile steps. Observe actual committed movement, not input frames.
   for(unsigned i=0;i<16 && field.manual.pending==Trigger::None;++i) {
-    tick+=19200000*160/1000;
+    tick+=19200000ULL*160/1000;
     assert(advance_field_runtime(world,field,tick,right,target).status==
            RuntimeStatus::Rendered);
     assert(!advance_field_encounters(encounter,field.manual,{}).triggered);
@@ -189,7 +189,7 @@ void test_actual_field_movement_activates_optional_battle() {
   const RuntimeControls left{PadSample{.dpad_left=true}};
   EncounterFrame encounter_frame{};
   for(unsigned i=0;i<16 && !encounter_frame.triggered;++i) {
-    tick+=19200000*160/1000;
+    tick+=19200000ULL*160/1000;
     assert(advance_field_runtime(world,field,tick,left,target).status==
            RuntimeStatus::Rendered);
     encounter_frame=advance_field_encounters(encounter,field.manual,{});
