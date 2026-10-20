@@ -152,3 +152,21 @@ The Linux host syscall smoke (EEXIST for preexisting empty destination,
 successful publish into absent name) was independently repeated on
 2026-10-21. Apple-native implementation and real NeXium guest behavior
 remain unconfirmed pending CI.
+
+## Stage379 unsupported filesystem is a hard failure
+
+The exclusive directory publisher deliberately does **not** downgrade to
+ordinary POSIX rename if the filesystem reports `ENOTSUP`. This matters
+on external or removable volumes: Apple's documentation makes
+`RENAME_EXCL` conditional on volume support, and some macOS exFAT
+filesystem implementations can reject that flag. The safe operational
+choice is to select a separate output root on a filesystem supporting
+exclusive rename (for example, an ordinary APFS volume), while keeping
+the damaged SDMC originals untouched. No automatic fallback installation
+or overwrite is attempted.
+
+Two additional synthetic tests simulate native `ENOTSUP` separately on
+Linux and macOS and require the staging directory and all its bytes to
+survive, with no destination published. The focused suite now defines
+**38 filesystem tests plus 19 screenshot/journal tests = 57 cases**.
+macOS and Linux actual runner behavior remains unverified until CI finishes.
