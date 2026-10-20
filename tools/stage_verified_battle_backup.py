@@ -56,6 +56,10 @@ def _publish_exclusive(stage, destination):
 
     libc = ctypes.CDLL(None, use_errno=True)
     src, dst = os.fsencode(stage), os.fsencode(destination)
+    # ctypes c_char_p truncates at NUL: reject impossible filesystem names
+    # explicitly so a malformed destination cannot redirect publication.
+    if b"\\x00" in src or b"\\x00" in dst:
+        raise ValueError("NUL byte forbidden in recovery publication path")
     if sys.platform.startswith("linux"):
         func = getattr(libc, "renameat2", None)
         if func is None:
