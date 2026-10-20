@@ -1503,8 +1503,15 @@ jobs:
           base="$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/battle-progress"
           dir=nexium-probe/battle-latest-recovery
           test -f "$base.a" && test -f "$base.b"
-          cmp "$base.a" nexium-probe/battle-double-victory/final.a
-          cmp "$base.b" nexium-probe/battle-double-victory/final.b
+          /usr/bin/python3 - "$base.a" "$base.b" \
+            nexium-probe/battle-double-victory/final.a \
+            nexium-probe/battle-double-victory/final.b <<'PY'
+          from pathlib import Path
+          import sys
+          a, b, expected_a, expected_b = (Path(x) for x in sys.argv[1:])
+          assert a.read_bytes() == expected_a.read_bytes(), "newest A changed"
+          assert b.read_bytes() == expected_b.read_bytes(), "older B changed"
+          PY
           # First preserve committed evidence. Fault only outer CRC byte 48
           # of latest generation THREE A (not the older healthy gen2 B).
           cp "$base.a" "$dir/pristine-gen3.a"
@@ -1532,7 +1539,11 @@ jobs:
               raise AssertionError("fault injection did not break newest A CRC")
           PY
           cp "$base.a" "$dir/damaged-newest-gen3.a"
-          cmp "$base.b" "$dir/pristine-gen2.b"
+          /usr/bin/python3 - "$base.b" "$dir/pristine-gen2.b" <<'PY'
+          from pathlib import Path
+          import sys
+          assert Path(sys.argv[1]).read_bytes() == Path(sys.argv[2]).read_bytes(), "older B was changed by fault injection"
+          PY
           # A completely new guest process, SAME isolated SDMC namespace.
           timeout --signal=TERM --kill-after=8 75s \
             ./nexium-dist/NeXium/nexium \
