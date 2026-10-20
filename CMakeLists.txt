@@ -78,6 +78,13 @@ add_executable(wa_field_battle_arm_tests tests/test_field_battle_arm.cpp)
 target_link_libraries(wa_field_battle_arm_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_battle_arm_tests COMMAND wa_field_battle_arm_tests)
 
+# Stage 386: isolated ARM fire/reload held-edge controller contract.
+add_executable(wa_field_battle_arm_controller_tests
+               tests/test_field_battle_arm_controller.cpp)
+target_link_libraries(wa_field_battle_arm_controller_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_battle_arm_controller_tests
+         COMMAND wa_field_battle_arm_controller_tests)
+
 # Stage 339: standalone battle D-pad/action edge decoder.
 add_executable(wa_field_battle_controller_tests tests/test_field_battle_controller.cpp)
 target_link_libraries(wa_field_battle_controller_tests PRIVATE wa_field_core)
