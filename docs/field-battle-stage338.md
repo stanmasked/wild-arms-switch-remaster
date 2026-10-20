@@ -303,3 +303,40 @@ only**: no actual SD card read/write yet. A separate transactional
 disk-save layer will be required before suggesting that wins or EXP
 survive restarting the game. The existing exploration saves continue
 to function independently.
+
+## Stage 359 — independently versioned battle progress journal
+
+The Switch prototype now loads battle history and EXP/Gella at startup
+from a **separate battle-progress.a / battle-progress.b** two-generation
+journal under `sdmc:/switch/wild_arms_field/`. On the first validated
+B-close of each battle, the game attempts to persist the updated
+volatile progress. Missing, unreadable or corrupt data never changes
+the live counters; unavailable SD storage remains nonfatal. Ordinary
+field quicksaves continue to use `field-save.a/.b` and unchanged
+40-byte WAFS payloads.
+
+The battle journal is a fixed **52-byte WABJ** wrapper consisting of
+magic, 64-bit little-endian generation, independent 36-byte WABR v1
+progress record, and another CRC32. Storage writes to the *older*
+slot's `.tmp`, flushes+fsyncs, reopens and byte-validates the
+temporary file, then replaces only the older slot and verifies
+published bytes. The newest fully validated generation is never
+overwritten in the normal write path. Readers ignore orphaned
+temporary files and recover the latest fully validated copy after
+a torn write, damaged peer or interrupted rename. A tie with unequal
+payloads fails as corrupt; a generation counter at UINT64_MAX fails
+closed instead of wrapping.
+
+`wa_field_battle_file_tests` exercises two generations, restart
+recovery, partial/fully synced uncommitted temp, interruption after
+removing the older slot or after publish, damaged newest fallback and
+repair, both slots corrupt, truncated/extra bytes, invalid balances,
+sequence exhaustion and unchanged separate field data.
+
+**Limits:** CRC32 is a corruption check, not cryptographic
+authentication; POSIX-like fflush/fsync/rename cannot guarantee actual
+SD/FAT power-loss durability without hardware/firmware validation.
+This is an asset-free synthetic battle prototype, not original PS1
+save data. The new file I/O requires separate exact-head CI and a real
+NeXium restart/reload test before claiming persistence is verified
+on a Switch emulator.
