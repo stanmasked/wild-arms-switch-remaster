@@ -1,0 +1,204 @@
+name: ARM experimental NeXium guest proof
+
+on:
+  push:
+    branches:
+      - 'stage-390-*'
+  pull_request:
+    paths:
+      - '.github/workflows/arm-nexium-guest.yml'
+      - 'tools/audit_nexium_arm_guest.py'
+      - 'tools/test_audit_nexium_arm_guest.py'
+      - 'switch/source/main.cpp'
+      - 'switch/Makefile'
+      - 'include/field_battle_arm*.hpp'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arm-nro:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build explicitly opted-in native ARM training NRO
+        run: |
+          make -C switch -j2 WA_ARM_EXPERIMENTAL=1
+          python3 tools/audit_switch_nro.py switch/wild_arms_field.nro --json switch/wild_arms_field.nro.audit.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage390-arm-explicit-nro
+          path: |
+            switch/wild_arms_field.nro
+            switch/wild_arms_field.nro.audit.json
+          if-no-files-found: error
+
+  ne-xium-guest:
+    needs: arm-nro
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    container:
+      image: fedora:44
+    env:
+      # Pin same official NeXium nightly proven in parent Stage371 run.
+      NEXIUM_URL: https://github.com/nexium-emu/nexium-nightly/releases/download/nightly/nexium-linux-x86_64.tar.gz
+      NEXIUM_ARCHIVE_SHA256: c933fbbcf8d1b011de8d4a79c9d8eb55c0678a305947af9388ddb40ce5960a66
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: stage390-arm-explicit-nro
+          path: native-arm
+      - name: Install Xvfb, Mesa Vulkan, PIL and NeXium libraries
+        run: |
+          dnf install -y --setopt=install_weak_deps=False \
+            mesa-vulkan-drivers vulkan-tools xorg-x11-server-Xvfb \
+            xdotool ImageMagick python3-pillow gtk3 alsa-lib systemd-libs \
+            libxkbcommon libxkbcommon-x11 vulkan-loader \
+            file curl tar gzip coreutils procps-ng
+          ldd --version | head -n 1
+      - name: Prove strict auditor rejects synthetic bad pixels and WABJ
+        run: |
+          /usr/bin/python3 -m py_compile tools/audit_nexium_arm_guest.py
+          /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_guest.py' -v
+      - name: Fetch exact SHA-256 verified official NeXium Linux binary
+        run: |
+          set -euo pipefail
+          mkdir -p nexium-dist arm-guest/screenshots
+          curl -fL --retry 3 --connect-timeout 20 --max-time 240 \
+            "$NEXIUM_URL" -o nexium-dist/nexium.tar.gz
+          echo "$NEXIUM_ARCHIVE_SHA256  nexium-dist/nexium.tar.gz" | sha256sum -c -
+          tar -xzf nexium-dist/nexium.tar.gz -C nexium-dist/
+          test -x nexium-dist/NeXium/nexium
+      - name: Prepare previously validated NeXium loader-compatible NRO wrapper
+        run: |
+          python3 tools/prepare_nexium_nro_probe.py \
+            native-arm/wild_arms_field.nro \
+            arm-guest/arm_loader_probe_only.nro \
+            --report arm-guest/loader-probe-manifest.json
+      - name: Capture actual distinct ordinary-R and experimental-ZL+R guest sessions
+        timeout-minutes: 7
+        run: |
+          set -euo pipefail
+          Xvfb :99 -screen 0 1600x900x24 -nolisten tcp > arm-guest/xvfb.log 2>&1 &
+          sleep 4
+          export DISPLAY=:99
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          capture() {
+            import -display :99 -window root "arm-guest/screenshots/$1.png"
+          }
+          press() {
+            xdotool keydown --clearmodifiers "$1"
+            sleep 0.23
+            xdotool keyup "$1"
+            sleep 0.43
+          }
+          launch() {
+            label="$1"
+            export NEXIUM_DATA_ROOT="$RUNNER_TEMP/wa-arm-$label"
+            timeout --signal=TERM --kill-after=8 125s \
+              ./nexium-dist/NeXium/nexium \
+              "$PWD/arm-guest/arm_loader_probe_only.nro" \
+              > "arm-guest/$label-process.log" 2>&1 &
+            guest_pid=$!
+            eval "${label}_pid=$guest_pid"
+            sleep 15
+            wid=$(xdotool search --onlyvisible --class nexium 2>/dev/null | tail -n 1) || true
+            test -n "$wid"
+            xdotool windowfocus "$wid"
+            # Host X => Switch B, disables old 23-step autoplay.
+            press x
+            sleep 0.75
+          }
+          stop_guest() {
+            kill -TERM "$guest_pid" 2>/dev/null || true
+            set +e
+            wait "$guest_pid"
+            exit_code=$?
+            set -e
+            # Exit is read from the actual observed wait, not manufactured
+            # after screenshots. 143 is our deliberate SIGTERM stop.
+            case "$exit_code" in
+              0|143) ;;
+              *) echo "Unexpected NeXium $label exit: $exit_code" >&2; return 1 ;;
+            esac
+            printf -v "${label}_wait_status" '%s' "$exit_code"
+            sleep 1
+          }
+          # First independent guest: ordinary R is unchanged. B-close
+          # writes baseline's own WABJ, providing a positive disk control.
+          launch baseline
+          capture 00_baseline_field
+          press e  # Switch R
+          capture 01_baseline_r_battle
+          press x  # Switch B exits
+          capture 02_baseline_return
+          stop_guest
+
+          # Separate guest + fresh SD root. ZL=host R key, Switch R=host E.
+          launch arm
+          xdotool keydown --clearmodifiers r
+          sleep 0.16
+          press e
+          xdotool keyup r
+          sleep 0.38
+          capture 03_arm_full
+
+          # X => Switch X => ARM Fire. Keep held for second frame; no repeat.
+          xdotool keydown --clearmodifiers v
+          sleep 0.34
+          capture 04_arm_fired
+          sleep 0.36
+          capture 05_arm_fire_held
+          xdotool keyup v
+          sleep 0.25
+
+          # Switch Y=host Z. Two other heroes Guard, concluding round one.
+          press z
+          press z
+          press n  # Switch Minus => ARM Reload on renewed actor 0.
+          capture 06_arm_reloaded
+          press x  # B exits ARM; unlike ordinary R, MUST NOT write WABJ.
+          capture 07_arm_return
+          stop_guest
+
+          BASELINE_PID="$baseline_pid" ARM_PID="$arm_pid" \
+          BASELINE_WAIT_STATUS="$baseline_wait_status" \
+          ARM_WAIT_STATUS="$arm_wait_status" python3 -c '
+          import json,os
+          from pathlib import Path
+          Path("arm-guest/processes.json").write_text(
+              json.dumps({"baseline_pid":int(os.environ["BASELINE_PID"]),
+                          "arm_pid":int(os.environ["ARM_PID"]),
+                          "baseline_wait_completed":True,
+                          "arm_wait_completed":True,
+                          "baseline_wait_status":int(os.environ["BASELINE_WAIT_STATUS"]),
+                          "arm_wait_status":int(os.environ["ARM_WAIT_STATUS"])},
+                         sort_keys=True)+"\n")
+          '
+      - name: Strict pixel, guest process and isolated save-file audit
+        run: |
+          /usr/bin/python3 tools/audit_nexium_arm_guest.py \
+            --screenshots arm-guest/screenshots \
+            --baseline-root "$RUNNER_TEMP/wa-arm-baseline" \
+            --arm-root "$RUNNER_TEMP/wa-arm-arm" \
+            --processes arm-guest/processes.json \
+            --report arm-guest/arm-audit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stage390-arm-real-ne-xium-evidence
+          path: |
+            arm-guest/
+          if-no-files-found: warn
