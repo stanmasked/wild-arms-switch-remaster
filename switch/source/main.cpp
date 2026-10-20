@@ -12,6 +12,7 @@
 #include "field_encounters.hpp"
 #include "field_save_file.hpp"
 #include "field_battle_file.hpp"
+#include "field_battle_storage_warning.hpp"
 #include "field_save_feedback.hpp"
 
 #include <algorithm>
@@ -106,6 +107,7 @@ int main() {
   // Separate nonpersistent demonstration fight, explicitly opened with R
   // in manual mode; the original exploration runtime stays intact.
   FieldBattleSession battle_scene{};
+  bool battle_journal_corrupt = false;
   // Recover only a fully validated independent battle-progress journal.
   // Missing/corrupt records cannot change the default volatile counters.
   if (storage_ready) {
@@ -114,6 +116,10 @@ int main() {
     if (loaded.status==BattleJournalStatus::Loaded) {
       battle_scene.history=restored.history;
       battle_scene.rewards=restored.rewards;
+    } else {
+      // Preserve both bad copies for external recovery. Show the problem
+      // only on an explicitly requested ZL panel, never on normal field.
+      battle_journal_corrupt=battle_journal_needs_warning(loaded.status);
     }
   }
   // ZR explicitly toggles optional step encounters. Default is off so
@@ -299,8 +305,10 @@ int main() {
       // Never overlay the ordinary map or the canonical B-return frame
       // unless explicitly requested; file save schema remains unchanged.
       if (!runtime.autoplay && (held & HidNpadButton_ZL)) {
-        if (draw_field_battle_history(output, battle_scene.history))
+        if (draw_field_battle_history(output, battle_scene.history)) {
           draw_battle_reward_balance(output, battle_scene.rewards);
+          (void)draw_battle_journal_warning(output, battle_journal_corrupt);
+        }
       }
     }
     framebufferEnd(&fb);
