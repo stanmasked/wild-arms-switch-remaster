@@ -223,6 +223,56 @@ void test_pending_event_survives_battle_then_accepts_real_a() {
   p.display.guards();
 }
 
+void test_second_area_and_clues_survive_enter_exit() {
+  Replay p;
+  p.step();
+  // Build a structurally valid second-area player snapshot using the
+  // native WorldState format. Battle must not reset the current area.
+  p.field.manual.area=1;
+  p.field.manual.player.x=p.world.areas[1].entrance_x;
+  p.field.manual.player.y=p.world.areas[1].entrance_y;
+  p.field.manual.player.facing=Direction::Down;
+  p.field.manual.player.successful_moves=12;
+  p.field.manual.clock=MovementClock{};
+  p.field.manual.decoder=PadDecoder{};
+  p.field.manual.pending=Trigger::None;
+  assert(valid_field_snapshot(p.world,p.field.manual));
+  assert(record_discovery(p.world,p.field.discoveries,0,4,1)==
+         DiscoveryResult::Recorded);
+  // Use the actual authored event location of second synthetic area.
+  const auto& map=p.world.areas[1].map;
+  int ex=-1,ey=-1;
+  for(int y=0;y<map.height;++y)
+    for(int x=0;x<map.width;++x)
+      if(map.tile(x,y)=='!') {ex=x;ey=y;}
+  assert(ex>=0 && ey>=0);
+  assert(record_discovery(p.world,p.field.discoveries,1,ex,ey)==
+         DiscoveryResult::Recorded);
+  p.step();
+  assert(p.field.manual.area==1);
+  const auto original=p.display.buffer;
+  assert(p.step(true).entered);
+  BattlePad attack{};attack.confirm=true;
+  assert(p.step(false,false,attack).control.status==
+         BattleControlStatus::ActionApplied);
+  p.step();
+  BattlePad defend{};defend.guard=true;
+  assert(p.step(false,false,defend).control.status==
+         BattleControlStatus::ActionApplied);
+  assert(p.step(false,true).exited);
+  assert(p.display.buffer==original);
+  assert(p.field.manual.area==1);
+  assert(p.field.manual.player.successful_moves==12);
+  assert(p.field.manual.player.x==p.world.areas[1].entrance_x);
+  assert(p.field.manual.player.y==p.world.areas[1].entrance_y);
+  assert(p.field.manual.pending==Trigger::None);
+  assert(p.field.discoveries.count==2);
+  assert(has_discovered_clue(p.field.discoveries,0,4,1));
+  assert(has_discovered_clue(p.field.discoveries,1,ex,ey));
+  assert(valid_discovery_journal(p.world,p.field.discoveries));
+  p.display.guards();
+}
+
 void test_exploration_resumes_from_same_tile_after_battle() {
   Replay p;
   p.step();
@@ -246,6 +296,7 @@ void test_exploration_resumes_from_same_tile_after_battle() {
 int main(){
   test_battle_actions_own_input_and_field_pixels_restore_exactly();
   test_exploration_resumes_from_same_tile_after_battle();
+  test_second_area_and_clues_survive_enter_exit();
   test_pending_event_survives_battle_then_accepts_real_a();
   test_prior_clue_and_real_quicksave_survive_combat_overlay();
 }
