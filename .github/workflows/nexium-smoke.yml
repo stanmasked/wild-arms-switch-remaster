@@ -63,6 +63,11 @@ on:
       - 'tools/test_audit_nexium_battle_alternating_faults.py'
       - 'tools/audit_nexium_battle_double_corruption.py'
       - 'tools/test_audit_nexium_battle_double_corruption.py'
+      - 'tools/audit_nexium_battle_corruption_warning.py'
+      - 'tools/test_audit_nexium_battle_corruption_warning.py'
+      - 'docs/field-battle-stage370.md'
+      - 'include/field_battle_storage_warning.hpp'
+      - 'tests/test_field_battle_storage_warning.cpp'
       - 'docs/field-battle-stage369.md'
       - 'docs/field-battle-stage368.md'
       - 'docs/field-battle-stage367.md'
@@ -220,6 +225,8 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_alternating_faults.py' -v
       - name: Unit-test both-corrupt WABJ fail-closed and no-overwrite oracle
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_double_corruption.py' -v
+      - name: Unit-test read-only battle storage error banner screenshot oracle
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_corruption_warning.py' -v
       - name: Unit-test ordered five-checkpoint reference matcher
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_checkpoints.py' -v
       - name: Verify synthetic frame evidence classifier
@@ -2100,6 +2107,13 @@ jobs:
             --key-log nexium-probe/battle-double-corruption/key-edges.log \
             --report nexium-probe/battle-double-corruption-audit.json
 
+      - name: Audit Stage370 warning visible only on ZL while both WABJ slots invalid
+        run: |
+          /usr/bin/python3 tools/audit_nexium_battle_corruption_warning.py \
+            --screens nexium-probe/battle-double-corruption-screens \
+            --prior-valid-rewards nexium-probe/battle-alternating-screens/02_twentieth_four_rewards.png \
+            --output nexium-probe/battle-corruption-warning-audit.json
+
       - name: Retain NeXium internal host logs from both runs
         if: always()
         run: |
@@ -2260,6 +2274,10 @@ jobs:
           if test -f nexium-probe/battle-recovery-audit.json; then
             echo "Eleventh-process recovery of older valid WABJ after CRC damage:" >> "$GITHUB_STEP_SUMMARY"
             /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-recovery-audit.json")); print("all checks:",r["all_checks_passed"],"count:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/battle-corruption-warning-audit.json; then
+            echo "Stage370: actual NeXium warning shown on ZL only, no false normal save alarm:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-corruption-warning-audit.json")); print("complete:",r["all_checks_passed"],"checks:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
           fi
           if test -f nexium-probe/battle-double-corruption-audit.json; then
             echo "Stage369: both WABJ slots CRC-invalid, zero counters and no overwrite:" >> "$GITHUB_STEP_SUMMARY"
