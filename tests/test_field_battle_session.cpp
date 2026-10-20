@@ -151,6 +151,46 @@ void test_corruption_never_writes_or_consumes_buttons() {
   assert(f.bytes==second);
 }
 
+
+void test_controller_victory_pixels_then_close() {
+  FieldBattleSession session{};
+  Frame frame;
+  FieldBattleSessionInput input{};
+  input.manual_mode=true;
+  input.open=true;
+  assert(advance_battle_session(session,input,frame.target).entered);
+  // In this synthetic fixture, both foes need one successful hit.
+  session.battle.enemies[0].hp=1;
+  session.battle.enemies[1].hp=1;
+  input.open=false;
+  input.pad.confirm=true;
+  auto first=advance_battle_session(session,input,frame.target);
+  assert(first.status==BattleSceneStatus::Rendered);
+  assert(first.control.status==BattleControlStatus::ActionApplied);
+  assert(first.control.action.inflicted==1);
+  assert(session.battle.enemies[0].hp==0);
+  assert(session.battle.phase==BattlePhase::Player);
+  assert(session.cursor.target==1); // Skip defeated opponent.
+  input.pad={};
+  assert(advance_battle_session(session,input,frame.target).status==
+         BattleSceneStatus::Rendered);
+  input.pad.confirm=true;
+  auto second=advance_battle_session(session,input,frame.target);
+  assert(second.control.status==BattleControlStatus::ActionApplied);
+  assert(second.control.action.inflicted==1);
+  assert(session.battle.phase==BattlePhase::Victory);
+  assert(frame.pixel(320,294)==kBattleGreen); // Actual victory border.
+  assert(frame.pixel(692,249)==kBattleBackground);
+  // Terminal A hold cannot restart the battle or trigger another attack.
+  assert(advance_battle_session(session,input,frame.target).control.status==
+         BattleControlStatus::Idle);
+  input.pad={};
+  input.close=true;
+  const auto completed=advance_battle_session(session,input,frame.target);
+  assert(completed.exited && !session.active);
+  frame.check_guards();
+}
+
 void test_completed_battle_can_only_be_closed() {
   FieldBattleSession session{};
   Frame f;
@@ -178,4 +218,5 @@ int main() {
   test_close_restores_underlying_frame_and_reopen_resets_battle();
   test_corruption_never_writes_or_consumes_buttons();
   test_completed_battle_can_only_be_closed();
+  test_controller_victory_pixels_then_close();
 }
