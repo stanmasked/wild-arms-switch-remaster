@@ -9,6 +9,7 @@
 #include "field_frame_ticks.hpp"
 #include "field_runtime.hpp"
 #include "field_battle_session.hpp"
+#include "field_encounters.hpp"
 #include "field_save_file.hpp"
 #include "field_save_feedback.hpp"
 
@@ -101,6 +102,9 @@ int main() {
   // Separate nonpersistent demonstration fight, explicitly opened with R
   // in manual mode; the original exploration runtime stays intact.
   FieldBattleSession battle_scene{};
+  // ZR explicitly toggles optional step encounters. Default is off so
+  // previous NeXium autoplay, saves and field captures stay unchanged.
+  EncounterDirector encounters{};
   while (appletMainLoop()) {
     padUpdate(&pad);
     const u64 pressed = padGetButtonsDown(&pad);
@@ -153,12 +157,30 @@ int main() {
       break;
     }
 
-    // Enter R for a separate synthetic battle scene; B closes it. A and Y
-    // are exclusive battle actions while active and cannot inspect tiles,
-    // start autoplay, or write the exploration SD snapshot. R+A on entry
-    // only opens the screen; the held A must be released to attack.
-    const FieldBattleSessionInput combat_input{
+    // Opt-in ZR mode: after four actual successful field steps start
+    // the same isolated battle. Never interrupt pending events, journal,
+    // snapshot, R training, autoplay or an already active battle.
+    const EncounterControls encounter_controls{
+        (pressed & HidNpadButton_ZR) != 0,
+        !result.autoplay,
+        battle_scene.active,
         open_battle,
+        result.snapshot_restored,
+        result.journal_visible || input.start_demo || input.cancel_demo ||
+            input.save_snapshot || input.load_snapshot ||
+            result.inspected != Trigger::None};
+    const EncounterFrame encounter_frame =
+        advance_field_encounters(encounters, runtime.manual,
+                                 encounter_controls);
+    if (encounter_frame.status == EncounterStatus::InvalidState) {
+      framebufferEnd(&fb);
+      break;
+    }
+    // Enter R for a direct synthetic training fight, or ZR opt-in
+    // encounters after sufficient walking. B closes it. While fighting
+    // A/Y cannot inspect field events or write exploration snapshots.
+    const FieldBattleSessionInput combat_input{
+        open_battle || encounter_frame.triggered,
         battle_scene.active && (pressed & HidNpadButton_B) != 0,
         !runtime.autoplay,
         {(held & HidNpadButton_Left) != 0,
@@ -239,8 +261,13 @@ int main() {
                               attempted_read));
     }
     // Never draw leftover save feedback over the opaque battle HUD.
-    if (!battle_scene.active)
+    if (!battle_scene.active) {
       (void)draw_storage_notice(output, feedback);
+      // Small opt-in indicator outside the map: golden when ZR mode is
+      // active. With encounters off, original pixel captures are identical.
+      if (encounters.enabled && !runtime.autoplay)
+        fill_raster_rect(output, 1240, 20, 18, 18, rgba(245,183,66));
+    }
     framebufferEnd(&fb);
   }
 
