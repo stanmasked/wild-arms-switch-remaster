@@ -47,6 +47,10 @@ on:
       - 'tools/test_audit_nexium_encounters.py'
       - 'tools/audit_nexium_battle_results.py'
       - 'tools/test_audit_nexium_battle_results.py'
+      - 'tools/audit_nexium_battle_persistence.py'
+      - 'tools/test_audit_nexium_battle_persistence.py'
+      - 'include/field_battle_file.hpp'
+      - 'tests/test_field_battle_file.cpp'
       - 'include/field_battle_results.hpp'
       - 'tests/test_field_battle_results.cpp'
       - 'include/field_encounters.hpp'
@@ -181,6 +185,8 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_encounters.py' -v
       - name: Unit-test independent eighth guest ZL results screenshot oracle
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_results.py' -v
+      - name: Unit-test independent two-process battle SD persistence oracle
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_persistence.py' -v
       - name: Unit-test ordered five-checkpoint reference matcher
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_checkpoints.py' -v
       - name: Verify synthetic frame evidence classifier
@@ -1011,6 +1017,111 @@ jobs:
             --screenshots nexium-probe/battle-history \
             --report nexium-probe/battle-history-audit.json
 
+      - name: Launch NINTH and TENTH independent NeXium guests to verify SD battle save reload
+        timeout-minutes: 4
+        run: |
+          set -eu
+          mkdir -p nexium-probe/battle-persistence \
+            nexium-probe/battle-persistence-screens
+          export DISPLAY=:99
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-battle-persistence-test"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          base="$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/battle-progress"
+          # Same isolated SD root for both guests, never for field replay.
+          test ! -e "$base.a"
+          test ! -e "$base.b"
+          boot_guest() {
+            label="$1"
+            timeout --signal=TERM --kill-after=8 75s \
+              ./nexium-dist/NeXium/nexium \
+              "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+              > "nexium-probe/battle-persistence/$label-process.log" 2>&1 &
+            guest_pid=$!
+            echo "$guest_pid" > "nexium-probe/battle-persistence/$label-process.pid"
+            sleep 15
+            window_id=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null |
+              tail -n 1) || true
+            test -n "$window_id"
+            xdotool windowfocus "$window_id"
+          }
+          stop_guest() {
+            kill -TERM "$guest_pid" 2>/dev/null || true
+            set +e
+            wait "$guest_pid"
+            result=$?
+            set -e
+            echo "$result" >> nexium-probe/battle-persistence/exit-codes.txt
+            sleep 0.4
+          }
+          press_guest() {
+            printf '%s %s\n' "$(date -u +%FT%TZ)" "$1" \
+              >> nexium-probe/battle-persistence/keys.log
+            xdotool keydown --clearmodifiers "$1"
+            sleep 0.23
+            xdotool keyup "$1"
+            sleep 0.42
+          }
+          capture() {
+            import -display :99 -window root \
+              "nexium-probe/battle-persistence-screens/$1.png"
+          }
+          # Guest nine: empty progress, then R + B early retreat.
+          boot_guest ninth
+          first_pid="$guest_pid"
+          press_guest x
+          capture 00_first_field
+          xdotool keydown --clearmodifiers r
+          sleep 0.43
+          capture 01_first_zl_zero
+          xdotool keyup r
+          sleep 0.32
+          press_guest e
+          press_guest x
+          capture 02_first_after_retreat
+          stop_guest
+          test -f "$base.a"
+          test ! -e "$base.b"
+          cp "$base.a" nexium-probe/battle-persistence/first-generation.a
+          # Guest ten is a fresh process with the exact SAME SDMC root.
+          boot_guest tenth
+          test "$first_pid" != "$guest_pid"
+          press_guest x
+          xdotool keydown --clearmodifiers r
+          sleep 0.45
+          capture 03_reboot_zl_one
+          xdotool keyup r
+          sleep 0.40
+          capture 04_reboot_zl_released
+          # Second independent B-close must increment to generation two.
+          press_guest e
+          press_guest x
+          capture 05_reboot_after_second_retreat
+          stop_guest
+          test -f "$base.a"
+          test -f "$base.b"
+          cp "$base.a" nexium-probe/battle-persistence/committed.a
+          cp "$base.b" nexium-probe/battle-persistence/committed.b
+          # The unrelated original field-save journal must never be created
+          # by these battle-only inputs.
+          test ! -e "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/field-save.a"
+          test ! -e "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/field-save.b"
+
+      - name: Audit real NINTH/TENTH guest restart, ZL result and two SD journal generations
+        run: |
+          /usr/bin/python3 tools/audit_nexium_battle_persistence.py \
+            --screenshots nexium-probe/battle-persistence-screens \
+            --first-journal nexium-probe/battle-persistence/first-generation.a \
+            --committed-a nexium-probe/battle-persistence/committed.a \
+            --committed-b nexium-probe/battle-persistence/committed.b \
+            --report nexium-probe/battle-persistence-audit.json
+
       - name: Retain NeXium internal host logs from both runs
         if: always()
         run: |
@@ -1163,6 +1274,10 @@ jobs:
           if test -f nexium-probe/battle-history-audit.json; then
             echo "Eighth-process ZL battle history:" >> "$GITHUB_STEP_SUMMARY"
             /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-history-audit.json")); print("all checks:",r["all_checks_passed"],"count:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/battle-persistence-audit.json; then
+            echo "Ninth/tenth independent process battle SD journal reload:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-persistence-audit.json")); print("all checks:",r["all_checks_passed"],"count:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "No firmware, ROM, BIOS or commercial assets used." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
