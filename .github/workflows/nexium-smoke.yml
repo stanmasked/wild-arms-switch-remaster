@@ -61,6 +61,9 @@ on:
       - 'tools/test_audit_nexium_battle_post_crc_victory.py'
       - 'tools/audit_nexium_battle_alternating_faults.py'
       - 'tools/test_audit_nexium_battle_alternating_faults.py'
+      - 'tools/audit_nexium_battle_double_corruption.py'
+      - 'tools/test_audit_nexium_battle_double_corruption.py'
+      - 'docs/field-battle-stage369.md'
       - 'docs/field-battle-stage368.md'
       - 'docs/field-battle-stage367.md'
       - 'docs/field-battle-stage366.md'
@@ -150,7 +153,7 @@ jobs:
     # Fedora 44 supplies 2.43; Ubuntu 24.04's libc cannot start it.
     container:
       image: fedora:44
-    timeout-minutes: 25
+    timeout-minutes: 28
     env:
       NEXIUM_URL: https://github.com/nexium-emu/nexium-nightly/releases/download/nightly/nexium-linux-x86_64.tar.gz
       # Official GitHub release asset API digest observed 2026-10-20.
@@ -215,6 +218,8 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_post_crc_victory.py' -v
       - name: Unit-test twentieth through twentysecond alternating CRC fault oracle
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_alternating_faults.py' -v
+      - name: Unit-test both-corrupt WABJ fail-closed and no-overwrite oracle
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_double_corruption.py' -v
       - name: Unit-test ordered five-checkpoint reference matcher
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_checkpoints.py' -v
       - name: Verify synthetic frame evidence classifier
@@ -1943,6 +1948,158 @@ jobs:
             --keys nexium-probe/battle-alternating/key-edges.log \
             --report nexium-probe/battle-alternating-audit.json
 
+      - name: TWENTYTHIRD/TWENTYFOURTH NeXium boots with BOTH A/B CRC-corrupt
+        timeout-minutes: 3
+        run: |
+          set -eu
+          mkdir -p nexium-probe/battle-double-corruption \
+            nexium-probe/battle-double-corruption-screens
+          export DISPLAY=:99
+          # Inherit real stage368 SDMC; never erase/reinitialize before audit.
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-stage365-double-victory"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          dir=nexium-probe/battle-double-corruption
+          shots=nexium-probe/battle-double-corruption-screens
+          base="$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/battle-progress"
+          test -f "$base.a" && test -f "$base.b"
+          /usr/bin/python3 - "$base.a" "$base.b" \
+            nexium-probe/battle-alternating/after22-gen5.a \
+            nexium-probe/battle-alternating/after22-gen6.b <<'PY'
+          from pathlib import Path
+          import sys
+          a, b, ar, br = (Path(x) for x in sys.argv[1:])
+          assert a.read_bytes() == ar.read_bytes()
+          assert b.read_bytes() == br.read_bytes()
+          PY
+          cp "$base.a" "$dir/intact-gen5.a"
+          cp "$base.b" "$dir/intact-gen6.b"
+          # Deterministic fault injection on separate committed copies,
+          # WITHOUT deleting or creating valid state replacements.
+          /usr/bin/python3 - "$base.a" "$base.b" <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, "tools")
+          from audit_nexium_battle_persistence import read_journal
+          for path, expected_generation in zip(sys.argv[1:], (5, 6)):
+              p = Path(path)
+              prior = read_journal(p)
+              assert (prior["generation"], prior["wins"],
+                      prior["experience"], prior["gella"]) == (
+                      expected_generation, 4, 32, 48)
+              raw = bytearray(p.read_bytes())
+              assert len(raw) == 52 and raw[:4] == b"WABJ"
+              raw[48] ^= 0x80
+              p.write_bytes(raw)
+              try:
+                  read_journal(p)
+              except ValueError:
+                  pass
+              else:
+                  raise AssertionError("double-fault test failed: journal still valid")
+          PY
+          cp "$base.a" "$dir/damaged-gen5.a"
+          cp "$base.b" "$dir/damaged-gen6.b"
+          : > "$dir/two-pids.txt"
+          : > "$dir/key-edges.log"
+
+          boot() {
+            label="$1"
+            timeout --signal=TERM --kill-after=8 80s \
+              ./nexium-dist/NeXium/nexium \
+              "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+              > "$dir/$label-process.log" 2>&1 &
+            guest_pid=$!
+            printf '%s %s\n' "$label" "$guest_pid" >> "$dir/two-pids.txt"
+            sleep 15
+            window_id=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null |
+              tail -n 1) || true
+            test -n "$window_id"
+            xdotool windowfocus "$window_id"
+          }
+          press() {
+            printf '%s %s %s\n' "$label" "$(date -u +%FT%TZ)" "$1" \
+              >> "$dir/key-edges.log"
+            xdotool keydown --clearmodifiers "$1"
+            sleep 0.23
+            xdotool keyup "$1"
+            sleep 0.47
+          }
+          shot() {
+            import -display :99 -window root "$shots/$1.png"
+          }
+          panel() {
+            xdotool keydown --clearmodifiers r
+            sleep 0.45
+            shot "$1"
+            xdotool keyup r
+            sleep 0.35
+          }
+          finish() {
+            kill -TERM "$guest_pid" 2>/dev/null || true
+            set +e
+            wait "$guest_pid"
+            code=$?
+            set -e
+            echo "$label $code" >> "$dir/exit-codes.txt"
+            sleep 0.4
+          }
+          # First guest cannot restore unverifiable wins. Validated B
+          # retreat only updates VOLATILE history; store must fail
+          # closed and preserve both invalid files byte-for-byte.
+          label=twentythird
+          boot "$label"
+          press x
+          panel 00_twentythird_zero_after_corruption
+          press e
+          press x
+          shot 01_twentythird_after_retreat
+          panel 02_twentythird_volatile_retreat
+          finish
+          test -f "$base.a" && test -f "$base.b"
+          cp "$base.a" "$dir/after23.a"
+          cp "$base.b" "$dir/after23.b"
+
+          # A NEW guest cannot inherit 1 in-memory retreat after
+          # restart; both corrupted records still prohibit writes.
+          label=twentyfourth
+          boot "$label"
+          press x
+          panel 03_twentyfourth_zero_after_reboot
+          press e
+          press x
+          shot 04_twentyfourth_after_retreat
+          panel 05_twentyfourth_volatile_retreat
+          finish
+          cp "$base.a" "$dir/after24.a"
+          cp "$base.b" "$dir/after24.b"
+          test ! -e "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/field-save.a"
+          test ! -e "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/field-save.b"
+
+      - name: Audit Stage369 both-invalid A/B CRC handling in two independent NeXium guests
+        run: |
+          /usr/bin/python3 tools/audit_nexium_battle_double_corruption.py \
+            --screens nexium-probe/battle-double-corruption-screens \
+            --original-field nexium-probe/battle-double-victory-screens/00_first_manual.png \
+            --intact-a nexium-probe/battle-double-corruption/intact-gen5.a \
+            --intact-b nexium-probe/battle-double-corruption/intact-gen6.b \
+            --corrupt-a nexium-probe/battle-double-corruption/damaged-gen5.a \
+            --corrupt-b nexium-probe/battle-double-corruption/damaged-gen6.b \
+            --after23-a nexium-probe/battle-double-corruption/after23.a \
+            --after23-b nexium-probe/battle-double-corruption/after23.b \
+            --after24-a nexium-probe/battle-double-corruption/after24.a \
+            --after24-b nexium-probe/battle-double-corruption/after24.b \
+            --old-pids nexium-probe/battle-alternating/new-guest-pids.txt \
+            --new-pids nexium-probe/battle-double-corruption/two-pids.txt \
+            --key-log nexium-probe/battle-double-corruption/key-edges.log \
+            --report nexium-probe/battle-double-corruption-audit.json
+
       - name: Retain NeXium internal host logs from both runs
         if: always()
         run: |
@@ -2103,6 +2260,10 @@ jobs:
           if test -f nexium-probe/battle-recovery-audit.json; then
             echo "Eleventh-process recovery of older valid WABJ after CRC damage:" >> "$GITHUB_STEP_SUMMARY"
             /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-recovery-audit.json")); print("all checks:",r["all_checks_passed"],"count:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/battle-double-corruption-audit.json; then
+            echo "Stage369: both WABJ slots CRC-invalid, zero counters and no overwrite:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-double-corruption-audit.json")); print("complete:",r["all_checks_passed"],"checks:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
           fi
           if test -f nexium-probe/battle-alternating-audit.json; then
             echo "Stage368: two newest WABJ slot CRC faults, four earned wins and 32EXP/48Gella:" >> "$GITHUB_STEP_SUMMARY"
