@@ -51,6 +51,17 @@ int main(int argc,char** argv) {
   BattleCursor cursor{};
   if (int status=save_ppm(prefix+"-initial.ppm",battle,cursor))
     return status;
+  // After exactly one A strike, the cursor advances to HERO 2 and FOE 1
+  // has 8/14 HP. NeXium will compare the guest frame against these bytes.
+  FieldBattle after_strike=battle;
+  BattleCursor strike_cursor{};
+  const BattleUpdate strike=advance_field_battle(
+      after_strike,0,BattleMove::Strike,0);
+  if (strike.step!=BattleStep::Applied || strike.inflicted!=6)
+    return 9;
+  strike_cursor.actor=1;
+  if (int status=save_ppm(prefix+"-strike.ppm",after_strike,strike_cursor))
+    return status;
   if (advance_field_battle(battle,0,BattleMove::Guard).step!=BattleStep::Applied)
     return 6;
   cursor.actor=1;
