@@ -266,6 +266,44 @@ class SafeOfflineRecoveryTests(unittest.TestCase):
             self.assertFalse(list(Path(d).glob(".wild-arms-stage371-*")))
             self.assertEqual([p.read_bytes() for p in a[:4]], originals)
 
+    def test_staged_publication_fsyncs_parent_after_directory_rename(self):
+        import os
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            original_fsync = os.fsync
+            calls = []
+            def track(fd):
+                calls.append(fd)
+                return original_fsync(fd)
+            with mock.patch("stage_verified_battle_backup.os.fsync", new=track):
+                result = call(a, execute=True)
+            self.assertTrue(result["staged"])
+            # Two output files, staging directory, then destination parent.
+            self.assertEqual(len(calls), 4)
+
+    def test_failed_parent_directory_fsync_reports_failure_without_erasing_package(self):
+        import os
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            before = [p.read_bytes() for p in a[:4]]
+            original_fsync = os.fsync
+            count = [0]
+            def fail_at_parent(fd):
+                count[0] += 1
+                if count[0] == 4:
+                    raise OSError("simulated parent directory durability failure")
+                return original_fsync(fd)
+            with mock.patch("stage_verified_battle_backup.os.fsync", new=fail_at_parent):
+                with self.assertRaisesRegex(OSError, "durability failure"):
+                    call(a, execute=True)
+            self.assertEqual(count[0], 4)
+            # The already published package must not be silently deleted
+            # or reported as durably complete after the failed fsync.
+            self.assertEqual(sorted(p.name for p in a[-1].iterdir()),
+                             ["battle-progress.a", "recovery-manifest.json"])
+            self.assertEqual((a[-1] / "battle-progress.a").read_bytes(), before[3])
+            self.assertEqual([p.read_bytes() for p in a[:4]], before)
+
     def test_competing_new_destination_must_not_be_replaced(self):
         with tempfile.TemporaryDirectory() as d:
             a = fixture(d)
