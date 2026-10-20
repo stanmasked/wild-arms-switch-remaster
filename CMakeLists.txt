@@ -77,6 +77,13 @@ add_executable(wa_field_battle_controller_tests tests/test_field_battle_controll
 target_link_libraries(wa_field_battle_controller_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_battle_controller_tests COMMAND wa_field_battle_controller_tests)
 
+# Stage 340: isolated 1280x720 combat framebuffer and host-only capture.
+add_executable(wa_field_battle_view_tests tests/test_field_battle_view.cpp)
+target_link_libraries(wa_field_battle_view_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_battle_view_tests COMMAND wa_field_battle_view_tests)
+add_executable(wa_field_battle_capture tests/field_battle_capture.cpp)
+target_link_libraries(wa_field_battle_capture PRIVATE wa_field_core)
+
 # Host validation of the exact software framebuffer algorithm used by libnx.
 add_executable(wa_field_pixels_tests tests/test_field_pixels.cpp)
 target_link_libraries(wa_field_pixels_tests PRIVATE wa_field_core)
