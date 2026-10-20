@@ -47,6 +47,29 @@ the player stayed put. Synthetic negative tests reject an incomplete
 journal, a changed banner pixel, an absent badge, a moved player or
 missing screenshots. All evidence is stored as hashed actual Xvfb PNGs.
 
-This is *new unverified code* until the exact-head CI executes in
-experimental NeXium. No proprietary PS1 content or physical console
-validation is asserted.
+Stage 336 independently verified this exact 2/2 guest route at commit
+`36b33b17`: NeXium [run 39347668322](https://github.com/stanmasked/wild-arms-switch-remaster/actions/runs/39347668322)
+passed all six completion checks, five ordered image checkpoints and
+cross-process storage regression checks. Host Core passed 125/125,
+and the Switch NRO build completed. These are emulator desktop
+(Xvfb) observations, **not** physical Switch verification or proof of
+fidelity to original PS1 assets.
+
+## Stage 337 — complete sprite-tile immobility and stronger negative tests
+
+Retain the same six-condition 2/2 guest audit, but strengthen its final
+player-stationary condition. The before-and-after screenshots now require
+**all RGB pixels of the projected area-1 player tile (4,2)** to remain
+identical. This tile ends before the adjacent event badge and cannot be
+confused with the legitimate change to the event tile (4,3).
+
+Three new synthetic adversarial fixtures verify fail-closed behavior:
+an erased `AREA 1 1/1` line, erased second-clue narrative details,
+and a corrupted player sprite region that still retains the original
+single red sampled pixel. Existing six conditions and screenshot names
+are unchanged, so the earlier guest proof remains comparable.
+
+Stage 337 is **not yet NeXium-verified** until its new exact-head CI
+completes. Only the evidence checker and fixtures changed: no game
+logic, map geometry, Switch input mappings, original PS1 content,
+or save serialization were modified.

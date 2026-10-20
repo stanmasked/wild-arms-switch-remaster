@@ -34,6 +34,24 @@ def second_area_badge_valid(image):
         difference, Image.merge("RGB", (mask, mask, mask))).getbbox() is None
 
 
+def player_tile_unchanged(before, after):
+    """Compare every projected pixel of the entire area-1 player tile.
+
+    The second event occupies the tile immediately *below* this one.
+    Replacing this comparison with a single red-sprite sample would miss
+    changed sprite edges, duplicated pixels, and partial movement.
+    """
+    # Native 11x7 field tile (4,2): x=544..607, y=264..327.
+    # These bounds exclude the event marker in tile (4,3).
+    tile = (
+        VIEW_X + round(544 * VIEW_W / 1280),
+        round(264 * VIEW_H / 720),
+        VIEW_X + round(608 * VIEW_W / 1280),
+        round(328 * VIEW_H / 720),
+    )
+    return ImageChops.difference(before.crop(tile), after.crop(tile)).getbbox() is None
+
+
 def audit_completion(folder, report_path):
     folder = Path(folder)
     if {p.name for p in folder.glob("*.png")} != {n + ".png" for n in NAMES}:
@@ -51,7 +69,9 @@ def audit_completion(folder, report_path):
         "second_event_full_blue_white_badge":
             second_area_badge_valid(images["04_completed_closed"]),
         "player_unchanged_by_recording_and_journal":
-            native_pixel(images["04_completed_closed"], 564, 284) == SPRITE_RED,
+            native_pixel(images["04_completed_closed"], 564, 284) == SPRITE_RED
+            and player_tile_unchanged(images["01_area1_adjacent"],
+                                      images["04_completed_closed"]),
     }
     result = {
         "kind": "real_nexium_xvfb_two_area_completion",
