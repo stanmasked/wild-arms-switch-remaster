@@ -48,7 +48,11 @@ def audit_battle(directory, report):
         "manual_field_before_battle":
             native_pixel(before, 0, 5) == MAP_STATUS,
         "r_opened_battle_in_guest":
-            native_pixel(opened, 70, 120) == BLUE
+            # The NeXium performance HUD covers the top-left corner
+            # (native 70,120). Check TWO exposed pixels of the same
+            # selected hero's left border instead of masking any frame.
+            native_pixel(opened, 70, 220) == BLUE
+            and native_pixel(opened, 70, 245) == BLUE
             and native_pixel(opened, 670, 165) == GOLD
             and native_pixel(opened, 692 + 230, 249) == RED,
         "a_strike_reduced_actual_foe_hp":

@@ -123,3 +123,28 @@ No actual Nintendo Switch/NeXium battle screenshot result is implied.
 The existing Stage 343 real guest probe is allowed to finish on its
 old exact-head commit; Stage 344 is developed as a separate stacked
 Draft PR so the exploratory emulator run is not canceled.
+
+## Stage 346 — genuine sixth NeXium guest battle screenshot
+
+The first completed sixth-process NeXium guest [run 39385814137](https://github.com/stanmasked/wild-arms-switch-remaster/actions/runs/39385814137)
+produced **all six real screenshots**, with **five of six** independent
+conditions passing. The guest visibly opened battle on R, damaged foe
+HP on A, did not repeat during held A, advanced the selection on Y
+guard, and restored pixel-identical field ROI after B.
+
+The sole rejected condition read blue from native point `(70,120)`,
+which is underneath NeXium's separately rendered FPS/performance HUD.
+The actual desktop screenshot shows RGB `(60,212,92)` there instead
+of the native border's `(105,160,230)`. Two exposed positions along
+the SAME selected player's left-side border, `(70,220)` and `(70,245)`,
+were inspected directly in the archived guest PNG and **both matched**
+RGB `(105,160,230)`. The enemy selection and HP check remains
+unchanged. No image or gameplay masks were expanded or loosened.
+
+The independent auditor now requires both exposed blue samples, plus
+the original full-health red foe bar and selected gold frame. Two
+new adversarial synthetic cases require acceptance despite NeXium's
+HUD occlusion and rejection when an exposed border pixel is missing.
+This is a precise correction to the screenshot oracle, **not** a
+change to the Switch renderer or battle controls. A fresh exact-head
+CI run is needed before the corrected audit can be called green.

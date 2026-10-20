@@ -30,6 +30,7 @@ def fake_screenshot(name):
         d.rectangle((692, 249, 692 + width - 1, 268), fill=RED)
         d.rectangle((670, 165, 673, 168), fill=GOLD)
         d.rectangle((70, 120, 73, 123), fill=BLUE)
+        d.rectangle((70, 190, 73, 257), fill=BLUE)
         if name != "01_battle_open":
             d.rectangle((70, 284, 73, 287), fill=BLUE)
         if name == "04_after_guard":
@@ -53,6 +54,33 @@ class BattleGuestAuditTests(unittest.TestCase):
             result = audit_battle(root, Path(root) / "report.json")
             self.assertTrue(result["all_checks_passed"])
             self.assertEqual(len(result["checks"]), 6)
+
+    def test_emulator_hud_occludes_top_left_without_hiding_real_border(self):
+        # The actual NeXium HUD covers native (70,120), a previously
+        # incorrect sample. The chosen exposed hero border remains intact.
+        with tempfile.TemporaryDirectory() as root:
+            create_folder(root)
+            path = Path(root) / "01_battle_open.png"
+            with Image.open(path) as source:
+                screenshot = source.convert("RGB")
+            ImageDraw.Draw(screenshot).rectangle(
+                (13, 14, 238, 153), fill=(60, 212, 92))
+            screenshot.save(path)
+            result = audit_battle(root, Path(root) / "report.json")
+            self.assertTrue(result["all_checks_passed"])
+
+    def test_missing_exposed_selected_border_rejected(self):
+        with tempfile.TemporaryDirectory() as root:
+            create_folder(root)
+            path = Path(root) / "01_battle_open.png"
+            with Image.open(path) as source:
+                screenshot = source.convert("RGB")
+            px = VIEW_X + round(70 * VIEW_W / 1280)
+            py = round(220 * VIEW_H / 720)
+            screenshot.putpixel((px, py), PANEL)
+            screenshot.save(path)
+            result = audit_battle(root, Path(root) / "report.json")
+            self.assertFalse(result["checks"]["r_opened_battle_in_guest"])
 
     def test_missing_frame_rejected(self):
         with tempfile.TemporaryDirectory() as root:
