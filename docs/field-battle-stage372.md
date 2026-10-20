@@ -81,3 +81,23 @@ damaged source records.
 The 27 filesystem cases and 19 synthetic screenshot-oracle cases give 46
 distinct cases in the focused CI test suite. These are **test definitions**,
 not a claim that CI or real NeXium guests passed.
+
+## Stage376 offline staging publication durability
+
+The staging tool already writes and fsyncs the recovered 52-byte WABJ file,
+its manifest and the private staging directory. After the final same-filesystem
+rename, it now also opens and fsyncs the **canonical parent directory** to
+request persistence of the new destination entry. If parent fsync fails,
+the operation raises an error rather than reporting a durable successful
+publication. The complete already-renamed recovery package is preserved for
+manual inspection; neither it nor any live damaged save is erased.
+
+Two additional synthetic tests verify the fourth (parent-directory) fsync
+and inject a failure specifically at that step, asserting that all source
+bytes and both output artifacts remain unchanged and present.
+
+There are now 29 offline staging tests and 19 synthetic screenshot/journal
+oracle tests (48 total definitions). Even a passing host CI does not
+prove real NAND/SD card power-loss durability, nor replacement on physical
+Nintendo Switch hardware. The separate NeXium guest verification is still
+necessary.
