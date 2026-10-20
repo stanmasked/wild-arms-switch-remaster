@@ -1,0 +1,55 @@
+name: ARM experimental Switch NRO
+
+on:
+  push:
+    branches:
+      - 'stage-389-*'
+  pull_request:
+    paths:
+      - '.github/workflows/arm-switch-experiment.yml'
+      - 'switch/Makefile'
+      - 'switch/source/main.cpp'
+      - 'include/field_battle_arm*.hpp'
+      - 'include/field_battle.hpp'
+      - 'CMakeLists.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-normal-and-optin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build canonical unchanged NRO first
+        run: |
+          make -C switch -j2
+          mkdir -p arm-build
+          cp switch/wild_arms_field.nro arm-build/wild_arms_normal.nro
+          python3 tools/audit_switch_nro.py arm-build/wild_arms_normal.nro --json arm-build/normal-audit.json
+      - name: Clean and explicitly build opt-in ARM training NRO
+        run: |
+          make -C switch clean
+          make -C switch -j2 WA_ARM_EXPERIMENTAL=1
+          cp switch/wild_arms_field.nro arm-build/wild_arms_arm_experimental.nro
+          python3 tools/audit_switch_nro.py arm-build/wild_arms_arm_experimental.nro --json arm-build/arm-audit.json
+      - name: Check distinct native outputs and preserve scope
+        run: |
+          test -s arm-build/wild_arms_normal.nro
+          test -s arm-build/wild_arms_arm_experimental.nro
+          if cmp -s arm-build/wild_arms_normal.nro arm-build/wild_arms_arm_experimental.nro; then
+            echo 'ERROR: flag did not change the NRO; experimental entry not compiled.'
+            exit 1
+          fi
+          sha256sum arm-build/*.nro > arm-build/checksums.txt
+          echo 'Two audited ROM-free NROs were compiled: standard and opt-in ARM.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No NeXium guest claim: launching R vs ZL+R still needs emulator screenshots.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wild-arms-optin-arm-nro-pair
+          path: arm-build/
+          if-no-files-found: error
