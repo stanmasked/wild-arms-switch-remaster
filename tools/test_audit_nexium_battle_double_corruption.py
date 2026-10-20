@@ -41,10 +41,20 @@ def make_fixture(root):
                         (1078, 623, GREEN)):
         paint_digit(zero, x, y, 0, color)
     paint_digit(zero, 789, 677, 0, (246, 247, 252))
+    # The real 1600x900 scaled NeXium screenshot samples the low EXITS
+    # line one pixel above the other HUD glyphs. Synthesize both rows.
+    from audit_nexium_battle_alternating_faults import GLYPH
+    def paint_exits(frame, n):
+        for row, bits in enumerate(GLYPH[n]):
+            for col in range(5):
+                frame.putpixel(screen_point(789+2*col+1, 677+2*row),
+                               (246, 247, 252) if (bits>>(4-col))&1 else PANEL)
+    paint_exits(zero, 0)
     # Masks for non-digit pixels are incidental to synthetic tests; PNG
     # equality and critical digit checks are strict in the actual audit.
     volatile = zero.copy()
     paint_digit(volatile, 789, 677, 1, (246, 247, 252))
+    paint_exits(volatile, 1)
     names = ("00_twentythird_zero_after_corruption",
              "01_twentythird_after_retreat",
              "02_twentythird_volatile_retreat",
