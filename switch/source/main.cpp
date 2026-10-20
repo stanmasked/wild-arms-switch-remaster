@@ -270,8 +270,10 @@ int main() {
       // Hold ZL to view session-only victories/defeats/retreats.
       // Never overlay the ordinary map or the canonical B-return frame
       // unless explicitly requested; file save schema remains unchanged.
-      if (!runtime.autoplay && (held & HidNpadButton_ZL))
-        (void)draw_field_battle_history(output, battle_scene.history);
+      if (!runtime.autoplay && (held & HidNpadButton_ZL)) {
+        if (draw_field_battle_history(output, battle_scene.history))
+          draw_battle_reward_balance(output, battle_scene.rewards);
+      }
     }
     framebufferEnd(&fb);
   }

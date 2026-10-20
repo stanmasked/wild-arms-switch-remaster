@@ -1,7 +1,7 @@
 #pragma once
 // Stage 341: explicit opt-in battle screen, isolated from exploration saves.
 // This is a synthetic demonstration battle, not a reconstructed PS1 encounter.
-#include "field_battle_results.hpp"
+#include "field_battle_rewards.hpp"
 
 #include <cstdint>
 
@@ -12,6 +12,7 @@ struct FieldBattleSession {
   BattleCursor cursor{};
   bool active = false;
   BattleHistory history{};  // Session-local only, never in field quicksaves.
+  BattleRewardAccount rewards{}; // Volatile EXP/Gella from confirmed wins only.
 };
 
 struct FieldBattleSessionInput {
@@ -31,6 +32,7 @@ struct BattleSceneFrame {
   bool exited = false;
   BattleControlFrame control{};
   BattleResolution resolution = BattleResolution::None;
+  BattleRewardPayout payout{};
 };
 
 // Executes one battle-only frame after the field engine has sampled a
@@ -63,9 +65,11 @@ struct BattleSceneFrame {
       // the B edge closes this battle; no field-save file is touched.
       const BattleResolution outcome =
           record_battle_exit(next.history, next.battle.phase);
+      const BattleRewardPayout payout =
+          credit_battle_reward(next.rewards, outcome);
       next.active = false;
       current = next;
-      return {BattleSceneStatus::Inactive, false, true, {}, outcome};
+      return {BattleSceneStatus::Inactive, false, true, {}, outcome, payout};
     }
   }
 
