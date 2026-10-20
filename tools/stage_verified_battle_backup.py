@@ -23,11 +23,22 @@ MANIFEST_FILE = "recovery-manifest.json"
 
 
 def _read_regular(path):
+    # Open and validate the SAME inode. lstat()+Path.read_bytes() alone
+    # can follow a symlink swapped in between those two operations.
     path = Path(path)
-    info = path.lstat()
-    if not stat.S_ISREG(info.st_mode):
+    before = path.lstat()
+    if not stat.S_ISREG(before.st_mode):
         raise ValueError("sources must be regular files, not links/devices")
-    return path.read_bytes()
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    with os.fdopen(os.open(path, flags), "rb") as file:
+        opened = os.fstat(file.fileno())
+        if (not stat.S_ISREG(opened.st_mode)
+                or (before.st_dev, before.st_ino) !=
+                   (opened.st_dev, opened.st_ino)):
+            raise ValueError("source changed identity before safe read")
+        if opened.st_size != 52:
+            raise ValueError("WABJ source must be exactly 52 bytes")
+        return file.read(53)
 
 
 def _sha(blob):
@@ -135,6 +146,12 @@ def prepare_recovery(damaged_a, damaged_b, backup_a, backup_b,
         raise FileNotFoundError("recovery parent directory does not exist")
     # Reject staging into any supplied source path or its enclosing directory.
     parent_real = parent.resolve(strict=True)
+    # A recovery package must never be created inside the source game's
+    # live battle save directory, including nested and symlinked parents.
+    for damaged_path in paths[:2]:
+        live_parent = damaged_path.parent.resolve(strict=True)
+        if parent_real == live_parent or live_parent in parent_real.parents:
+            raise ValueError("recovery output must be outside live save directories")
     if any(out.resolve(strict=False) == p.resolve(strict=True) for p in paths):
         raise ValueError("recovery output aliases a source file")
     evidence = {
@@ -183,9 +200,22 @@ def prepare_recovery(damaged_a, damaged_b, backup_a, backup_b,
             os.fsync(fd)
         finally:
             os.close(fd)
+        # Atomically reserve a fresh directory. A check-then-rename alone
+        # can replace somebody else's concurrently created EMPTY directory.
+        # POSIX rename atomically exchanges our staged directory for our
+        # own still-empty 0700 reservation, without touching user contents.
         if out.exists() or out.is_symlink():
             raise FileExistsError("destination appeared during staging")
-        os.rename(stage, out)
+        out.mkdir(mode=0o700)
+        try:
+            os.rename(stage, out)
+        except BaseException:
+            # Never delete a directory which another process has populated.
+            try:
+                out.rmdir()
+            except OSError:
+                pass
+            raise
     except BaseException:
         if stage.exists():
             shutil.rmtree(stage)
