@@ -61,6 +61,10 @@ jobs:
             libxkbcommon libxkbcommon-x11 vulkan-loader \
             file curl tar gzip coreutils procps-ng
           ldd --version | head -n 1
+      - name: Prove strict auditor rejects synthetic bad pixels and WABJ
+        run: |
+          /usr/bin/python3 -m py_compile tools/audit_nexium_arm_guest.py
+          /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_guest.py' -v
       - name: Fetch exact SHA-256 verified official NeXium Linux binary
         run: |
           set -euo pipefail
