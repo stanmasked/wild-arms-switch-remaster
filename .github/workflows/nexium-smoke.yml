@@ -51,6 +51,8 @@ on:
       - 'tools/test_audit_nexium_battle_persistence.py'
       - 'tools/audit_nexium_battle_recovery.py'
       - 'tools/test_audit_nexium_battle_recovery.py'
+      - 'tools/audit_nexium_battle_reward_restart.py'
+      - 'tools/test_audit_nexium_battle_reward_restart.py'
       - 'include/field_battle_file.hpp'
       - 'tests/test_field_battle_file.cpp'
       - 'include/field_battle_results.hpp'
@@ -191,6 +193,8 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_persistence.py' -v
       - name: Unit-test independent damaged SD battle journal recovery oracle
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_recovery.py' -v
+      - name: Unit-test independent earned EXP and Gella real guest image oracle
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_reward_restart.py' -v
       - name: Unit-test ordered five-checkpoint reference matcher
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_checkpoints.py' -v
       - name: Verify synthetic frame evidence classifier
@@ -1219,6 +1223,116 @@ jobs:
             --repaired-b nexium-probe/battle-recovery/repaired.b \
             --report nexium-probe/battle-recovery-audit.json
 
+      - name: Play SEVEN real A strikes in TWELFTH guest and reload rewards in THIRTEENTH
+        timeout-minutes: 4
+        run: |
+          set -eu
+          mkdir -p nexium-probe/battle-earned \
+            nexium-probe/battle-earned-screens
+          export DISPLAY=:99
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-earned-victory"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          base="$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/battle-progress"
+          test ! -e "$base.a"
+          test ! -e "$base.b"
+          boot_reward_guest() {
+            label="$1"
+            timeout --signal=TERM --kill-after=8 80s \
+              ./nexium-dist/NeXium/nexium \
+              "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+              > "nexium-probe/battle-earned/$label-process.log" 2>&1 &
+            guest_pid=$!
+            echo "$guest_pid" > "nexium-probe/battle-earned/$label-process.pid"
+            sleep 15
+            window_id=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null |
+              tail -n 1) || true
+            test -n "$window_id"
+            xdotool windowfocus "$window_id"
+          }
+          press_reward_key() {
+            printf '%s %s\n' "$(date -u +%FT%TZ)" "$1" \
+              >> nexium-probe/battle-earned/keys.log
+            xdotool keydown --clearmodifiers "$1"
+            sleep 0.23
+            xdotool keyup "$1"
+            sleep 0.47
+          }
+          reward_frame() {
+            import -display :99 -window root \
+              "nexium-probe/battle-earned-screens/$1.png"
+          }
+          stop_reward_guest() {
+            kill -TERM "$guest_pid" 2>/dev/null || true
+            set +e
+            wait "$guest_pid"
+            result=$?
+            set -e
+            echo "$result" >> nexium-probe/battle-earned/exit-codes.txt
+            sleep 0.4
+          }
+          # Completely new profile. Switch B=X to exit autoplay, R=E.
+          boot_reward_guest twelfth
+          first_pid="$guest_pid"
+          press_reward_key x
+          reward_frame 00_manual_before_win
+          press_reward_key e
+          # Real controller: 3 attacks KO foe 1 (6+5+4 >= 14).
+          # Remaining 4 attacks KO foe 2 (5+4+3+5 = 17).
+          # Every C is an independent press/release; no synthetic HP patch.
+          for strike in $(seq 1 7); do
+            press_reward_key c
+          done
+          reward_frame 01_real_victory
+          # Require real terminal Victory frame BEFORE any reward record.
+          /usr/bin/python3 -c 'import sys; sys.path.insert(0,"tools"); from audit_nexium_field_journal import read_rgb,native_pixel; assert native_pixel(read_rgb("nexium-probe/battle-earned-screens/01_real_victory.png"),320,294)==(63,191,138)'
+          press_reward_key x
+          xdotool keydown --clearmodifiers r
+          sleep 0.45
+          reward_frame 02_first_guest_reward_panel
+          xdotool keyup r
+          sleep 0.35
+          stop_reward_guest
+          test -f "$base.a"
+          test ! -e "$base.b"
+          cp "$base.a" nexium-probe/battle-earned/first-earned.a
+
+          # Truly new process with the SAME untouched SDMC namespace.
+          boot_reward_guest thirteenth
+          test "$first_pid" != "$guest_pid"
+          press_reward_key x
+          xdotool keydown --clearmodifiers r
+          sleep 0.43
+          reward_frame 03_reboot_reward_panel
+          xdotool keyup r
+          sleep 0.35
+          # Reopen combat once but retreat. WINS/EXP/Gella must not grow.
+          press_reward_key e
+          press_reward_key x
+          reward_frame 04_reboot_after_retreat
+          stop_reward_guest
+          test -f "$base.a"
+          test -f "$base.b"
+          cp "$base.a" nexium-probe/battle-earned/final-earned.a
+          cp "$base.b" nexium-probe/battle-earned/final-earned.b
+          test ! -e "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/field-save.a"
+          test ! -e "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/field-save.b"
+
+      - name: Audit TWELFTH/THIRTEENTH real victory, earned rewards and persisted reload
+        run: |
+          /usr/bin/python3 tools/audit_nexium_battle_reward_restart.py \
+            --screenshots nexium-probe/battle-earned-screens \
+            --first-a nexium-probe/battle-earned/first-earned.a \
+            --final-a nexium-probe/battle-earned/final-earned.a \
+            --final-b nexium-probe/battle-earned/final-earned.b \
+            --report nexium-probe/battle-earned-audit.json
+
       - name: Retain NeXium internal host logs from both runs
         if: always()
         run: |
@@ -1379,6 +1493,10 @@ jobs:
           if test -f nexium-probe/battle-recovery-audit.json; then
             echo "Eleventh-process recovery of older valid WABJ after CRC damage:" >> "$GITHUB_STEP_SUMMARY"
             /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-recovery-audit.json")); print("all checks:",r["all_checks_passed"],"count:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/battle-earned-audit.json; then
+            echo "Twelfth/thirteenth guest real victory with EXP/Gella across restart:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-earned-audit.json")); print("all checks:",r["all_checks_passed"],"count:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "No firmware, ROM, BIOS or commercial assets used." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4

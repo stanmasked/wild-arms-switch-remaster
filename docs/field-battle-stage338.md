@@ -421,3 +421,36 @@ and real file-system write/reload boundaries. It is **not** a complete
 physical Switch/NeXium win+reward restart test and must pass its own
 exact-head CI before any green claim. Original PlayStation awards
 remain unknown; current values are synthetic placeholders.
+
+## Stage 363 — real earned EXP/Gella replay in NeXium (new guest tests)
+
+Two additional NeXium guests (processes 12/13) share a **dedicated
+empty battle-only SDMC root**, separate from all prior tests.
+Guest 12 enters the actual native battle through Switch R, then presses
+Switch A **seven distinct times** without directly modifying enemy HP.
+The first three strikes finish foe one (6 + 5 + 4 damage against 14 HP);
+the next four finish foe two (5 + 4 + 3 + 5 against 17 HP). A
+green-bordered **VICTORY** must be observed in the actual NeXium frame
+*before* B closes the fight, credits synthetic 8 EXP / 12 Gella, and
+commits battle-progress.a generation 1. With ZL held, the actual
+read-only field panel must show WINS 1 / EXP 8 / G 12.
+
+Guest 13 is an entirely new emulator process launched with the **same
+isolated SDMC root**. Before starting a new battle it must independently
+render an identical ZL results panel showing the reloaded victory and
+rewards. After one R→B retreat, it must publish generation-2 B with
+one victory, one retreat, 8 EXP and 12 Gella, leaving generation-1
+A *bit for bit identical*, and never writing field-save.a/.b.
+
+The independent Python `audit_nexium_battle_reward_restart.py`
+requires exactly five real Xvfb screenshots and three observed
+journal byte streams, validates their two nested CRC32 checksums,
+real Victory pixel, rendered green reward glyphs, restored session
+panel, original field after B, exact wins/retreats/currency totals
+and original-generation immutability. The companion synthetic fixture
+suite checks corrupted inner CRC, extra/missing images, fake Victory,
+counterfeit reload, changed returned map and duplicated rewards.
+
+**No native/physical Switch proof is claimed until the exact-head
+NeXium test completes.** The currency values and battle models here
+remain synthetic and are not PS1 game data.
