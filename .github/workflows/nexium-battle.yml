@@ -1,0 +1,185 @@
+name: NeXium battle R-A-B-R guest proof (experimental)
+
+# Independent guest screenshots of the opt-in synthetic native battle.
+# Uses only authored homebrew NRO, no firmware, ROM, BIOS or commercial assets.
+on:
+  push:
+    paths:
+      - '.github/workflows/nexium-battle.yml'
+      - 'switch/source/main.cpp'
+      - 'switch/Makefile'
+      - 'include/field_battle*.hpp'
+      - 'include/field_pixels.hpp'
+      - 'tools/audit_nexium_battle.py'
+      - 'tools/test_audit_nexium_battle.py'
+      - 'tests/field_battle_capture.cpp'
+      - 'tools/export_battle_preview.py'
+  pull_request:
+    paths:
+      - '.github/workflows/nexium-battle.yml'
+      - 'switch/source/main.cpp'
+      - 'switch/Makefile'
+      - 'include/field_battle*.hpp'
+      - 'include/field_pixels.hpp'
+      - 'tools/audit_nexium_battle.py'
+      - 'tools/test_audit_nexium_battle.py'
+      - 'tests/field_battle_capture.cpp'
+      - 'tools/export_battle_preview.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  battle-nro:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build authentic standard NRO
+        run: make -C switch -j2
+      - name: Confirm valid NRO container
+        run: |
+          python3 tools/audit_switch_nro.py switch/wild_arms_field.nro --json switch/wild_arms_field.audit.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: battle-standard-nro
+          path: switch/wild_arms_field.nro
+          if-no-files-found: error
+
+  battle-host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build same-commit 1280x720 battle renderer
+        run: |
+          cmake -S . -B build
+          cmake --build build --target wa_field_battle_capture wa_field_battle_view_tests wa_field_battle_session_tests --parallel 2
+          ctest --test-dir build -R '^wa_field_battle_(view|session)_tests$' --output-on-failure
+          mkdir -p battle-reference
+          ./build/wa_field_battle_capture battle-reference/battle-preview
+          python3 tools/export_battle_preview.py \
+            battle-reference/battle-preview-initial.ppm \
+            battle-reference/battle-preview-strike.ppm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: battle-same-commit-host-reference
+          path: battle-reference/*.png
+          if-no-files-found: error
+
+  nexium-battle:
+    needs: [battle-nro, battle-host]
+    runs-on: ubuntu-24.04
+    container:
+      image: fedora:44
+    timeout-minutes: 9
+    env:
+      NEXIUM_URL: https://github.com/nexium-emu/nexium-nightly/releases/download/nightly/nexium-linux-x86_64.tar.gz
+      # Oct 18 archived binary; abort if moving nightly changes.
+      NEXIUM_ARCHIVE_SHA256: 0ec2da5d58b6b362a9f0a4c927af0e55d36a0b50d1ab3f035dd075ea12d76761
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: battle-standard-nro
+          path: native-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          name: battle-same-commit-host-reference
+          path: battle-reference
+      - name: Install GLIBC 2.43, Xvfb and software Vulkan
+        run: |
+          dnf install -y --setopt=install_weak_deps=False \
+            mesa-vulkan-drivers xorg-x11-server-Xvfb xdotool \
+            ImageMagick python3-pillow gtk3 alsa-lib systemd-libs \
+            libxkbcommon libxkbcommon-x11 vulkan-loader \
+            curl tar gzip coreutils procps-ng
+          ldd --version | head -n 1
+      - name: Prove fail-closed screenshot oracle on invented frames
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle.py' -v
+      - name: Verify and extract fixed binary archive
+        run: |
+          set -euo pipefail
+          mkdir -p nexium-dist nexium-battle
+          curl -fL --retry 3 --connect-timeout 20 --max-time 240 \
+            "$NEXIUM_URL" -o nexium-dist/nexium.tar.gz
+          echo "$NEXIUM_ARCHIVE_SHA256  nexium-dist/nexium.tar.gz" | sha256sum -c -
+          tar -xzf nexium-dist/nexium.tar.gz -C nexium-dist/
+          test -x nexium-dist/NeXium/nexium
+      - name: Prepare explicitly nonstandard NeXium loader compatibility copy
+        run: |
+          /usr/bin/python3 tools/prepare_nexium_nro_probe.py \
+            native-artifact/wild_arms_field.nro \
+            nexium-battle/loader-probe-only.nro \
+            --report nexium-battle/loader-probe-manifest.json
+      - name: Launch independent guest and perform real R A B R input sequence
+        timeout-minutes: 3
+        run: |
+          set -eu
+          Xvfb :99 -screen 0 1600x900x24 -nolisten tcp \
+            > nexium-battle/xvfb.log 2>&1 &
+          sleep 4
+          export DISPLAY=:99
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-battle-standalone"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          export RUST_LOG=info
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          timeout --signal=TERM --kill-after=8 80s \
+            ./nexium-dist/NeXium/nexium \
+            "$PWD/nexium-battle/loader-probe-only.nro" \
+            > nexium-battle/guest.log 2>&1 &
+          guest=$!
+          sleep 15
+          wid=$(xdotool search --onlyvisible --class 'nexium' | head -n 1)
+          test -n "$wid"
+          xdotool windowfocus "$wid"
+          # Native guest starts in manual field mode; no autoplay X sent.
+          capture() {
+            import -display :99 -window root "nexium-battle/$1.png"
+          }
+          tap() {
+            xdotool keydown --clearmodifiers "$1"
+            sleep 0.22
+            xdotool keyup "$1"
+            sleep 0.50
+          }
+          capture 00_field_before
+          tap e  # NeXium's official default keyboard: E -> Switch R
+          capture 01_battle_open
+          tap c  # C -> Switch A: one strike, FOE 1 14 -> 8 HP
+          capture 02_battle_strike
+          tap x  # X -> Switch B: exit back to unchanged field
+          capture 03_field_return
+          tap e  # E -> Switch R: fresh battle again
+          capture 04_battle_reopen
+          kill -TERM "$guest" 2>/dev/null || true
+          wait "$guest" 2>/dev/null || true
+      - name: Require exact RGB battle entry, strike, field restoration and restart
+        run: |
+          /usr/bin/python3 tools/audit_nexium_battle.py \
+            --reference battle-reference \
+            --screenshots nexium-battle \
+            --report nexium-battle/guest-battle-audit.json
+      - name: Summarize independent guest evidence
+        if: always()
+        run: |
+          echo "## Experimental native battle screen" >> "$GITHUB_STEP_SUMMARY"
+          if test -f nexium-battle/guest-battle-audit.json; then
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-battle/guest-battle-audit.json"));print("6 checks:",r["checks"],"ALL:",r["all_checks_passed"])' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No valid guest battle evidence yet." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "Xvfb guest screenshots, not physical Switch or native GPU captures." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nexium-real-guest-battle-R-A-B-R
+          path: nexium-battle/
+          if-no-files-found: warn
