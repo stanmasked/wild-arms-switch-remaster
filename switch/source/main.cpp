@@ -357,7 +357,7 @@ int main() {
     // Never draw leftover save feedback over the opaque battle HUD.
     if (!battle_scene.active
 #if defined(WA_ARM_EXPERIMENTAL)
-        && !arm_scene.active && !open_arm
+        && !arm_scene.active && !open_arm && !arm_frame.exited
 #endif
         ) {
       (void)draw_storage_notice(output, feedback);
