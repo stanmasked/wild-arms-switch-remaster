@@ -14,8 +14,8 @@ from audit_nexium_checkpoints import GAME_ROI, screen_point
 from audit_nexium_field_journal import read_rgb, native_pixel
 from audit_nexium_battle_persistence import read_journal
 from audit_nexium_battle_alternating_faults import four_rewards, GREEN, GOLD
-from audit_nexium_battle_double_corruption import digit, WHITE
-from audit_nexium_battle_corruption_warning import banner
+from audit_nexium_battle_double_corruption import digit
+from audit_nexium_battle_corruption_warning import WHITE, banner
 
 FRAMES = (
     "00_twentyfifth_restore_four_wins",
