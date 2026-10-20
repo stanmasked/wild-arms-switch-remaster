@@ -54,7 +54,7 @@ def reward_two(frame):
             and native_pixel(frame, 1015, 629) == PANEL
             and native_pixel(frame, 1017, 629) == GREEN
             and native_pixel(frame, 1027, 629) == GREEN
-            and native_pixel(frame, 1093, 625) == GREEN
+            and native_pixel(frame, 1093, 623) == GREEN
             and native_pixel(frame, 1105, 631) == GREEN)
 
 
