@@ -105,9 +105,22 @@ def audit_external_recovery(screens, prior_field, staged_a,
     raw26_b = Path(after26_b).read_bytes()
     raw_staged = Path(staged_a).read_bytes()
     file_manifest = json.loads(Path(manifest).read_text(encoding="utf-8"))
+    # A trusted restore package must be tied to THESE two damaged inputs,
+    # not merely to a generally valid generation-6 recovery candidate.
+    manifest_source_binding = (
+        file_manifest.get("kind") == "stage371_offline_verified_WABJ_staging"
+        and file_manifest.get("corrupt_a_sha256") ==
+            hashlib.sha256(original[0]).hexdigest()
+        and file_manifest.get("corrupt_b_sha256") ==
+            hashlib.sha256(original[1]).hexdigest()
+        and file_manifest.get("requires_explicit_restore_by_owner") is True
+        and file_manifest.get("restored_file") == "battle-progress.a"
+    )
     ids = guest_pids(prior_pids, new_pids)
     guest_keys(keys)
     checks = {
+        "recovery_manifest_pins_exact_original_corrupt_sources":
+            manifest_source_binding,
         "two_corrupt_originals_preserved_without_mutation":
             original == live,
         "trusted_gen6_backup_restored_only_into_separate_new_root":
