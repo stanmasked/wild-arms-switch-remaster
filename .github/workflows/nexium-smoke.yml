@@ -57,6 +57,9 @@ on:
       - 'tools/test_audit_nexium_battle_two_victories.py'
       - 'tools/audit_nexium_battle_latest_crc_fallback.py'
       - 'tools/test_audit_nexium_battle_latest_crc_fallback.py'
+      - 'tools/audit_nexium_battle_post_crc_victory.py'
+      - 'tools/test_audit_nexium_battle_post_crc_victory.py'
+      - 'docs/field-battle-stage367.md'
       - 'docs/field-battle-stage366.md'
       - 'docs/field-battle-stage365.md'
       - 'include/field_battle_file.hpp'
@@ -144,7 +147,7 @@ jobs:
     # Fedora 44 supplies 2.43; Ubuntu 24.04's libc cannot start it.
     container:
       image: fedora:44
-    timeout-minutes: 18
+    timeout-minutes: 21
     env:
       NEXIUM_URL: https://github.com/nexium-emu/nexium-nightly/releases/download/nightly/nexium-linux-x86_64.tar.gz
       # Official GitHub release asset API digest observed 2026-10-20.
@@ -205,6 +208,8 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_two_victories.py' -v
       - name: Unit-test seventeenth guest corrupted latest CRC recovery
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_latest_crc_fallback.py' -v
+      - name: Unit-test eighteenth/nineteenth guest victory after CRC repair
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_post_crc_victory.py' -v
       - name: Unit-test ordered five-checkpoint reference matcher
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_checkpoints.py' -v
       - name: Verify synthetic frame evidence classifier
@@ -1603,6 +1608,148 @@ jobs:
             --seventeenth-pid nexium-probe/battle-latest-recovery/seventeenth-pid.txt \
             --report nexium-probe/battle-latest-recovery-audit.json
 
+      - name: EIGHTEENTH guest wins after CRC repair then NINETEENTH restarts and retreats
+        timeout-minutes: 4
+        run: |
+          set -eu
+          mkdir -p nexium-probe/battle-post-repair \
+            nexium-probe/battle-post-repair-screens
+          export DISPLAY=:99
+          # Same proven SDMC namespace as guests 14-17; never reset between.
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-stage365-double-victory"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          dir=nexium-probe/battle-post-repair
+          shots=nexium-probe/battle-post-repair-screens
+          base="$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/battle-progress"
+          test -f "$base.a" && test -f "$base.b"
+          # Ensure stage366 actually repaired latest A, rather than
+          # silently constructing a new synthetic guest journal here.
+          /usr/bin/python3 - "$base.a" "$base.b" \
+            nexium-probe/battle-latest-recovery/repaired-gen3.a \
+            nexium-probe/battle-latest-recovery/unchanged-gen2.b <<'PY'
+          from pathlib import Path
+          import sys
+          a, b, expected_a, expected_b = (Path(p) for p in sys.argv[1:])
+          assert a.read_bytes() == expected_a.read_bytes()
+          assert b.read_bytes() == expected_b.read_bytes()
+          PY
+          cp "$base.a" "$dir/pre-third-win-gen3.a"
+          cp "$base.b" "$dir/pre-third-win-gen2.b"
+          : > "$dir/guest-pids.txt"
+          : > "$dir/key-edges.log"
+
+          boot() {
+            label="$1"
+            timeout --signal=TERM --kill-after=8 80s \
+              ./nexium-dist/NeXium/nexium \
+              "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+              > "$dir/$label-process.log" 2>&1 &
+            guest_pid=$!
+            printf '%s %s\n' "$label" "$guest_pid" >> "$dir/guest-pids.txt"
+            sleep 15
+            window_id=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null |
+              tail -n 1) || true
+            test -n "$window_id"
+            xdotool windowfocus "$window_id"
+          }
+          press() {
+            printf '%s %s\n' "$(date -u +%FT%TZ)" "$1" >> "$dir/key-edges.log"
+            xdotool keydown --clearmodifiers "$1"
+            sleep 0.23
+            xdotool keyup "$1"
+            sleep 0.47
+          }
+          panel() {
+            xdotool keydown --clearmodifiers r
+            sleep 0.45
+            import -display :99 -window root "$shots/$1.png"
+            xdotool keyup r
+            sleep 0.35
+          }
+          stop_guest() {
+            kill -TERM "$guest_pid" 2>/dev/null || true
+            set +e
+            wait "$guest_pid"
+            result=$?
+            set -e
+            echo "$result" >> "$dir/exit-codes.txt"
+            sleep 0.4
+          }
+          boot eighteenth
+          first_pid="$guest_pid"
+          press x
+          panel 00_eighteenth_restored_gen3
+          press e
+          for attack in 1 2 3 4 5 6 7; do
+            press c
+          done
+          import -display :99 -window root \
+            "$shots/01_eighteenth_third_victory.png"
+          /usr/bin/python3 - "$shots/01_eighteenth_third_victory.png" <<'PY'
+          import sys
+          sys.path.insert(0, "tools")
+          from audit_nexium_field_journal import read_rgb
+          from audit_nexium_battle_two_victories import victory
+          assert victory(read_rgb(sys.argv[1])), "third full-HP fight never reached VICTORY"
+          PY
+          press x
+          panel 02_eighteenth_three_win_rewards
+          stop_guest
+          test -f "$base.a" && test -f "$base.b"
+          cp "$base.a" "$dir/after-third-win-gen3.a"
+          cp "$base.b" "$dir/after-third-win-gen4.b"
+          # Game must have recorded third win + 8 EXP/12 G in B.
+          /usr/bin/python3 - "$base.b" <<'PY'
+          import sys
+          sys.path.insert(0, "tools")
+          from audit_nexium_battle_persistence import read_journal
+          b = read_journal(sys.argv[1])
+          assert (b["generation"], b["wins"], b["retreats"],
+                  b["experience"], b["gella"], b["outcome"]) == (4, 3, 1, 24, 36, 1)
+          PY
+
+          # Distinct process must restore third earned victory BEFORE
+          # any combat and must not award XP/Gella for following retreat.
+          boot nineteenth
+          test "$guest_pid" != "$first_pid"
+          press x
+          panel 03_nineteenth_reload_three_wins
+          press e
+          press x
+          import -display :99 -window root \
+            "$shots/04_nineteenth_after_retreat.png"
+          stop_guest
+          test -f "$base.a" && test -f "$base.b"
+          cp "$base.a" "$dir/final-gen5.a"
+          cp "$base.b" "$dir/final-gen4.b"
+          test ! -e "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/field-save.a"
+          test ! -e "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/field-save.b"
+
+      - name: Audit EIGHTEENTH/NINETEENTH genuine third victory and 24EXP/36Gella restart
+        run: |
+          /usr/bin/python3 tools/audit_nexium_battle_post_crc_victory.py \
+            --screens nexium-probe/battle-post-repair-screens \
+            --original-field nexium-probe/battle-double-victory-screens/00_first_manual.png \
+            --recovered-two-win-panel nexium-probe/battle-latest-recovery-screens/00_crc_fallback_rewards.png \
+            --repaired-gen3-a nexium-probe/battle-post-repair/pre-third-win-gen3.a \
+            --retained-gen2-b nexium-probe/battle-post-repair/pre-third-win-gen2.b \
+            --third-win-a nexium-probe/battle-post-repair/after-third-win-gen3.a \
+            --third-win-b nexium-probe/battle-post-repair/after-third-win-gen4.b \
+            --final-a nexium-probe/battle-post-repair/final-gen5.a \
+            --final-b nexium-probe/battle-post-repair/final-gen4.b \
+            --prior-three-pids nexium-probe/battle-double-victory/guest-pids.txt \
+            --prior-seventeenth-pid nexium-probe/battle-latest-recovery/seventeenth-pid.txt \
+            --new-pids nexium-probe/battle-post-repair/guest-pids.txt \
+            --key-log nexium-probe/battle-post-repair/key-edges.log \
+            --output nexium-probe/battle-post-repair-audit.json
+
       - name: Retain NeXium internal host logs from both runs
         if: always()
         run: |
@@ -1763,6 +1910,10 @@ jobs:
           if test -f nexium-probe/battle-recovery-audit.json; then
             echo "Eleventh-process recovery of older valid WABJ after CRC damage:" >> "$GITHUB_STEP_SUMMARY"
             /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-recovery-audit.json")); print("all checks:",r["all_checks_passed"],"count:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/battle-post-repair-audit.json; then
+            echo "Stage367: real third victory after CRC repair, gen4 and gen5, 24 EXP/36 Gella:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-post-repair-audit.json")); print("complete:",r["all_checks_passed"],"checks:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
           fi
           if test -f nexium-probe/battle-latest-recovery-audit.json; then
             echo "Stage366: newest corrupted gen3 A recovered older two-win gen2 B:" >> "$GITHUB_STEP_SUMMARY"
