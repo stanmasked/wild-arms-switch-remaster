@@ -89,6 +89,11 @@ add_executable(wa_field_battle_session_tests tests/test_field_battle_session.cpp
 target_link_libraries(wa_field_battle_session_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_battle_session_tests COMMAND wa_field_battle_session_tests)
 
+# Stage 344: real host field/battle/shared-framebuffer integration replay.
+add_executable(wa_field_battle_integration_tests tests/test_field_battle_integration.cpp)
+target_link_libraries(wa_field_battle_integration_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_battle_integration_tests COMMAND wa_field_battle_integration_tests)
+
 # Host validation of the exact software framebuffer algorithm used by libnx.
 add_executable(wa_field_pixels_tests tests/test_field_pixels.cpp)
 target_link_libraries(wa_field_pixels_tests PRIVATE wa_field_core)

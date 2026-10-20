@@ -97,3 +97,29 @@ oracle's fail-closed behavior before guest launch. These checks are
 new and are **not yet verified by a completed exact-head NeXium run**.
 NeXium Xvfb screenshots are not native framebuffer captures or
 evidence of physical Switch hardware.
+
+## Stage 344 — field/battle input ownership integration regression
+
+A separate host CTest target `wa_field_battle_integration_tests`
+composes the **actual** `advance_field_runtime` and
+`advance_battle_session` on the same 1280×720 RGBA output buffer,
+reproducing the Switch `main.cpp` ordering: field draws first with a
+neutral controller while battle is active, then the battle overwrites
+that frame. Unlike a stand-alone combat test it validates the real
+world-state and rendering boundary:
+
+- R+A cannot attack during battle entry or inspect a field event.
+- Holding A never repeats a strike; strike reduces opponent HP once.
+- Switch Y is a guard action, not an exploration quicksave.
+- The field's area, tile, move counter, pending event, clue journal and
+  quicksave slot remain untouched through opening, attack, guard, exit
+  and reentry.
+- After B closes the battle, the **entire RGBA framebuffer exactly
+  matches** the same untouched field rendered before entering battle,
+  including canary guards beyond the framebuffer stride.
+- Manual field D-pad resumes movement from the same pre-battle tile.
+
+No actual Nintendo Switch/NeXium battle screenshot result is implied.
+The existing Stage 343 real guest probe is allowed to finish on its
+old exact-head commit; Stage 344 is developed as a separate stacked
+Draft PR so the exploratory emulator run is not canceled.
