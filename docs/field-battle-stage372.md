@@ -101,3 +101,37 @@ oracle tests (48 total definitions). Even a passing host CI does not
 prove real NAND/SD card power-loss durability, nor replacement on physical
 Nintendo Switch hardware. The separate NeXium guest verification is still
 necessary.
+
+## Stage377 exclusive publish and Intel macOS validation
+
+The previous staging implementation created a destination reservation
+directory and used the ordinary POSIX rename. This could still overwrite
+an unrelated **empty** directory if that name was replaced between
+reservation and rename. Stage377 uses a kernel-enforced **exclusive
+directory rename** instead:
+
+- Linux: libc renameat2(AT_FDCWD, src, AT_FDCWD, dest, RENAME_NOREPLACE)
+- macOS: libc renamex_np(src, dest, RENAME_EXCL)
+- Unsupported platform/filesystem: **fail closed**, no unsafe rename fallback
+- Embedded NUL bytes are forbidden before passing path bytes to ctypes.
+- The destination parent remains fsynced after successful publication;
+  if this final durability step fails the already-published package is
+  preserved for manual examination without claiming full durability.
+
+Linux smoke verification of the actual libc syscall confirmed that an
+unrelated empty destination returns EEXIST and retains the staged
+source, while publication succeeds for a previously absent name. This
+is a local syscall smoke check, NOT a complete test of the Python
+workflow, NeXium, or Nintendo Switch storage.
+
+The focused synthetic regression suite now defines 32 filesystem tests
+and 19 screenshot/journal tests (51 cases), including explicit races
+against empty, populated and symlink destinations, plus a NUL-path
+safety case. The GitHub Actions matrix tests Python 3.11 and 3.13 on
+both Ubuntu x86_64 and macOS 15 **Intel x86_64**. Neither code coverage
+nor the physical macOS runner result is assumed until the exact-head
+CI has completed.
+
+References:
+- Linux renameat2 RENAME_NOREPLACE (kernel-enforced no replacement).
+- Apple renamex_np RENAME_EXCL (macOS 10.12+, filesystem-dependent).
