@@ -35,7 +35,7 @@ jobs:
         run: |
           python3 -m py_compile tools/audit_nexium_arm_guest.py
           python3 -m py_compile tools/test_audit_nexium_arm_guest.py
-      - name: Run eight synthetic positive/negative auditor regressions
+      - name: Run nine synthetic positive/negative auditor regressions
         run: |
           python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_guest.py' -v
       - name: Record explicitly synthetic boundary
