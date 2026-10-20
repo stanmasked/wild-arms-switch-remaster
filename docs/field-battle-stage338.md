@@ -176,3 +176,31 @@ R versus ZR precedence, no active-battle toggle, corrupt state refusal
 without mutation, and a real shared field-framebuffer/controller
 movement → battle-open → B-return integration replay. This is new
 Switch gameplay code requiring its own NRO and Host Core CI verification.
+
+## Stage 350 — real NeXium ZR encounter seven-frame evidence
+
+A seventh **independent** guest process with its own isolated SDMC root
+now supplements the existing sixth guest R-training battle audit,
+without modifying or relaxing the five canonical exploration and
+storage-recovery captures. On the actual Switch NRO, NeXium's default
+keyboard layout maps ZR to **T**, A to **C**, B to **X** and the D-pad to
+the arrow keys. The seventh run confirms that ZR explicitly enables
+encounters, three rightward tile steps to the area-0 event **do not**
+open a premature fight, A acknowledges the pending event, and the
+fourth *real* successful step (left) opens battle. A deals damage and
+B returns to the field at the moved tile while ZR mode stays enabled.
+
+`tools/audit_nexium_encounters.py` analyzes exactly seven real
+1600×900 Xvfb screenshots and SHA-256 digests, checking a small
+gold indicator outside the existing game ROI, pending-event status,
+unobscured battle hero/foe borders and HP bars, and the returned
+field/player position. The `test_audit_nexium_encounters.py` synthetic
+positive and adversarial suite rejects missing frames, missing ZR,
+missing event/acknowledgment, missing battle selection/damage, absent
+returning player, and any movement on the toggle-only frame. The
+NeXium's built-in performance HUD is **not** misclassified as a
+missing hero; controls are checked at unobscured native coordinates.
+
+This is **new experimental CI**, not proof until an exact-head NeXium
+run finishes with all seven observed guest checks successful. It does
+not certify physical Switch, PS1 content, or commercial assets.
