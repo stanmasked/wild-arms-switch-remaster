@@ -1,0 +1,41 @@
+name: ARM guest auditor contract (Intel Mac)
+
+on:
+  push:
+    branches:
+      - 'stage-390-*'
+  pull_request:
+    paths:
+      - '.github/workflows/arm-guest-audit-intel.yml'
+      - 'tools/audit_nexium_arm_guest.py'
+      - 'tools/test_audit_nexium_arm_guest.py'
+      - 'tools/test_audit_nexium_battle_two_victories.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-synthetic-contract:
+    name: ARM guest auditor contract (macOS Intel)
+    runs-on: macos-15-intel
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python/CPU provenance
+        run: |
+          uname -m
+          python3 --version
+      - name: Install image fixture dependency
+        run: python3 -m pip install 'Pillow>=10,<13'
+      - name: Check strict ARM auditor syntax
+        run: |
+          python3 -m py_compile tools/audit_nexium_arm_guest.py
+          python3 -m py_compile tools/test_audit_nexium_arm_guest.py
+      - name: Run eight synthetic positive/negative auditor regressions
+        run: |
+          python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_guest.py' -v
+      - name: Record explicitly synthetic boundary
+        run: |
+          echo 'These synthetic tests validate the AUDITOR only, not an actual NeXium guest.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Real Xvfb guest evidence remains gated on the separate ARM NeXium workflow.' >> "$GITHUB_STEP_SUMMARY"
