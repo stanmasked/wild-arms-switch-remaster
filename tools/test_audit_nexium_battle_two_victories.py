@@ -50,7 +50,7 @@ def picture(name):
             else:
                 d.rectangle((782, 654, 783, 658), fill=GOLD)
                 for x, y in ((1017, 629), (1027, 629),
-                             (1093, 625), (1105, 631)):
+                             (1093, 623), (1105, 631)):
                     d.rectangle((x, y, x+2, y+1), fill=GREEN)
     screen = Image.new("RGB", SCREEN_SIZE)
     screen.paste(native.resize((VIEW_W, VIEW_H), Image.Resampling.NEAREST),
