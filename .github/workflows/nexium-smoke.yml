@@ -45,6 +45,10 @@ on:
       - 'tools/test_audit_nexium_battle.py'
       - 'tools/audit_nexium_encounters.py'
       - 'tools/test_audit_nexium_encounters.py'
+      - 'tools/audit_nexium_battle_results.py'
+      - 'tools/test_audit_nexium_battle_results.py'
+      - 'include/field_battle_results.hpp'
+      - 'tests/test_field_battle_results.cpp'
       - 'include/field_encounters.hpp'
       - 'tests/test_field_encounters.cpp'
       - 'include/field_battle.hpp'
@@ -175,6 +179,8 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle.py' -v
       - name: Unit-test independent seventh-guest ZR encounter screenshot oracle
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_encounters.py' -v
+      - name: Unit-test independent eighth guest ZL results screenshot oracle
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_results.py' -v
       - name: Unit-test ordered five-checkpoint reference matcher
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_checkpoints.py' -v
       - name: Verify synthetic frame evidence classifier
@@ -932,6 +938,79 @@ jobs:
             --screenshots nexium-probe/encounter-scene \
             --report nexium-probe/encounter-audit.json
 
+      - name: Launch EIGHTH isolated NeXium guest and inspect ZL battle history
+        timeout-minutes: 3
+        run: |
+          set -eu
+          mkdir -p nexium-probe/battle-history
+          export DISPLAY=:99
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-battle-history-test"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          timeout --signal=TERM --kill-after=8 75s \
+            ./nexium-dist/NeXium/nexium \
+            "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+            > nexium-probe/battle-history/eighth-process.log 2>&1 &
+          eighth_pid=$!
+          echo "$eighth_pid" > nexium-probe/battle-history/eighth-process.pid
+          sleep 15
+          window_id=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null |
+            tail -n 1) || true
+          test -n "$window_id"
+          xdotool windowfocus "$window_id"
+          history_key() {
+            printf '%s %s\n' "$(date -u +%FT%TZ)" "$1" >> nexium-probe/battle-history/keys.log
+            xdotool keydown --clearmodifiers "$1"
+            sleep 0.22
+            xdotool keyup "$1"
+            sleep 0.42
+          }
+          # NeXium source defaults: B=X, R=E, ZL=R. No ZR enabled.
+          history_key x
+          import -display :99 -window root \
+            nexium-probe/battle-history/00_field_start.png
+          xdotool keydown --clearmodifiers r
+          sleep 0.42
+          import -display :99 -window root \
+            nexium-probe/battle-history/01_zl_empty.png
+          xdotool keyup r
+          sleep 0.32
+          history_key e
+          import -display :99 -window root \
+            nexium-probe/battle-history/02_first_battle.png
+          history_key x
+          import -display :99 -window root \
+            nexium-probe/battle-history/03_field_after_retreat.png
+          xdotool keydown --clearmodifiers r
+          sleep 0.45
+          import -display :99 -window root \
+            nexium-probe/battle-history/04_zl_retreat.png
+          xdotool keyup r
+          sleep 0.35
+          import -display :99 -window root \
+            nexium-probe/battle-history/05_zl_released.png
+          history_key e
+          import -display :99 -window root \
+            nexium-probe/battle-history/06_next_battle.png
+          kill -TERM "$eighth_pid" 2>/dev/null || true
+          set +e
+          wait "$eighth_pid"
+          result=$?
+          set -e
+          echo "$result" > nexium-probe/battle-history/eighth-exit-code.txt
+
+      - name: Audit EIGHTH guest ZL history panel and retained retreat
+        run: |
+          /usr/bin/python3 tools/audit_nexium_battle_results.py \
+            --screenshots nexium-probe/battle-history \
+            --report nexium-probe/battle-history-audit.json
+
       - name: Retain NeXium internal host logs from both runs
         if: always()
         run: |
@@ -1080,6 +1159,10 @@ jobs:
           if test -f nexium-probe/encounter-audit.json; then
             echo "Seventh-process opt-in ZR encounter and field return:" >> "$GITHUB_STEP_SUMMARY"
             /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/encounter-audit.json")); print("all checks:",r["all_checks_passed"],"count:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/battle-history-audit.json; then
+            echo "Eighth-process ZL battle history:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-history-audit.json")); print("all checks:",r["all_checks_passed"],"count:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "No firmware, ROM, BIOS or commercial assets used." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4

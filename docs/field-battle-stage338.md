@@ -234,3 +234,27 @@ retreat, no double counting, records across new encounters, counter
 saturation, HUD opt-in and no writes on invalid targets. This is a
 synthetic native prototype, not the PlayStation battle database or an
 on-device Switch hardware test; new CI is required.
+
+## Stage 356 — NeXium eighth guest: opt-in result history
+
+A new eighth isolated emulator boot tests actual ZL history-panel
+interaction **independently** of the previous five field processes,
+sixth R-training and seventh ZR four-step encounter. NeXium's verified
+key mappings are ZL=R (host `r`), Switch R=E, and Switch B=X. With
+no ZR opt-in, it records seven actual Xvfb screenshots: manual field;
+empty ZL history; first R battle; B retreat and same field pixels;
+ZL history now displaying `EXITS 1 LAST RETREAT`; ZL released with
+the exact original map restored; reopened R battle retaining the prior
+retreat in its footer.
+
+The independent Python oracle checks the *pixel font glyph* representing
+zero and one in the actual ZL panel, the RETREAT text, unoccluded battle
+border, preserved field image and second battle's displayed `E 1`
+footer. A synthetic positive/adversarial unit test refuses missing
+images, wrong counts, fake UI, missing second-battle record and unchanged
+gameplay. The audit does not infer physical Switch hardware or validate
+the PS1 battle database.
+
+The eight-guest workflow must pass on its **exact source commit**
+before the ZL panel is considered emulator-verified. Stage 355 source
+and earlier NeXium evidence are unchanged while that check runs.
