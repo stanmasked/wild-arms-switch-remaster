@@ -314,6 +314,48 @@ class SafeOfflineRecoveryTests(unittest.TestCase):
         self.assertEqual(caught.exception.errno, errno.EEXIST)
         native.renameat2.assert_called_once()
 
+    def test_linux_unsupported_filesystem_fails_without_fallback(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        import ctypes
+        import errno
+        native = mock.Mock()
+        native.renameat2.return_value = -1
+        with tempfile.TemporaryDirectory() as d:
+            stage = Path(d) / "staged"
+            target = Path(d) / "new-target"
+            stage.mkdir()
+            (stage / "backup.bin").write_bytes(b"keep")
+            with mock.patch("sys.platform", "linux"), \
+                 mock.patch.object(ctypes, "CDLL", return_value=native), \
+                 mock.patch.object(ctypes, "get_errno", return_value=errno.ENOTSUP):
+                with self.assertRaises(OSError) as caught:
+                    _publish_exclusive(stage, target)
+            self.assertEqual(caught.exception.errno, errno.ENOTSUP)
+            self.assertFalse(target.exists())
+            self.assertEqual((stage / "backup.bin").read_bytes(), b"keep")
+            native.renameat2.assert_called_once()
+
+    def test_macos_unsupported_exclusive_rename_fails_without_fallback(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        import ctypes
+        import errno
+        native = mock.Mock()
+        native.renamex_np.return_value = -1
+        with tempfile.TemporaryDirectory() as d:
+            stage = Path(d) / "staged"
+            target = Path(d) / "new-target"
+            stage.mkdir()
+            (stage / "backup.bin").write_bytes(b"keep")
+            with mock.patch("sys.platform", "darwin"), \
+                 mock.patch.object(ctypes, "CDLL", return_value=native), \
+                 mock.patch.object(ctypes, "get_errno", return_value=errno.ENOTSUP):
+                with self.assertRaises(OSError) as caught:
+                    _publish_exclusive(stage, target)
+            self.assertEqual(caught.exception.errno, errno.ENOTSUP)
+            self.assertFalse(target.exists())
+            self.assertEqual((stage / "backup.bin").read_bytes(), b"keep")
+            native.renamex_np.assert_called_once()
+
     def test_exclusive_publisher_rejects_nul_truncated_path(self):
         from stage_verified_battle_backup import _publish_exclusive
         with tempfile.TemporaryDirectory() as d:
