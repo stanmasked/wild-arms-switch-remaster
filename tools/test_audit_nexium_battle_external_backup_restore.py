@@ -83,7 +83,7 @@ class IsolatedGuestRestoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             r=audit_external_recovery(*fixture(d))
             self.assertTrue(r["all_checks_passed"],r["checks"])
-            self.assertEqual(len(r["checks"]),11)
+            self.assertEqual(len(r["checks"]),12)
 
     def test_missing_required_guest_frame_rejected(self):
         with tempfile.TemporaryDirectory() as d:
@@ -148,6 +148,36 @@ class IsolatedGuestRestoreTests(unittest.TestCase):
             r=audit_external_recovery(*a)
             self.assertFalse(r["checks"][
                 "two_corrupt_originals_preserved_without_mutation"])
+
+    def test_manifest_corrupt_a_hash_must_match_archived_original(self):
+        with tempfile.TemporaryDirectory() as d:
+            a=fixture(d)
+            data=json.loads(a[11].read_text())
+            data["corrupt_a_sha256"]="0"*64
+            a[11].write_text(json.dumps(data))
+            result=audit_external_recovery(*a)
+            self.assertFalse(result["checks"][
+                "recovery_manifest_pins_exact_original_corrupt_sources"])
+
+    def test_manifest_corrupt_b_hash_must_match_archived_original(self):
+        with tempfile.TemporaryDirectory() as d:
+            a=fixture(d)
+            data=json.loads(a[11].read_text())
+            data["corrupt_b_sha256"]="f"*64
+            a[11].write_text(json.dumps(data))
+            result=audit_external_recovery(*a)
+            self.assertFalse(result["checks"][
+                "recovery_manifest_pins_exact_original_corrupt_sources"])
+
+    def test_manifest_must_retain_manual_restore_only_boundary(self):
+        with tempfile.TemporaryDirectory() as d:
+            a=fixture(d)
+            data=json.loads(a[11].read_text())
+            data["requires_explicit_restore_by_owner"]=False
+            a[11].write_text(json.dumps(data))
+            result=audit_external_recovery(*a)
+            self.assertFalse(result["checks"][
+                "recovery_manifest_pins_exact_original_corrupt_sources"])
 
     def test_manifest_claiming_auto_install_rejected(self):
         with tempfile.TemporaryDirectory() as d:
