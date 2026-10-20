@@ -42,3 +42,25 @@ Neither Stage371 nor Stage372 installs anything onto a running SDMC or
 claims physical-card durability. A path restriction cannot prove a directory
 is not part of some other live game installation; operators must select a
 private external destination. Keep source files and trusted digests offline.
+
+## Stage373 CI evidence hardening
+
+The Stage371 Python test failed to import `WHITE` from
+`audit_nexium_battle_double_corruption`; it belongs to
+`audit_nexium_battle_corruption_warning`. The import is fixed on both
+the parent PR and this stacked head. Earlier NeXium runtime steps never
+executed because the import error stopped the smoke job at the unit
+test gate. Nothing in that failed run proves or disproves guest25/26
+reward persistence.
+
+Stage373 also requires all four corrupted-source paths (archived A/B
+and separately staged live A/B) to reference distinct inodes. This
+prevents passing a byte-equality check by pointing both sides at the
+same file or hardlink. Two adversarial oracle tests enforce the rule.
+
+The separate `battle-save-offline-integrity.yml` workflow runs
+source compilation, the offline file-staging tests and the screenshot
+oracle's synthetic positive/adversarial tests on Python 3.11 and 3.13.
+These are fast **synthetic** tests and cannot replace the real NeXium
+guest trial. Do not mark restoration confirmed until the exact-head
+NeXium run provides distinct process logs and real verified screenshots.
