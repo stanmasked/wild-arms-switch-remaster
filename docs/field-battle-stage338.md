@@ -204,3 +204,21 @@ missing hero; controls are checked at unobscured native coordinates.
 This is **new experimental CI**, not proof until an exact-head NeXium
 run finishes with all seven observed guest checks successful. It does
 not certify physical Switch, PS1 content, or commercial assets.
+
+## Stage 351 — guest-input phase alignment without fixed key timing
+
+The seventh-process ZR encounter workflow uses bounded, **pixel-observed**
+movement rather than assuming the guest advances exactly three steps
+during 1.3 seconds of held Right. Every 160 ms, it captures a temporary
+Xvfb image in a separate `encounter-probes` directory and checks the
+actual pending-event status RGB. It releases Right on the first detected
+event. After A acknowledgement, a second loop releases Left as soon as
+the real rendered selected-hero border confirms combat entry.
+
+Both probes have a strict 20-poll upper bound and fail the workflow
+if the expected guest state never appears. The seven audit screenshots
+remain exactly the same; temporary probes are stored **outside** the
+strict evidence directory. A failed probe cannot manufacture passing
+evidence. This is a test-harness change only, separate from the game
+engine and the existing field/save/sixth-guest routes. Guest results
+require fresh CI confirmation.
