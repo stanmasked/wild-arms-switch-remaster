@@ -122,8 +122,10 @@ class RealGuestPersistenceAuditorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             paths = setup(root)
             save_fake_journal(paths[1], 1, 0)
-            r = evaluate(paths)
-            self.assertFalse(r["checks"]["first_guest_wrote_only_valid_generation_one"])
+            # A record claiming RETREAT with zero retreats violates the
+            # WABR semantic contract. Fail-closed decoding must raise.
+            with self.assertRaises(ValueError):
+                evaluate(paths)
 
     def test_missing_rebooted_one_glyph_rejected(self):
         with tempfile.TemporaryDirectory() as root:
