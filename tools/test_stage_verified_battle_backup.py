@@ -266,6 +266,17 @@ class SafeOfflineRecoveryTests(unittest.TestCase):
             self.assertFalse(list(Path(d).glob(".wild-arms-stage371-*")))
             self.assertEqual([p.read_bytes() for p in a[:4]], originals)
 
+    def test_exclusive_publisher_rejects_nul_truncated_path(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        with tempfile.TemporaryDirectory() as d:
+            source = Path(d) / "staged"
+            source.mkdir()
+            destination = Path(d) / "hidden\x00suffix"
+            with self.assertRaisesRegex(ValueError, "NUL byte"):
+                _publish_exclusive(source, destination)
+            self.assertTrue(source.is_dir())
+            self.assertFalse((Path(d) / "hidden").exists())
+
     def test_staged_publication_fsyncs_parent_after_directory_rename(self):
         import os
         with tempfile.TemporaryDirectory() as d:
