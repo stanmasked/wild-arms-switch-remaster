@@ -53,6 +53,8 @@ on:
       - 'tools/test_audit_nexium_battle_recovery.py'
       - 'tools/audit_nexium_battle_reward_restart.py'
       - 'tools/test_audit_nexium_battle_reward_restart.py'
+      - 'tools/audit_nexium_battle_two_victories.py'
+      - 'tools/test_audit_nexium_battle_two_victories.py'
       - 'include/field_battle_file.hpp'
       - 'tests/test_field_battle_file.cpp'
       - 'include/field_battle_results.hpp'
@@ -138,7 +140,7 @@ jobs:
     # Fedora 44 supplies 2.43; Ubuntu 24.04's libc cannot start it.
     container:
       image: fedora:44
-    timeout-minutes: 15
+    timeout-minutes: 18
     env:
       NEXIUM_URL: https://github.com/nexium-emu/nexium-nightly/releases/download/nightly/nexium-linux-x86_64.tar.gz
       # Official GitHub release asset API digest observed 2026-10-20.
@@ -195,6 +197,8 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_recovery.py' -v
       - name: Unit-test independent earned EXP and Gella real guest image oracle
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_reward_restart.py' -v
+      - name: Unit-test three-guest cumulative two-victory image and journal oracle
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_two_victories.py' -v
       - name: Unit-test ordered five-checkpoint reference matcher
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_checkpoints.py' -v
       - name: Verify synthetic frame evidence classifier
@@ -1333,6 +1337,146 @@ jobs:
             --final-b nexium-probe/battle-earned/final-earned.b \
             --report nexium-probe/battle-earned-audit.json
 
+      - name: Play TWO real full-HP wins in FOURTEENTH/FIFTEENTH guests and verify SIXTEENTH reload
+        timeout-minutes: 6
+        run: |
+          set -eu
+          mkdir -p nexium-probe/battle-double-victory \
+            nexium-probe/battle-double-victory-screens
+          export DISPLAY=:99
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-stage365-double-victory"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          base="$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/battle-progress"
+          test ! -e "$base.a"
+          test ! -e "$base.b"
+          dir=nexium-probe/battle-double-victory
+          shots=nexium-probe/battle-double-victory-screens
+          : > "$dir/guest-pids.txt"
+          boot() {
+            label="$1"
+            timeout --signal=TERM --kill-after=8 80s \
+              ./nexium-dist/NeXium/nexium \
+              "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+              > "$dir/$label-process.log" 2>&1 &
+            guest_pid=$!
+            printf '%s %s\n' "$label" "$guest_pid" >> "$dir/guest-pids.txt"
+            sleep 15
+            window_id=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null |
+              tail -n 1) || true
+            test -n "$window_id"
+            xdotool windowfocus "$window_id"
+          }
+          press() {
+            printf '%s %s\n' "$(date -u +%FT%TZ)" "$1" >> "$dir/keys.log"
+            xdotool keydown --clearmodifiers "$1"
+            sleep 0.23
+            xdotool keyup "$1"
+            sleep 0.47
+          }
+          shot() {
+            import -display :99 -window root "$shots/$1.png"
+          }
+          close_guest() {
+            kill -TERM "$guest_pid" 2>/dev/null || true
+            set +e
+            wait "$guest_pid"
+            result=$?
+            set -e
+            echo "$result" >> "$dir/exit-codes.txt"
+            sleep 0.4
+          }
+          seven_attacks() {
+            press e
+            for strike in 1 2 3 4 5 6 7; do
+              press c
+            done
+          }
+          verify_victory() {
+            /usr/bin/python3 - "$shots/$1.png" <<'PY'
+          import sys
+          sys.path.insert(0, "tools")
+          from audit_nexium_field_journal import read_rgb, native_pixel
+          img = read_rgb(sys.argv[1])
+          assert native_pixel(img, 324, 297) == (63, 191, 138)
+          assert native_pixel(img, 500, 296) == (63, 191, 138)
+          assert native_pixel(img, 500, 298) == (12, 19, 31)
+          PY
+          }
+          panel() {
+            xdotool keydown --clearmodifiers r
+            sleep 0.45
+            shot "$1"
+            xdotool keyup r
+            sleep 0.35
+          }
+
+          # First native 7-strike victory on entirely empty dedicated SDMC.
+          boot fourteenth
+          first_pid="$guest_pid"
+          press x
+          shot 00_first_manual
+          seven_attacks
+          shot 01_first_victory
+          verify_victory 01_first_victory
+          press x
+          panel 02_first_rewards
+          close_guest
+          test -f "$base.a" && test ! -e "$base.b"
+          cp "$base.a" "$dir/first.a"
+
+          # New process must restore 8 EXP / 12 Gella BEFORE earning more.
+          boot fifteenth
+          second_pid="$guest_pid"
+          test "$first_pid" != "$second_pid"
+          press x
+          panel 03_second_reload
+          seven_attacks
+          shot 04_second_victory
+          verify_victory 04_second_victory
+          press x
+          panel 05_second_rewards
+          close_guest
+          test -f "$base.a" && test -f "$base.b"
+          cp "$base.a" "$dir/second.a"
+          cp "$base.b" "$dir/second.b"
+
+          # Third independent process restores 16 EXP / 24 Gella. A B
+          # retreat must NOT grant a third payout; gen3 overwrites A only.
+          boot sixteenth
+          third_pid="$guest_pid"
+          test "$third_pid" != "$first_pid"
+          test "$third_pid" != "$second_pid"
+          press x
+          panel 06_third_reload
+          press e
+          press x
+          shot 07_third_retreat
+          close_guest
+          test -f "$base.a" && test -f "$base.b"
+          cp "$base.a" "$dir/final.a"
+          cp "$base.b" "$dir/final.b"
+          test ! -e "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/field-save.a"
+          test ! -e "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/field-save.b"
+
+      - name: Audit FOURTEENTH/FIFTEENTH/SIXTEENTH cumulative EXP and Gella with WABJ generations 1-3
+        run: |
+          /usr/bin/python3 tools/audit_nexium_battle_two_victories.py \
+            --screenshots nexium-probe/battle-double-victory-screens \
+            --first-a nexium-probe/battle-double-victory/first.a \
+            --second-a nexium-probe/battle-double-victory/second.a \
+            --second-b nexium-probe/battle-double-victory/second.b \
+            --final-a nexium-probe/battle-double-victory/final.a \
+            --final-b nexium-probe/battle-double-victory/final.b \
+            --pids nexium-probe/battle-double-victory/guest-pids.txt \
+            --report nexium-probe/battle-double-victory-audit.json
+
       - name: Retain NeXium internal host logs from both runs
         if: always()
         run: |
@@ -1493,6 +1637,10 @@ jobs:
           if test -f nexium-probe/battle-recovery-audit.json; then
             echo "Eleventh-process recovery of older valid WABJ after CRC damage:" >> "$GITHUB_STEP_SUMMARY"
             /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-recovery-audit.json")); print("all checks:",r["all_checks_passed"],"count:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/battle-double-victory-audit.json; then
+            echo "Stage365: three independent NeXium guests, two cumulative wins, 16 EXP / 24 Gella:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-double-victory-audit.json")); print("complete:",r["all_checks_passed"],"checks:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
           fi
           if test -f nexium-probe/battle-earned-audit.json; then
             echo "Twelfth/thirteenth guest real victory with EXP/Gella across restart:" >> "$GITHUB_STEP_SUMMARY"
