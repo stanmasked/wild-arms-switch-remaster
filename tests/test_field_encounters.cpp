@@ -3,6 +3,7 @@
 #include "field_battle_session.hpp"
 #include <cassert>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 using namespace wa::field;
@@ -134,6 +135,24 @@ void test_invalid_state_is_atomic() {
   assert(!d.enabled && !d.primed);
 }
 
+void test_corrupt_future_anchor_is_safely_rebased() {
+  WorldState w{};
+  w.player.successful_moves=2;
+  EncounterDirector d{};
+  EncounterControls enable{};enable.toggle=true;
+  assert(run(d,w,enable).enabled);
+  d.last_encounter_moves=std::numeric_limits<std::uint64_t>::max();
+  ++w.player.successful_moves;
+  assert(!run(d,w).triggered);
+  assert(d.last_encounter_moves==3);
+  for(unsigned i=0;i<3;++i) {
+    ++w.player.successful_moves;
+    assert(!run(d,w).triggered);
+  }
+  ++w.player.successful_moves;
+  assert(run(d,w).triggered);
+}
+
 void test_actual_field_movement_activates_optional_battle() {
   const FieldWorld world=make_demo_world();
   auto field=start_field_runtime(world,19200000,0);
@@ -188,5 +207,6 @@ int main() {
   test_modal_training_and_existing_battle_never_trigger();
   test_disabling_is_rearm_not_a_random_encounter();
   test_invalid_state_is_atomic();
+  test_corrupt_future_anchor_is_safely_rebased();
   test_actual_field_movement_activates_optional_battle();
 }
