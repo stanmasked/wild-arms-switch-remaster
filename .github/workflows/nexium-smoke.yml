@@ -55,6 +55,9 @@ on:
       - 'tools/test_audit_nexium_battle_reward_restart.py'
       - 'tools/audit_nexium_battle_two_victories.py'
       - 'tools/test_audit_nexium_battle_two_victories.py'
+      - 'tools/audit_nexium_battle_latest_crc_fallback.py'
+      - 'tools/test_audit_nexium_battle_latest_crc_fallback.py'
+      - 'docs/field-battle-stage366.md'
       - 'docs/field-battle-stage365.md'
       - 'include/field_battle_file.hpp'
       - 'tests/test_field_battle_file.cpp'
@@ -200,6 +203,8 @@ jobs:
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_reward_restart.py' -v
       - name: Unit-test three-guest cumulative two-victory image and journal oracle
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_two_victories.py' -v
+      - name: Unit-test seventeenth guest corrupted latest CRC recovery
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle_latest_crc_fallback.py' -v
       - name: Unit-test ordered five-checkpoint reference matcher
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_checkpoints.py' -v
       - name: Verify synthetic frame evidence classifier
@@ -1478,6 +1483,126 @@ jobs:
             --pids nexium-probe/battle-double-victory/guest-pids.txt \
             --report nexium-probe/battle-double-victory-audit.json
 
+      - name: Corrupt latest gen3 A then start SEVENTEENTH NeXium guest to restore two-win rewards
+        timeout-minutes: 3
+        run: |
+          set -eu
+          mkdir -p nexium-probe/battle-latest-recovery \
+            nexium-probe/battle-latest-recovery-screens
+          export DISPLAY=:99
+          # Reuse the exact validated guest 14/15/16 SDMC, not a host fixture.
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-stage365-double-victory"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          base="$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/battle-progress"
+          dir=nexium-probe/battle-latest-recovery
+          test -f "$base.a" && test -f "$base.b"
+          /usr/bin/python3 - "$base.a" "$base.b" \
+            nexium-probe/battle-double-victory/final.a \
+            nexium-probe/battle-double-victory/final.b <<'PY'
+          from pathlib import Path
+          import sys
+          a, b, expected_a, expected_b = (Path(x) for x in sys.argv[1:])
+          assert a.read_bytes() == expected_a.read_bytes(), "newest A changed"
+          assert b.read_bytes() == expected_b.read_bytes(), "older B changed"
+          PY
+          # First preserve committed evidence. Fault only outer CRC byte 48
+          # of latest generation THREE A (not the older healthy gen2 B).
+          cp "$base.a" "$dir/pristine-gen3.a"
+          cp "$base.b" "$dir/pristine-gen2.b"
+          /usr/bin/python3 - "$base.a" "$base.b" <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, "tools")
+          from audit_nexium_battle_persistence import read_journal
+          a, b = map(Path, sys.argv[1:])
+          latest, older = read_journal(a), read_journal(b)
+          assert (latest["generation"], latest["wins"], latest["retreats"],
+                  latest["experience"], latest["gella"]) == (3, 2, 1, 16, 24)
+          assert (older["generation"], older["wins"], older["retreats"],
+                  older["experience"], older["gella"]) == (2, 2, 0, 16, 24)
+          raw = bytearray(a.read_bytes())
+          assert len(raw) == 52 and raw[:4] == b"WABJ"
+          raw[48] ^= 0x80
+          a.write_bytes(raw)
+          try:
+              read_journal(a)
+          except ValueError:
+              pass
+          else:
+              raise AssertionError("fault injection did not break newest A CRC")
+          PY
+          cp "$base.a" "$dir/damaged-newest-gen3.a"
+          /usr/bin/python3 - "$base.b" "$dir/pristine-gen2.b" <<'PY'
+          from pathlib import Path
+          import sys
+          assert Path(sys.argv[1]).read_bytes() == Path(sys.argv[2]).read_bytes(), "older B was changed by fault injection"
+          PY
+          # A completely new guest process, SAME isolated SDMC namespace.
+          timeout --signal=TERM --kill-after=8 75s \
+            ./nexium-dist/NeXium/nexium \
+            "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+            > "$dir/seventeenth-process.log" 2>&1 &
+          guest_pid=$!
+          echo "seventeenth $guest_pid" > "$dir/seventeenth-pid.txt"
+          sleep 15
+          window_id=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null |
+            tail -n 1) || true
+          test -n "$window_id"
+          xdotool windowfocus "$window_id"
+          press() {
+            printf '%s %s\n' "$(date -u +%FT%TZ)" "$1" >> "$dir/keys.log"
+            xdotool keydown --clearmodifiers "$1"
+            sleep 0.23
+            xdotool keyup "$1"
+            sleep 0.47
+          }
+          press x
+          xdotool keydown --clearmodifiers r
+          sleep 0.45
+          import -display :99 -window root \
+            nexium-probe/battle-latest-recovery-screens/00_crc_fallback_rewards.png
+          xdotool keyup r
+          sleep 0.35
+          # Retreat is deliberately NOT a victory. A new gen3 A should
+          # match the original valid gen3 bytes, and B must not change.
+          press e
+          press x
+          import -display :99 -window root \
+            nexium-probe/battle-latest-recovery-screens/01_after_repaired_retreat.png
+          kill -TERM "$guest_pid" 2>/dev/null || true
+          set +e
+          wait "$guest_pid"
+          result=$?
+          set -e
+          echo "$result" > "$dir/seventeenth-exit-code.txt"
+          test -f "$base.a" && test -f "$base.b"
+          cp "$base.a" "$dir/repaired-gen3.a"
+          cp "$base.b" "$dir/unchanged-gen2.b"
+          test ! -e "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/field-save.a"
+          test ! -e "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/field-save.b"
+
+      - name: Audit SEVENTEENTH real guest older-B fallback and no-loss two-victory CRC repair
+        run: |
+          /usr/bin/python3 tools/audit_nexium_battle_latest_crc_fallback.py \
+            --frames nexium-probe/battle-latest-recovery-screens \
+            --original-field nexium-probe/battle-double-victory-screens/00_first_manual.png \
+            --known-second-win-panel nexium-probe/battle-double-victory-screens/06_third_reload.png \
+            --valid-latest-a nexium-probe/battle-latest-recovery/pristine-gen3.a \
+            --valid-fallback-b nexium-probe/battle-latest-recovery/pristine-gen2.b \
+            --corrupt-latest-a nexium-probe/battle-latest-recovery/damaged-newest-gen3.a \
+            --repaired-a nexium-probe/battle-latest-recovery/repaired-gen3.a \
+            --unchanged-b nexium-probe/battle-latest-recovery/unchanged-gen2.b \
+            --previous-pids nexium-probe/battle-double-victory/guest-pids.txt \
+            --seventeenth-pid nexium-probe/battle-latest-recovery/seventeenth-pid.txt \
+            --report nexium-probe/battle-latest-recovery-audit.json
+
       - name: Retain NeXium internal host logs from both runs
         if: always()
         run: |
@@ -1638,6 +1763,10 @@ jobs:
           if test -f nexium-probe/battle-recovery-audit.json; then
             echo "Eleventh-process recovery of older valid WABJ after CRC damage:" >> "$GITHUB_STEP_SUMMARY"
             /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-recovery-audit.json")); print("all checks:",r["all_checks_passed"],"count:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/battle-latest-recovery-audit.json; then
+            echo "Stage366: newest corrupted gen3 A recovered older two-win gen2 B:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-latest-recovery-audit.json")); print("complete:",r["all_checks_passed"],"checks:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
           fi
           if test -f nexium-probe/battle-double-victory-audit.json; then
             echo "Stage365: three independent NeXium guests, two cumulative wins, 16 EXP / 24 Gella:" >> "$GITHUB_STEP_SUMMARY"
