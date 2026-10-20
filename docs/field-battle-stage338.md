@@ -148,3 +148,31 @@ HUD occlusion and rejection when an exposed border pixel is missing.
 This is a precise correction to the screenshot oracle, **not** a
 change to the Switch renderer or battle controls. A fresh exact-head
 CI run is needed before the corrected audit can be called green.
+
+## Stage 349 — optional deterministic encounters while exploring
+
+The native Switch field prototype now has a **ZR toggled, off-by-default**
+synthetic encounter mode. Once enabled in manual exploration, every
+`kEncounterStepInterval = 4` *successful* tiles, it opens the same
+three-hero/two-foe native battle UI used by R training. R continues to
+open a training fight immediately regardless of the encounter setting.
+A small golden indicator appears at the top-right only while the
+optional mode is enabled, away from the map. A second ZR press disables
+it. No random number generator or original PlayStation assets are used.
+
+Encounters are scheduled after the real field runtime has advanced.
+Blocked moves, time spent standing still, button-held frames, and
+pending event/exit acknowledgments never trigger an encounter.
+A pending marker delays the next fight until a later *real movement*.
+Entering a new area, restoring a snapshot, or resetting/reversing the
+successful movement count re-anchors the interval safely. The scheduler
+does not modify the field, clue journal, quicksave, or battle internals.
+Autoplay turns optional encounters off, and existing field capture
+scripts never press ZR; established reference pixels stay unchanged.
+
+`wa_field_encounters_tests` exercises opt-in gating, exact tile
+intervals, pending event deferral, both areas, snapshot rebasing,
+R versus ZR precedence, no active-battle toggle, corrupt state refusal
+without mutation, and a real shared field-framebuffer/controller
+movement → battle-open → B-return integration replay. This is new
+Switch gameplay code requiring its own NRO and Host Core CI verification.
