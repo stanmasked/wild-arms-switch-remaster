@@ -340,3 +340,31 @@ This is an asset-free synthetic battle prototype, not original PS1
 save data. The new file I/O requires separate exact-head CI and a real
 NeXium restart/reload test before claiming persistence is verified
 on a Switch emulator.
+
+## Stage 360 — two independent real NeXium process battle-save replay
+
+A ninth and tenth NeXium guest, each a **new process**, now run in
+one isolated `NEXIUM_DATA_ROOT`, separate from all original field
+saves. The first guest confirms initial `EXITS 0` via real held-ZL
+pixels, performs R→B retreat, and stops. CI requires an actual 52-byte
+`battle-progress.a` guest SDMC journal and copies the entire first
+committed record as evidence. The tenth guest boots from the **same
+SDMC directory**, uses ZL to show **EXITS 1 LAST RETREAT** after launch
+without any new battle, releases ZL and verifies original field pixels,
+then performs another R→B retreat to commit
+`battle-progress.b` generation 2. This script refuses unexpected
+creation of unrelated `field-save.a/.b`.
+
+The independent `audit_nexium_battle_persistence.py` examines six
+actual 1600×900 screenshots and all three observed guest journal files.
+It decodes little-endian WABJ/WABR records, independently validates
+both CRC32 checksums, exact sizes, reserved bytes, last-outcome
+relationships, generations 1→2, retreat counter 1→2, zero placeholder
+rewards, **preservation of old generation bytes**, and six game-frame
+observations. No in-memory test state is trusted. An adversarial
+Python unit suite rejects corruption, missing or counterfeit evidence.
+
+This is **experimental NeXium filesystem evidence**, not an actual
+Switch hardware power-cut durability guarantee. The ninth/tenth
+guests and exact-head Host Core/NRO need to complete successfully
+before restart persistence is considered confirmed.
