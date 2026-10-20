@@ -258,7 +258,7 @@ class SafeOfflineRecoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             a = fixture(d)
             originals = [p.read_bytes() for p in a[:4]]
-            with mock.patch("stage_verified_battle_backup.os.rename",
+            with mock.patch("stage_verified_battle_backup._publish_exclusive",
                             side_effect=OSError("simulated publication failure")):
                 with self.assertRaises(OSError):
                     call(a, execute=True)
@@ -305,19 +305,53 @@ class SafeOfflineRecoveryTests(unittest.TestCase):
             self.assertEqual([p.read_bytes() for p in a[:4]], before)
 
     def test_competing_new_destination_must_not_be_replaced(self):
+        from stage_verified_battle_backup import _publish_exclusive
         with tempfile.TemporaryDirectory() as d:
             a = fixture(d)
-            original_mkdir = Path.mkdir
-            def race(path, *args, **kwargs):
-                if path == a[-1]:
-                    original_mkdir(path)
-                    (path / "owner-data.txt").write_text("belongs to someone else")
-                return original_mkdir(path, *args, **kwargs)
-            with mock.patch.object(Path, "mkdir", new=race):
+            def race(stage, destination):
+                Path(destination).mkdir()
+                (Path(destination) / "owner-data.txt").write_text(
+                    "belongs to someone else")
+                return _publish_exclusive(stage, destination)
+            with mock.patch("stage_verified_battle_backup._publish_exclusive",
+                            new=race):
                 with self.assertRaises(FileExistsError):
                     call(a, execute=True)
             self.assertEqual((a[-1] / "owner-data.txt").read_text(),
                              "belongs to someone else")
+            self.assertFalse(list(Path(d).glob(".wild-arms-stage371-*")))
+
+    def test_competing_empty_directory_is_not_replaced(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            def race(stage, destination):
+                Path(destination).mkdir()
+                return _publish_exclusive(stage, destination)
+            with mock.patch("stage_verified_battle_backup._publish_exclusive",
+                            new=race):
+                with self.assertRaises(FileExistsError):
+                    call(a, execute=True)
+            self.assertTrue(a[-1].is_dir())
+            self.assertEqual(list(a[-1].iterdir()), [])
+            self.assertFalse(list(Path(d).glob(".wild-arms-stage371-*")))
+
+    def test_competing_symlink_destination_is_not_replaced(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            target = Path(d) / "other-owner"
+            target.mkdir()
+            (target / "keep.txt").write_text("independent")
+            def race(stage, destination):
+                Path(destination).symlink_to(target, target_is_directory=True)
+                return _publish_exclusive(stage, destination)
+            with mock.patch("stage_verified_battle_backup._publish_exclusive",
+                            new=race):
+                with self.assertRaises(FileExistsError):
+                    call(a, execute=True)
+            self.assertTrue(a[-1].is_symlink())
+            self.assertEqual((target / "keep.txt").read_text(), "independent")
             self.assertFalse(list(Path(d).glob(".wild-arms-stage371-*")))
 
     def test_swapped_symlink_during_source_open_rejected(self):
