@@ -170,25 +170,31 @@ void test_actual_field_movement_activates_optional_battle() {
   // Walk three steps to the first event, acknowledge it with A, then
   // take one more real step by moving left: an encounter is triggered.
   const RuntimeControls right{PadSample{.dpad_right=true}};
-  for(unsigned i=0;i<3;++i) {
+  // Movement pacing may need more than three 160-ms samples to accept
+  // three tile steps. Observe actual committed movement, not input frames.
+  for(unsigned i=0;i<16 && field.manual.pending==Trigger::None;++i) {
     tick+=19200000*160/1000;
     assert(advance_field_runtime(world,field,tick,right,target).status==
            RuntimeStatus::Rendered);
     assert(!advance_field_encounters(encounter,field.manual,{}).triggered);
   }
   assert(field.manual.pending==Trigger::Event);
+  assert(field.manual.player.successful_moves==3);
   tick+=320000;
   const RuntimeControls ack{PadSample{.confirm=true}};
   assert(advance_field_runtime(world,field,tick,ack,target).status==
          RuntimeStatus::Rendered);
   assert(field.manual.pending==Trigger::None);
   assert(!advance_field_encounters(encounter,field.manual,{}).triggered);
-  tick+=19200000*160/1000;
   const RuntimeControls left{PadSample{.dpad_left=true}};
-  assert(advance_field_runtime(world,field,tick,left,target).status==
-         RuntimeStatus::Rendered);
+  EncounterFrame encounter_frame{};
+  for(unsigned i=0;i<16 && !encounter_frame.triggered;++i) {
+    tick+=19200000*160/1000;
+    assert(advance_field_runtime(world,field,tick,left,target).status==
+           RuntimeStatus::Rendered);
+    encounter_frame=advance_field_encounters(encounter,field.manual,{});
+  }
   assert(field.manual.player.successful_moves==4);
-  const auto encounter_frame=advance_field_encounters(encounter,field.manual,{});
   assert(encounter_frame.triggered);
   FieldBattleSessionInput start{};
   start.open=encounter_frame.triggered;start.manual_mode=true;
