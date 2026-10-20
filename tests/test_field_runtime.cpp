@@ -1101,6 +1101,8 @@ void test_cross_area_discovery_journal_survives_world_and_snapshot_changes() {
       world, rt, tick, view, screen.target);
   require(opened.status == RuntimeStatus::Rendered &&
           opened.journal_visible && opened.clue_count == 2);
+  require(screen.pixel(kJournalPanelX + 36 + 2,
+                       kJournalPanelY + 520) == rgba(246, 247, 252));
   // Two real controller-collected clues: both regions display 1/1.
   constexpr int local_digit_x = kJournalPanelX + 356 + 7 * 14 + 2;
   require(screen.pixel(local_digit_x, kJournalPanelY + 36) ==

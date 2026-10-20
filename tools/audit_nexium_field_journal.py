@@ -25,6 +25,7 @@ GLYPHS = {
     "L": (16, 16, 16, 16, 16, 16, 31),
     "U": (17, 17, 17, 17, 17, 17, 14),
     "E": (31, 16, 16, 30, 16, 16, 31),
+    "F": (31, 16, 16, 30, 16, 16, 16),
     "S": (15, 16, 16, 14, 1, 1, 30),
     "/": (1, 1, 2, 4, 8, 16, 16),
     "A": (14, 17, 17, 31, 17, 17, 17),
@@ -33,6 +34,7 @@ GLYPHS = {
     "T": (31, 4, 4, 4, 4, 4, 4),
     "D": (30, 17, 17, 17, 17, 17, 30),
     "G": (14, 17, 16, 23, 17, 17, 14),
+    "H": (17, 17, 17, 31, 17, 17, 17),
     "I": (14, 4, 4, 4, 4, 4, 14),
     "R": (30, 17, 17, 30, 20, 18, 17),
     "W": (17, 17, 17, 21, 21, 21, 10),
@@ -93,11 +95,15 @@ def _expected_panel(clue_count):
     draw.rectangle((308, 84, 971, 635), fill=DARK)
     _paint_text(draw, f"CLUES {clue_count}/2", 340, 116)
     # The synthetic world has one event in each of its two maps.
-    _paint_text(draw, f"AREA 0 {clue_count}/1", 660, 116)
-    _paint_text(draw, "AREA 1 0/1", 660, 140)
-    if clue_count:
+    _paint_text(draw, f"AREA 0 {int(clue_count >= 1)}/1", 660, 116)
+    _paint_text(draw, f"AREA 1 {int(clue_count >= 2)}/1", 660, 140)
+    if clue_count >= 1:
         _paint_text(draw, "A0  OLD RADIO NOTE", 340, 168)
         _paint_text(draw, "SIGNAL IN STATIC", 340, 188)
+    if clue_count >= 2:
+        _paint_text(draw, "A1  SILENT RELAY", 340, 220)
+        _paint_text(draw, "AN ECHO ANSWERS", 340, 240)
+        _paint_text(draw, "ALL CLUES FOUND", 340, 600)
     return native
 
 
