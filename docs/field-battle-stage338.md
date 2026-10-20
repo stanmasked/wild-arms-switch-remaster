@@ -148,3 +148,21 @@ HUD occlusion and rejection when an exposed border pixel is missing.
 This is a precise correction to the screenshot oracle, **not** a
 change to the Switch renderer or battle controls. A fresh exact-head
 CI run is needed before the corrected audit can be called green.
+
+## Stage 348 — immediate attack/guard feedback
+
+A new read-only framebuffer footer (native y=682) reports the last
+**successful** battle action: `STRIKE N DAMAGE`, `GUARD READY`,
+or, when all heroes have acted and enemies respond,
+`STRIKE N ENEMY HIT M` / `GUARD ENEMY HIT M`. The numeric damage
+and retaliation are taken from the actual deterministic
+`BattleUpdate`; neither the field world nor the save record changes.
+This makes the synthetic fight's results visible without a debug log.
+
+The caption does not change on held buttons, cursor movement, invalid
+actions or ordinary frames. R opens a **new** session and clears the
+caption; B exits without drawing over the original field. The bottom
+static command legend remains on y=648, so neither overlaps the other.
+New portable tests cover actual strike damage, guard, enemy counter,
+no duplicate updates, failure before any framebuffer write and
+read-only display. No PS1 resources are used.

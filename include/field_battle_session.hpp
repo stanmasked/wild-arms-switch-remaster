@@ -1,7 +1,7 @@
 #pragma once
 // Stage 341: explicit opt-in battle screen, isolated from exploration saves.
 // This is a synthetic demonstration battle, not a reconstructed PS1 encounter.
-#include "field_battle_view.hpp"
+#include "field_battle_feedback.hpp"
 
 #include <cstdint>
 
@@ -10,6 +10,7 @@ namespace wa::field {
 struct FieldBattleSession {
   FieldBattle battle = make_demo_battle();
   BattleCursor cursor{};
+  BattleFeedback last_feedback{}; // UI-only result of last applied action.
   bool active = false;
 };
 
@@ -47,12 +48,14 @@ struct BattleSceneFrame {
   if (entering) {
     next.battle = make_demo_battle();
     next.cursor = BattleCursor{};
+    next.last_feedback = BattleFeedback{};
     // Input used to open the scene must be released before it can
     // trigger an attack/navigation. Do not consume a held A press.
     next.cursor.previous = input.pad;
     next.active = true;
   } else {
-    if (!valid_field_battle(next.battle) ||
+    if (!valid_battle_feedback(next.last_feedback) ||
+        !valid_field_battle(next.battle) ||
         next.cursor.actor >= kBattlePartySize ||
         next.cursor.target >= kBattleEnemyCount)
       return {BattleSceneStatus::InvalidBattle};
@@ -69,6 +72,14 @@ struct BattleSceneFrame {
         next.battle, next.cursor, input.pad);
     if (result.control.status == BattleControlStatus::InvalidState)
       return {BattleSceneStatus::InvalidController};
+    if (result.control.status == BattleControlStatus::ActionApplied) {
+      const BattleMove move =
+          input.pad.guard ? BattleMove::Guard : BattleMove::Strike;
+      next.last_feedback =
+          battle_feedback_from_action(move, result.control.action);
+      if (!valid_battle_feedback(next.last_feedback))
+        return {BattleSceneStatus::InvalidController};
+    }
   }
   const BattleRenderStatus drawn =
       draw_field_battle(target, next.battle, next.cursor);
@@ -76,6 +87,7 @@ struct BattleSceneFrame {
     return {drawn == BattleRenderStatus::InvalidTarget
                ? BattleSceneStatus::InvalidTarget
                : BattleSceneStatus::InvalidBattle};
+  draw_battle_feedback(target, next.last_feedback);
 
   current = next;
   result.status = BattleSceneStatus::Rendered;

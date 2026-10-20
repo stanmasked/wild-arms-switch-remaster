@@ -94,6 +94,11 @@ add_executable(wa_field_battle_integration_tests tests/test_field_battle_integra
 target_link_libraries(wa_field_battle_integration_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_battle_integration_tests COMMAND wa_field_battle_integration_tests)
 
+# Stage 348: feedback for the player's last combat action and enemy reply.
+add_executable(wa_field_battle_feedback_tests tests/test_field_battle_feedback.cpp)
+target_link_libraries(wa_field_battle_feedback_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_battle_feedback_tests COMMAND wa_field_battle_feedback_tests)
+
 # Host validation of the exact software framebuffer algorithm used by libnx.
 add_executable(wa_field_pixels_tests tests/test_field_pixels.cpp)
 target_link_libraries(wa_field_pixels_tests PRIVATE wa_field_core)
