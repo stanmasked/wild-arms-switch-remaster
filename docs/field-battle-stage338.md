@@ -72,3 +72,28 @@ writes. The Switch source **now includes** the battle HUD and mode selector;
 compilation and actual execution in NeXium or physical Switch must still
 be confirmed by the new exact-head CI. No original PS1 sprites, music,
 encounter triggers, saves, or completion storyline are claimed.
+
+## Stage 343 — independent real NeXium battle guest check
+
+The experimental `nexium-smoke.yml` workflow retains its original
+five-guest save-recovery sequence and the unchanged five canonical
+exploration screenshots. After the existing GUI-only no-NRO comparison,
+it now boots the **same NRO in a sixth isolated NeXium process** with
+a different `NEXIUM_DATA_ROOT`. This prevents field save validation
+from being affected by the new battle input test.
+
+With the official emulator's default keyboard assignments (`R=E`,
+`A=C`, `Y=Z`, `B=X`) the test cancels autoplay, takes a field
+screenshot, opens battle, attacks once, keeps A pressed across two
+captures, defends with Y, then closes with B. A Python oracle checks
+the real observed Xvfb pixels, including selected borders, enemy HP
+bar shrinkage, absence of repeated held-A damage, guard cursor change,
+and identical field image before/after. It records SHA-256 of six PNGs
+in `nexium-probe/battle-audit.json` and includes them in the existing
+workflow artifact.
+
+Seven independent synthetic positive/negative tests exercise the
+oracle's fail-closed behavior before guest launch. These checks are
+new and are **not yet verified by a completed exact-head NeXium run**.
+NeXium Xvfb screenshots are not native framebuffer captures or
+evidence of physical Switch hardware.
