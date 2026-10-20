@@ -17,10 +17,12 @@ def digest(blob):
 
 def fixture(root):
     root = Path(root)
-    good_a = root / "separate-external-gen5.a"
-    good_b = root / "separate-external-gen6.b"
-    bad_a = root / "damaged-live.a"
-    bad_b = root / "damaged-live.b"
+    (root / "live-save").mkdir()
+    (root / "independent-backups").mkdir()
+    good_a = root / "independent-backups" / "separate-external-gen5.a"
+    good_b = root / "independent-backups" / "separate-external-gen6.b"
+    bad_a = root / "live-save" / "damaged-live.a"
+    bad_b = root / "live-save" / "damaged-live.b"
     journal(good_a, 5, 1, 4, 1, 32, 48)
     journal(good_b, 6, 3, 4, 2, 32, 48)
     for src, dest in ((good_a, bad_a), (good_b, bad_b)):
@@ -212,6 +214,44 @@ class SafeOfflineRecoveryTests(unittest.TestCase):
             os.link(a[0], a[2])
             with self.assertRaises(ValueError):
                 call(a)
+
+    def test_staging_beside_corrupt_live_saves_is_forbidden_even_in_preview(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            a[-1] = a[0].parent / "accidental-live-recovery"
+            before = [p.read_bytes() for p in a[:4]]
+            for execute in (False, True):
+                with self.assertRaisesRegex(ValueError, "outside live save"):
+                    call(a, execute=execute)
+            self.assertFalse(a[-1].exists())
+            self.assertEqual([p.read_bytes() for p in a[:4]], before)
+
+    def test_nested_live_save_subdirectory_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            inside = a[0].parent / "old-copies"
+            inside.mkdir()
+            a[-1] = inside / "new-package"
+            with self.assertRaisesRegex(ValueError, "outside live save"):
+                call(a, execute=True)
+            self.assertEqual(list(inside.iterdir()), [])
+
+    def test_symlinked_parent_into_live_save_directory_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            link = Path(d) / "looks-safe"
+            link.symlink_to(a[0].parent, target_is_directory=True)
+            a[-1] = link / "accidental-package"
+            with self.assertRaisesRegex(ValueError, "outside live save"):
+                call(a, execute=True)
+            self.assertFalse((a[0].parent / "accidental-package").exists())
+
+    def test_sibling_external_directory_is_allowed(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            result = call(a, execute=True)
+            self.assertTrue(result["staged"])
+            self.assertTrue((a[-1] / "recovery-manifest.json").is_file())
 
     def test_stage_does_not_include_an_unverified_second_slot(self):
         with tempfile.TemporaryDirectory() as d:
