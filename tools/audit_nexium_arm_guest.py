@@ -103,7 +103,12 @@ def audit_arm_guests(screenshots, baseline_root, arm_root, processes, report):
             and native_pixel(fired, 692 + 100, 249) == RED
             and native_pixel(fired, 692 + 230, 249) == DARK,
         "held_x_did_not_double_fire":
+            # The ARM panel lies BELOW GAME_ROI. Comparing only the
+            # central gameplay region misses ammo-only held-fire bugs.
             same_game(fired, held)
+            and native_pixel(held, *ARM_BORDER) == GOLD
+            and native_pixel(held, *ARM_PARTIAL_BAR) == GOLD
+            and native_pixel(held, *ARM_PAST_PARTIAL) == DARK
             and native_pixel(held, *ARM_FULL_BAR) == DARK,
         "guard_two_heroes_then_minus_reloads_without_extra_damage":
             native_pixel(reloaded, *ARM_BORDER) == GOLD
