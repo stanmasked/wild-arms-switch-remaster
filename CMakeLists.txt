@@ -99,6 +99,11 @@ add_executable(wa_field_encounters_tests tests/test_field_encounters.cpp)
 target_link_libraries(wa_field_encounters_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_encounters_tests COMMAND wa_field_encounters_tests)
 
+# Stage 355: outcomes, session-only history and opt-in result HUD.
+add_executable(wa_field_battle_results_tests tests/test_field_battle_results.cpp)
+target_link_libraries(wa_field_battle_results_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_battle_results_tests COMMAND wa_field_battle_results_tests)
+
 # Host validation of the exact software framebuffer algorithm used by libnx.
 add_executable(wa_field_pixels_tests tests/test_field_pixels.cpp)
 target_link_libraries(wa_field_pixels_tests PRIVATE wa_field_core)

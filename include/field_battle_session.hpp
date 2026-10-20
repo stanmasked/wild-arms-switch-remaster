@@ -1,7 +1,7 @@
 #pragma once
 // Stage 341: explicit opt-in battle screen, isolated from exploration saves.
 // This is a synthetic demonstration battle, not a reconstructed PS1 encounter.
-#include "field_battle_view.hpp"
+#include "field_battle_results.hpp"
 
 #include <cstdint>
 
@@ -11,6 +11,7 @@ struct FieldBattleSession {
   FieldBattle battle = make_demo_battle();
   BattleCursor cursor{};
   bool active = false;
+  BattleHistory history{};  // Session-local only, never in field quicksaves.
 };
 
 struct FieldBattleSessionInput {
@@ -29,6 +30,7 @@ struct BattleSceneFrame {
   bool entered = false;
   bool exited = false;
   BattleControlFrame control{};
+  BattleResolution resolution = BattleResolution::None;
 };
 
 // Executes one battle-only frame after the field engine has sampled a
@@ -57,9 +59,13 @@ struct BattleSceneFrame {
         next.cursor.target >= kBattleEnemyCount)
       return {BattleSceneStatus::InvalidBattle};
     if (input.close) {
+      // Completion, defeat or early exit is counted exactly once when
+      // the B edge closes this battle; no field-save file is touched.
+      const BattleResolution outcome =
+          record_battle_exit(next.history, next.battle.phase);
       next.active = false;
       current = next;
-      return {BattleSceneStatus::Inactive, false, true};
+      return {BattleSceneStatus::Inactive, false, true, {}, outcome};
     }
   }
 
@@ -76,6 +82,7 @@ struct BattleSceneFrame {
     return {drawn == BattleRenderStatus::InvalidTarget
                ? BattleSceneStatus::InvalidTarget
                : BattleSceneStatus::InvalidBattle};
+  draw_previous_battle_history(target, next.history);
 
   current = next;
   result.status = BattleSceneStatus::Rendered;

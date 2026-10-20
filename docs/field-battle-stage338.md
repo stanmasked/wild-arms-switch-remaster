@@ -204,3 +204,33 @@ missing hero; controls are checked at unobscured native coordinates.
 This is **new experimental CI**, not proof until an exact-head NeXium
 run finishes with all seven observed guest checks successful. It does
 not certify physical Switch, PS1 content, or commercial assets.
+
+## Stage 355 — result classification and session-only battle record
+
+Closing a battle with B now classifies the **validated** terminal phase
+and increments a saturating, nonpersistent session counter: `Victory`,
+`Defeat` or `Retreat` (closing before combat ends). Every combat
+session contributes precisely one result on its **first** closing B edge;
+holding B after exit cannot count it twice. The battle still returns to
+the exact underlying field pixels, preserving existing NeXium capture
+contracts, including ZR's enabled state and the pause/acknowledge state
+of any active field event.
+
+The new `BattleHistory` belongs to `FieldBattleSession`, not the
+`WorldState`, `FieldSnapshotSlot` or SD journal. Counters saturate at
+`UINT32_MAX` rather than wrapping. Opening a fresh fight resets the
+combat stats and cursor but **does not reset** the history.
+
+On real Switch/NeXium in manual field mode, **hold ZL** to inspect an
+optional read-only battle-history panel showing wins, losses, exits and
+the most recent result. There is no panel by default, even immediately
+after B, so all existing screenshot tests and save-fidelity invariants
+remain unchanged. A later battle screen displays a compact record in
+its footer; the first-ever battle screen remains pixel-identical.
+
+`wa_field_battle_results_tests` checks victory through genuine
+controller strikes, defeat through enemy retaliation, unfinished-battle
+retreat, no double counting, records across new encounters, counter
+saturation, HUD opt-in and no writes on invalid targets. This is a
+synthetic native prototype, not the PlayStation battle database or an
+on-device Switch hardware test; new CI is required.

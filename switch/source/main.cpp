@@ -267,6 +267,11 @@ int main() {
       // active. With encounters off, original pixel captures are identical.
       if (encounters.enabled && !runtime.autoplay)
         fill_raster_rect(output, 1240, 20, 18, 18, rgba(245,183,66));
+      // Hold ZL to view session-only victories/defeats/retreats.
+      // Never overlay the ordinary map or the canonical B-return frame
+      // unless explicitly requested; file save schema remains unchanged.
+      if (!runtime.autoplay && (held & HidNpadButton_ZL))
+        (void)draw_field_battle_history(output, battle_scene.history);
     }
     framebufferEnd(&fb);
   }
