@@ -17,8 +17,6 @@ import stat
 import tempfile
 from pathlib import Path
 
-from audit_nexium_battle_persistence import read_journal
-
 HEX_SHA256 = re.compile(r"[0-9a-fA-F]{64}\Z")
 SLOT_FILE = "battle-progress.a"
 MANIFEST_FILE = "recovery-manifest.json"
@@ -37,10 +35,9 @@ def _sha(blob):
 
 
 def _journal_from_bytes(blob):
-    # Keep the parser used by the real NeXium auditor as the only binary
-    # authority, but never create a temporary journal beside live saves.
-    # read_journal accepts a Path; supply a restricted BytesIO-backed shim
-    # only if the validator's interface changes in a future revision.
+    # Mirror the WABJ/WABR v1 decoder in field_battle_file.hpp and
+    # audit_nexium_battle_persistence.py; validate without writing a temp
+    # file anywhere near the user's original save directory.
     import struct
     import zlib
     if len(blob) != 52 or blob[:4] != b"WABJ":
@@ -110,8 +107,7 @@ def prepare_recovery(damaged_a, damaged_b, backup_a, backup_b,
         paths.append(Path(backup_b))
     # Reject aliasing, including hard links. A recovery backup must not
     # be the same inode as either damaged live file.
-    stats = [(p.stat(follow_symlinks=False).st_dev,
-              p.stat(follow_symlinks=False).st_ino) for p in paths]
+    stats = [(p.lstat().st_dev, p.lstat().st_ino) for p in paths]
     if len(set(stats)) != len(stats):
         raise ValueError("live/copy inputs must be distinct physical files")
     damaged = [_corrupt_snapshot(path) for path in paths[:2]]
