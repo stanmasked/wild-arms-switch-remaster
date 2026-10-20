@@ -91,6 +91,9 @@ class LatestBattleFallbackTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             a = make_case(d)
             journal(a[3], 4, 3, 2, 1, 16, 24)
+            damaged = bytearray(a[3].read_bytes())
+            damaged[48] ^= 0x80
+            a[5].write_bytes(damaged)
             r = audit_fallback(*a)
             self.assertFalse(r["checks"]["original_gen3_A_has_two_wins_one_retreat_and_16_24"])
 
