@@ -4,11 +4,13 @@ on:
   push:
     branches:
       - 'stage-372-*'
+      - 'stage-384-*'
   pull_request:
     paths:
       - '.github/workflows/battle-save-offline-integrity.yml'
       - 'tools/stage_verified_battle_backup.py'
       - 'tools/test_stage_verified_battle_backup.py'
+      - 'tools/test_stage_verified_battle_backup_cli.py'
       - 'tools/audit_nexium_battle_external_backup_restore.py'
       - 'tools/test_audit_nexium_battle_external_backup_restore.py'
       - 'tools/audit_nexium_battle_corruption_warning.py'
@@ -41,9 +43,12 @@ jobs:
           python -m py_compile tools/stage_verified_battle_backup.py
           python -m py_compile tools/audit_nexium_battle_external_backup_restore.py
           python -m py_compile tools/test_stage_verified_battle_backup.py
+          python -m py_compile tools/test_stage_verified_battle_backup_cli.py
           python -m py_compile tools/test_audit_nexium_battle_external_backup_restore.py
       - name: Offline backup and filesystem attacks
         run: python -m unittest discover -s tools -p 'test_stage_verified_battle_backup.py' -v
+      - name: Real Python CLI subprocess smoke (still synthetic data)
+        run: python -m unittest discover -s tools -p 'test_stage_verified_battle_backup_cli.py' -v
       - name: Recovery oracle and synthetic guest images
         run: python -m unittest discover -s tools -p 'test_audit_nexium_battle_external_backup_restore.py' -v
       - name: Report test scope
