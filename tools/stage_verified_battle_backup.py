@@ -214,6 +214,16 @@ def prepare_recovery(damaged_a, damaged_b, backup_a, backup_b,
         out.mkdir(mode=0o700)
         try:
             os.rename(stage, out)
+            # Persist the newly published destination name, not just the
+            # already-fsynced files and staging directory. If this fails,
+            # report failure and leave the complete package in place for
+            # offline inspection; never delete a possibly published save.
+            parent_fd = os.open(parent_real, os.O_RDONLY |
+                                getattr(os, "O_DIRECTORY", 0))
+            try:
+                os.fsync(parent_fd)
+            finally:
+                os.close(parent_fd)
         except BaseException:
             # Never delete a directory which another process has populated.
             try:
