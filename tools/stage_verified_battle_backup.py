@@ -154,6 +154,11 @@ def prepare_recovery(damaged_a, damaged_b, backup_a, backup_b,
             raise ValueError("recovery output must be outside live save directories")
     if any(out.resolve(strict=False) == p.resolve(strict=True) for p in paths):
         raise ValueError("recovery output aliases a source file")
+    # Publish via the canonical validated parent, not through the original
+    # parent symlink which could be redirected while staging is prepared.
+    out = parent_real / out.name
+    if out.exists() or out.is_symlink():
+        raise FileExistsError("canonical destination already exists")
     evidence = {
         "kind": "stage371_offline_verified_WABJ_staging",
         "backup_used": slot,
