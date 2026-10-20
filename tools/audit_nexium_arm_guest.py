@@ -13,6 +13,7 @@ from PIL import ImageChops
 
 from audit_nexium_checkpoints import GAME_ROI
 from audit_nexium_field_journal import native_pixel, read_rgb
+from stage_verified_battle_backup import _journal_from_bytes
 
 SCREENSHOTS = (
     "00_baseline_field",
@@ -69,6 +70,15 @@ def audit_arm_guests(screenshots, baseline_root, arm_root, processes, report):
     )
     baseline_slots = battle_slots(baseline_root)
     arm_slots = battle_slots(arm_root)
+    # The ordinary R control must produce a real valid journal, not a
+    # placeholder file or empty directory. ARM must create no slot at all.
+    baseline_records = []
+    for slot in baseline_slots:
+        if slot.is_file() and not slot.is_symlink():
+            try:
+                baseline_records.append(_journal_from_bytes(slot.read_bytes()))
+            except ValueError:
+                pass
     checks = {
         "two_independent_guest_processes":
             processes["baseline_pid"] != processes["arm_pid"]
@@ -103,8 +113,10 @@ def audit_arm_guests(screenshots, baseline_root, arm_root, processes, report):
         "b_exit_exactly_restores_field":
             same_game(field, arm_return)
             and native_pixel(arm_return, 0, 5) == MAP_STATUS,
-        "normal_b_close_did_persist_in_isolated_baseline":
-            any(path.is_file() and path.stat().st_size > 0 for path in baseline_slots),
+        "normal_b_close_wrote_valid_single_retreat_journal":
+            any(record["retreats"] == 1 and record["wins"] == 0
+                    and record["experience"] == 0 and record["gella"] == 0
+                    for record in baseline_records),
         "arm_training_never_created_wabj_slots":
             not any(path.exists() or path.is_symlink() for path in arm_slots),
     }
