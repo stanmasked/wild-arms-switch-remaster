@@ -30,10 +30,18 @@ def fixture(root):
     prior = make_fixture(root)
     backup_a, backup_b = prior[2], prior[3]
     corrupt_a, corrupt_b = prior[8], prior[9]
+    # Independent live-SDMC copies must not alias immutable fault evidence.
+    # Otherwise edits made by the adversarial test modify both sides and
+    # the auditor cannot detect unexpected writes to the live copy.
+    live_dir = root / "isolated-live-sdmc"
+    live_dir.mkdir()
+    live_a, live_b = live_dir / "battle-progress.a", live_dir / "battle-progress.b"
+    shutil.copyfile(corrupt_a, live_a)
+    shutil.copyfile(corrupt_b, live_b)
     sha_a = hashlib.sha256(backup_a.read_bytes()).hexdigest()
     sha_b = hashlib.sha256(backup_b.read_bytes()).hexdigest()
     out = root/"staged"
-    prepare_recovery(corrupt_a, corrupt_b, backup_a, backup_b,
+    prepare_recovery(live_a, live_b, backup_a, backup_b,
                      sha_a, sha_b, out, execute=True)
     restored = out/"battle-progress.a"
     screens = root/"screens371"
@@ -66,7 +74,7 @@ def fixture(root):
     keys.write_text("".join(f"{n} 2026-10-20T20:00:00Z {key}\n"
                             for n,key in events),encoding="ascii")
     return (screens,prior[1],restored,corrupt_a,corrupt_b,
-            corrupt_a,corrupt_b,after25_a,after25_b,after26_a,
+            live_a,live_b,after25_a,after25_b,after26_a,
             after26_b,out/"recovery-manifest.json",prior[11],pids,
             keys,root/"audit.json")
 
