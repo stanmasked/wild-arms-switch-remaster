@@ -50,7 +50,8 @@ struct EncounterFrame {
   EncounterDirector next = current;
   const std::uint64_t moves = field.player.successful_moves;
   const bool rebased = !next.primed || next.area != field.area ||
-      input.snapshot_restored || moves < next.last_observed_moves;
+      input.snapshot_restored || moves < next.last_observed_moves ||
+      moves < next.last_encounter_moves;
   if (rebased) {
     next.primed = true;
     next.area = field.area;
