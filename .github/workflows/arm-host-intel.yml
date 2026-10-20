@@ -47,7 +47,7 @@ jobs:
             wa_field_battle_arm_view_tests \
             wa_field_battle_arm_training_tests
       - name: Run real native ARM combat/control/HUD CTests
-        run: ctest --test-dir build-arm -R '^wa_field_battle_arm(_controller|_view|_training)?_tests --output-on-failure -V
+        run: ctest --test-dir build-arm -R '^wa_field_battle_arm(_controller|_view|_training)?_tests$' --output-on-failure -V
       - name: Configure address and undefined-behavior instrumentation
         run: |
           cmake -S . -B build-arm-sanitized \
@@ -65,35 +65,7 @@ jobs:
         env:
           ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
-        run: ctest --test-dir build-arm-sanitized -R '^wa_field_battle_arm(_controller|_view)?_tests$' --output-on-failure -V
-      - name: Report scope
-        run: |
-          echo 'Intel Mac: 4 native ARM CTests (normal + ASan/UBSan).' >> "$GITHUB_STEP_SUMMARY"
-          echo 'Experimental ROM-free host code only; does not exercise NeXium or Switch SDMC.' >> "$GITHUB_STEP_SUMMARY"
- --output-on-failure -V
-      - name: Configure address and undefined-behavior instrumentation
-        run: |
-          cmake -S . -B build-arm-sanitized \
-            -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_CXX_COMPILER=clang++ \
-            '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer'
-      - name: Compile sanitizers for all four ARM test executables
-        run: |
-          cmake --build build-arm-sanitized --parallel 3 --target \
-            wa_field_battle_arm_tests \
-            wa_field_battle_arm_controller_tests \
-            wa_field_battle_arm_view_tests \
-            wa_field_battle_arm_training_tests
-      - name: Run ARM CTests under ASan and UBSan
-        env:
-          ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
-          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
-        run: ctest --test-dir build-arm-sanitized -R '^wa_field_battle_arm(_controller|_view|_training)?_tests --output-on-failure -V
-      - name: Report scope
-        run: |
-          echo 'Intel Mac: 4 native ARM CTests (normal + ASan/UBSan).' >> "$GITHUB_STEP_SUMMARY"
-          echo 'Experimental ROM-free host code only; does not exercise NeXium or Switch SDMC.' >> "$GITHUB_STEP_SUMMARY"
- --output-on-failure -V
+        run: ctest --test-dir build-arm-sanitized -R '^wa_field_battle_arm(_controller|_view|_training)?_tests$' --output-on-failure -V
       - name: Report scope
         run: |
           echo 'Intel Mac: 4 native ARM CTests (normal + ASan/UBSan).' >> "$GITHUB_STEP_SUMMARY"
