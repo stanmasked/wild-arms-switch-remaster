@@ -32,7 +32,8 @@ def fixture(root):
     process=root/"processes.json"
     process.write_text(json.dumps({
         "baseline_pid":1001,"arm_pid":1002,
-        "baseline_wait_completed":True,"arm_wait_completed":True}))
+        "baseline_wait_completed":True,"arm_wait_completed":True,
+        "baseline_wait_status":143,"arm_wait_status":143}))
 
     field=Image.new("RGB",SCREEN_SIZE,DARK)
     put(field,(0,5),MAP_STATUS)
@@ -133,11 +134,21 @@ class StrictArmGuestAuditorTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 audit_arm_guests(*a)
 
+    def test_unexpected_guest_exit_is_rejected_even_with_valid_pixels(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args = fixture(temp)
+            evidence = json.loads(args[3].read_text())
+            evidence["arm_wait_status"] = 124  # Emulator timeout, not intentional stop.
+            args[3].write_text(json.dumps(evidence))
+            result = audit_arm_guests(*args)
+            self.assertFalse(result["checks"]["two_independent_guest_processes"])
+
     def test_process_identity_is_checked(self):
         with tempfile.TemporaryDirectory() as temp:
             a=fixture(temp)
             same={"baseline_pid":1001,"arm_pid":1001,
-                  "baseline_wait_completed":True,"arm_wait_completed":True}
+                  "baseline_wait_completed":True,"arm_wait_completed":True,
+                  "baseline_wait_status":143,"arm_wait_status":143}
             a[3].write_text(json.dumps(same))
             result=audit_arm_guests(*a)
             self.assertFalse(result["checks"]["two_independent_guest_processes"])
