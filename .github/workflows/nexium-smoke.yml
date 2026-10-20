@@ -904,12 +904,7 @@ jobs:
             sleep 0.16
             import -display :99 -window root \
               nexium-probe/encounter-probes/right.png
-            if /usr/bin/python3 -c '
-import sys
-sys.path.insert(0,"tools")
-from audit_nexium_field_journal import read_rgb, native_pixel
-assert native_pixel(read_rgb("nexium-probe/encounter-probes/right.png"),0,5)==(246,183,66)
-'; then
+            if /usr/bin/python3 -c 'import sys; sys.path.insert(0,"tools"); from audit_nexium_field_journal import read_rgb,native_pixel; sys.exit(0 if native_pixel(read_rgb("nexium-probe/encounter-probes/right.png"),0,5)==(246,183,66) else 1)'; then
               pending_seen=1
               printf 'pending event observed after %s polls\n' "$poll" >> nexium-probe/encounter-scene/keys.log
               break
@@ -932,12 +927,7 @@ assert native_pixel(read_rgb("nexium-probe/encounter-probes/right.png"),0,5)==(2
             sleep 0.16
             import -display :99 -window root \
               nexium-probe/encounter-probes/left.png
-            if /usr/bin/python3 -c '
-import sys
-sys.path.insert(0,"tools")
-from audit_nexium_field_journal import read_rgb, native_pixel
-assert native_pixel(read_rgb("nexium-probe/encounter-probes/left.png"),70,220)==(105,160,230)
-'; then
+            if /usr/bin/python3 -c 'import sys; sys.path.insert(0,"tools"); from audit_nexium_field_journal import read_rgb,native_pixel; sys.exit(0 if native_pixel(read_rgb("nexium-probe/encounter-probes/left.png"),70,220)==(105,160,230) else 1)'; then
               battle_seen=1
               printf 'encounter border observed after %s polls\n' "$poll" >> nexium-probe/encounter-scene/keys.log
               break
