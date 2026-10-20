@@ -41,6 +41,13 @@ on:
       - 'tools/test_audit_nexium_field_journal.py'
       - 'tools/audit_nexium_field_completion.py'
       - 'tools/test_audit_nexium_field_completion.py'
+      - 'tools/audit_nexium_battle.py'
+      - 'tools/test_audit_nexium_battle.py'
+      - 'include/field_battle.hpp'
+      - 'include/field_battle_controller.hpp'
+      - 'include/field_battle_view.hpp'
+      - 'include/field_battle_session.hpp'
+      - 'tests/test_field_battle_session.cpp'
       - 'tests/test_field_journal_view.cpp'
       - 'tests/test_field_runtime.cpp'
       - 'tests/test_field_discovery.cpp'
@@ -118,9 +125,11 @@ jobs:
     timeout-minutes: 15
     env:
       NEXIUM_URL: https://github.com/nexium-emu/nexium-nightly/releases/download/nightly/nexium-linux-x86_64.tar.gz
-      # Official GitHub release archive digest observed 2026-10-18.
+      # Official GitHub release asset API digest observed 2026-10-20.
+      # NeXium nightly 2026.10.20 (0895625), asset 658656899, 114182978 bytes.
+      # Still SHA256-verified after downloading; no trust-on-first-use fallback.
       # Fail closed if the rolling nightly changes; re-verify before updating.
-      NEXIUM_ARCHIVE_SHA256: 0ec2da5d58b6b362a9f0a4c927af0e55d36a0b50d1ab3f035dd075ea12d76761
+      NEXIUM_ARCHIVE_SHA256: c933fbbcf8d1b011de8d4a79c9d8eb55c0678a305947af9388ddb40ce5960a66
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -158,6 +167,8 @@ jobs:
         run: |
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_field_journal.py' -v
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_field_completion.py' -v
+      - name: Unit-test independent real-guest battle screenshot oracle
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_battle.py' -v
       - name: Unit-test ordered five-checkpoint reference matcher
         run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_checkpoints.py' -v
       - name: Verify synthetic frame evidence classifier
@@ -762,6 +773,83 @@ jobs:
             --no-nro nexium-probe/control-without-nro.png \
             --report nexium-probe/control-comparison.json
 
+      - name: Launch SIXTH independent NeXium guest and exercise actual battle controls
+        timeout-minutes: 3
+        run: |
+          set -eu
+          mkdir -p nexium-probe/battle-scene
+          export DISPLAY=:99
+          # Completely isolated from the five SD persistence test processes.
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-battle-test"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          timeout --signal=TERM --kill-after=8 75s \
+            ./nexium-dist/NeXium/nexium \
+            "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+            > nexium-probe/battle-scene/sixth-process.log 2>&1 &
+          sixth_pid=$!
+          echo "$sixth_pid" > nexium-probe/battle-scene/sixth-process.pid
+          sleep 15
+          window_id=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null |
+            tail -n 1) || true
+          test -n "$window_id"
+          xdotool windowfocus "$window_id"
+          battle_key() {
+            printf '%s %s\n' "$(date -u +%FT%TZ)" "$1" >> nexium-probe/battle-scene/keys.log
+            xdotool keydown --clearmodifiers "$1"
+            sleep 0.22
+            xdotool keyup "$1"
+            sleep 0.30
+          }
+          # Switch B => host X: cancel untouched autoplay and enter manual.
+          battle_key x
+          import -display :99 -window root \
+            nexium-probe/battle-scene/00_field_before.png
+          # Verified NeXium default keyboard binding: Switch R => host E.
+          battle_key e
+          # Render a settled guest battle frame after key-release; a
+          # screenshot taken immediately can catch a stale GUI frame.
+          sleep 0.8
+          import -display :99 -window root \
+            nexium-probe/battle-scene/01_battle_open.png
+          # Switch A => C: keep SAME key held across both screenshots.
+          # A separate press would correctly attack again, so not allowed.
+          xdotool keydown --clearmodifiers c
+          sleep 0.32
+          import -display :99 -window root \
+            nexium-probe/battle-scene/02_after_strike.png
+          sleep 0.35
+          import -display :99 -window root \
+            nexium-probe/battle-scene/03_strike_held.png
+          xdotool keyup c
+          sleep 0.20
+          # Switch Y => Z: guard second hero; cursor selects third.
+          battle_key z
+          import -display :99 -window root \
+            nexium-probe/battle-scene/04_after_guard.png
+          # Switch B => X: exit combat. No input reaches field gameplay.
+          battle_key x
+          import -display :99 -window root \
+            nexium-probe/battle-scene/05_field_return.png
+          kill -TERM "$sixth_pid" 2>/dev/null || true
+          set +e
+          wait "$sixth_pid"
+          result=$?
+          set -e
+          echo "$result" > nexium-probe/battle-scene/sixth-exit-code.txt
+
+      - name: Audit SIXTH guest battle opening, held A, guard and exact return
+        run: |
+          /usr/bin/python3 tools/audit_nexium_battle.py \
+            --screenshots nexium-probe/battle-scene \
+            --report nexium-probe/battle-audit.json
+
       - name: Retain NeXium internal host logs from both runs
         if: always()
         run: |
@@ -902,6 +990,10 @@ jobs:
           if test -f nexium-probe/field-journal-audit.json; then
             echo "Real first-guest L journal screenshot verification:" >> "$GITHUB_STEP_SUMMARY"
             /usr/bin/python3 -c 'import json; d=json.load(open("nexium-probe/field-journal-audit.json")); print("complete:",d["open_release_collect_reopen_confirmed"],"checks:",len(d["checks"]))' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/battle-audit.json; then
+            echo "Sixth-process real guest battle input and pixels:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-audit.json")); print("all checks:",r["all_checks_passed"],"count:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "No firmware, ROM, BIOS or commercial assets used." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4

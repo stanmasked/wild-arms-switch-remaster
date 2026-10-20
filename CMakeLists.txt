@@ -84,6 +84,11 @@ add_test(NAME wa_field_battle_view_tests COMMAND wa_field_battle_view_tests)
 add_executable(wa_field_battle_capture tests/field_battle_capture.cpp)
 target_link_libraries(wa_field_battle_capture PRIVATE wa_field_core)
 
+# Stage 341: opt-in battle session, separate from the exploration NRO path.
+add_executable(wa_field_battle_session_tests tests/test_field_battle_session.cpp)
+target_link_libraries(wa_field_battle_session_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_battle_session_tests COMMAND wa_field_battle_session_tests)
+
 # Host validation of the exact software framebuffer algorithm used by libnx.
 add_executable(wa_field_pixels_tests tests/test_field_pixels.cpp)
 target_link_libraries(wa_field_pixels_tests PRIVATE wa_field_core)

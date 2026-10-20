@@ -8,6 +8,7 @@
 #include "field_autoplay.hpp"
 #include "field_frame_ticks.hpp"
 #include "field_runtime.hpp"
+#include "field_battle_session.hpp"
 #include "field_save_file.hpp"
 #include "field_save_feedback.hpp"
 
@@ -97,22 +98,32 @@ int main() {
   }
 
   StorageFeedback feedback{};
+  // Separate nonpersistent demonstration fight, explicitly opened with R
+  // in manual mode; the original exploration runtime stays intact.
+  FieldBattleSession battle_scene{};
   while (appletMainLoop()) {
     padUpdate(&pad);
     const u64 pressed = padGetButtonsDown(&pad);
+    const u64 held = padGetButtons(&pad);
     if (pressed & HidNpadButton_Plus) break;
+    // New opt-in Switch R battle does not interrupt the 23-step autoplay.
+    // Whenever battle owns input, the field receives a neutral sample.
+    const bool open_battle =
+        (pressed & HidNpadButton_R) != 0 && !runtime.autoplay;
+    const bool battle_owns_input = battle_scene.active || open_battle;
 
     u32 stride_bytes = 0;
     u32* pixels = static_cast<u32*>(framebufferBegin(&fb, &stride_bytes));
     if (!pixels) break;
     const PixelTarget output{pixels, kWidth, kHeight,
                              static_cast<int>(stride_bytes / sizeof(u32))};
-    const RuntimeControls input{
-        read_pad(pad), (pressed & HidNpadButton_X) != 0,
-        (pressed & HidNpadButton_B) != 0,
-        (pressed & HidNpadButton_Y) != 0,
-        (pressed & HidNpadButton_Minus) != 0,
-        (padGetButtons(&pad) & HidNpadButton_L) != 0};
+    const RuntimeControls input = battle_owns_input
+        ? RuntimeControls{} : RuntimeControls{
+            read_pad(pad), (pressed & HidNpadButton_X) != 0,
+            (pressed & HidNpadButton_B) != 0,
+            (pressed & HidNpadButton_Y) != 0,
+            (pressed & HidNpadButton_Minus) != 0,
+            (held & HidNpadButton_L) != 0};
     // In-memory Y/Minus remains the single deterministic gameplay source.
     // On the first Minus after a fresh launch, seed the volatile slot from
     // the newest independently validated SD journal entry. Failed reads
@@ -138,6 +149,29 @@ int main() {
     const RuntimeFrame result = advance_field_runtime(
         world, runtime, armGetSystemTick(), input, output);
     if (result.status != RuntimeStatus::Rendered) {
+      framebufferEnd(&fb);
+      break;
+    }
+
+    // Enter R for a separate synthetic battle scene; B closes it. A and Y
+    // are exclusive battle actions while active and cannot inspect tiles,
+    // start autoplay, or write the exploration SD snapshot. R+A on entry
+    // only opens the screen; the held A must be released to attack.
+    const FieldBattleSessionInput combat_input{
+        open_battle,
+        battle_scene.active && (pressed & HidNpadButton_B) != 0,
+        !runtime.autoplay,
+        {(held & HidNpadButton_Left) != 0,
+         (held & HidNpadButton_Right) != 0,
+         (held & HidNpadButton_Up) != 0,
+         (held & HidNpadButton_Down) != 0,
+         (held & HidNpadButton_A) != 0,
+         (held & HidNpadButton_Y) != 0}};
+    const BattleSceneFrame battle_frame =
+        advance_battle_session(battle_scene, combat_input, output);
+    if (battle_frame.status == BattleSceneStatus::InvalidTarget ||
+        battle_frame.status == BattleSceneStatus::InvalidBattle ||
+        battle_frame.status == BattleSceneStatus::InvalidController) {
       framebufferEnd(&fb);
       break;
     }
@@ -204,7 +238,9 @@ int main() {
           storage_load_notice(false, false, storage_ready,
                               attempted_read));
     }
-    (void)draw_storage_notice(output, feedback);
+    // Never draw leftover save feedback over the opaque battle HUD.
+    if (!battle_scene.active)
+      (void)draw_storage_notice(output, feedback);
     framebufferEnd(&fb);
   }
 
