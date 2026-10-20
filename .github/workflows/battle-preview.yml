@@ -1,0 +1,56 @@
+name: Battle raster preview (host-only)
+
+# These PNGs are deterministic reference renders, NOT NeXium or Switch frames.
+on:
+  push:
+    paths:
+      - 'include/field_battle*.hpp'
+      - 'tests/test_field_battle*.cpp'
+      - 'tests/field_battle_capture.cpp'
+      - 'tools/export_battle_preview.py'
+      - 'CMakeLists.txt'
+      - '.github/workflows/battle-preview.yml'
+  pull_request:
+    paths:
+      - 'include/field_battle*.hpp'
+      - 'tests/test_field_battle*.cpp'
+      - 'tests/field_battle_capture.cpp'
+      - 'tools/export_battle_preview.py'
+      - 'CMakeLists.txt'
+      - '.github/workflows/battle-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: battle-preview-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-battle-frames:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure host native C++ build
+        run: cmake -S . -B build
+      - name: Build the independent renderer and capture
+        run: cmake --build build --target wa_field_battle_view_tests wa_field_battle_capture --parallel 2
+      - name: Verify guard bytes, full-frame parity and invalid-input fail-closed behavior
+        run: ctest --test-dir build -R '^wa_field_battle_view_tests$' --output-on-failure
+      - name: Export three strictly labeled host-only battle UI screenshots
+        run: |
+          mkdir -p battle-reference
+          ./build/wa_field_battle_capture battle-reference/battle-preview
+          python3 tools/export_battle_preview.py \
+            battle-reference/battle-preview-initial.ppm \
+            battle-reference/battle-preview-active.ppm \
+            battle-reference/battle-preview-victory.ppm
+          test -s battle-reference/battle-preview-initial.png
+          test -s battle-reference/battle-preview-active.png
+          test -s battle-reference/battle-preview-victory.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wild-arms-battle-host-only-preview
+          path: battle-reference/*.png
+          if-no-files-found: error

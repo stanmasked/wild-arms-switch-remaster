@@ -41,3 +41,9 @@ navigation, edge latching, guarded rounds, victory and invalid commands.
 This is platform-neutral groundwork only. No mapping to physical Switch
 buttons or battle UI is claimed; no modifications to field exploration,
 NeXium screenshot references, NRO runtime or save serialization.
+
+## Stage 340 — read-only battle framebuffer
+
+A portable, deterministic 1280×720 pixel renderer displays three party cards and two enemies with numeric HP, proportional health bars, selected unit/target borders, current round, READY/ACTED/GUARD/DOWN status, command legend, and victory/defeat overlays. The renderer checks the battle, cursor and pixel target before any writes, never mutating the underlying battle or saved state. It uses an original 5×7 synthetic bitmap alphabet; no PS1 assets are included.
+
+The new `wa_field_battle_view_tests` covers golden geometry and colors, proportional bars, selected units, deterministic full-frame parity, invalid input no-write behavior, framebuffer stride sentinels, and result overlays. `wa_field_battle_capture` exports synthetic host-only initial/guard/victory PPM frames. A separate workflow converts them to PNG using a Python standard-library script, retaining provenance as **host reference screenshots, not NeXium or real Nintendo Switch captures**. No change to the existing playable exploration NRO or its save format.
