@@ -32,10 +32,10 @@ def same(a, b, box):
     return ImageChops.difference(a.crop(box), b.crop(box)).getbbox() is None
 
 
-def digit(frame, x, y, n, color):
+def digit(frame, x, y, n, color, sample_y=1):
     glyph = GLYPH[n]
     return all(
-        native_pixel(frame, x+2*col+1, y+2*row+1)
+        native_pixel(frame, x+2*col+1, y+2*row+sample_y)
         == (color if (glyph[row] >> (4-col)) & 1 else PANEL)
         for row in range(7) for col in range(5)
     )
@@ -48,7 +48,15 @@ def zero_rewards(frame):
             and digit(frame, 776, 650, 0, GOLD)
             and digit(frame, 1013, 623, 0, GREEN)
             and digit(frame, 1078, 623, 0, GREEN)
-            and digit(frame, 789, 677, 0, (246, 247, 252)))
+            and digit(frame, 789, 677, 0, (246, 247, 252), sample_y=0))
+
+
+def one_volatile_retreat(frame):
+    return (not zero_rewards(frame)
+            and digit(frame, 776, 650, 0, GOLD)
+            and digit(frame, 1013, 623, 0, GREEN)
+            and digit(frame, 1078, 623, 0, GREEN)
+            and digit(frame, 789, 677, 1, (246, 247, 252), sample_y=0))
 
 
 def single_crc_flip(original, corrupted):
@@ -134,10 +142,7 @@ def audit_both_corrupt(screens, original_field,
             and same(base, ret23, GAME_ROI)
             and same(base, ret23, PANEL_RECT),
         "twentythird_retreat_only_updates_volatile_in_memory_history":
-            not zero_rewards(stats23)
-            and digit(stats23, 776, 650, 0, GOLD)
-            and digit(stats23, 1013, 623, 0, GREEN)
-            and digit(stats23, 1078, 623, 0, GREEN),
+            one_volatile_retreat(stats23),
         "twentythird_failed_save_did_not_rewrite_either_corrupt_slot":
             copies[0] == damaged[0] and copies[1] == damaged[1],
         "twentyfourth_guest_reboots_again_with_zero_rewards":
@@ -149,7 +154,8 @@ def audit_both_corrupt(screens, original_field,
             and same(base, ret24, GAME_ROI)
             and same(base, ret24, PANEL_RECT),
         "twentyfourth_volatile_panel_matches_first_volatile_retreat":
-            same(stats23, stats24, GAME_ROI)
+            one_volatile_retreat(stats24)
+            and same(stats23, stats24, GAME_ROI)
             and same(stats23, stats24, PANEL_RECT),
         "twentyfourth_failed_save_kept_both_corrupt_slots_unchanged":
             copies[2] == damaged[0] and copies[3] == damaged[1],
