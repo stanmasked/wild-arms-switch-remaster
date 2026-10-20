@@ -119,6 +119,12 @@ add_executable(wa_field_battle_file_tests tests/test_field_battle_file.cpp)
 target_link_libraries(wa_field_battle_file_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_battle_file_tests COMMAND wa_field_battle_file_tests)
 
+# Stage 362: real battle controller -> reward -> committed journal -> clean boot.
+add_executable(wa_field_battle_restart_rewards_tests tests/test_field_battle_restart_rewards.cpp)
+target_link_libraries(wa_field_battle_restart_rewards_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_battle_restart_rewards_tests
+         COMMAND wa_field_battle_restart_rewards_tests)
+
 # Host validation of the exact software framebuffer algorithm used by libnx.
 add_executable(wa_field_pixels_tests tests/test_field_pixels.cpp)
 target_link_libraries(wa_field_pixels_tests PRIVATE wa_field_core)

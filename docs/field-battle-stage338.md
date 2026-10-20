@@ -396,3 +396,28 @@ This is an experiment that still needs exact-head GitHub Actions /
 NeXium confirmation. Neither the host filesystem unit tests nor any
 emulator guest test demonstrates physical SD/FAT crash durability on
 Nintendo Switch hardware.
+
+## Stage 362 — deterministic battle rewards survive fresh sessions (host integration)
+
+New CTest `wa_field_battle_restart_rewards_tests` exercises the actual
+`FieldBattleSession` input controller through two genuine finishing
+`A` strikes against shortened **test-only** foe HP. The first verified
+win yields exactly 8 prototype EXP / 12 Gella. It stores that account
+in the real two-slot WABJ journal, constructs an entirely new
+`FieldBattleSession`, and restores results **only from disk**. The
+reopened combat starts with full original synthetic foe HP and a
+preserved (but not duplicated) reward balance. B retreat creates
+generation two without credit. A third fresh session restores that
+account, wins a second fight, then writes generation three. A fourth
+reconstructed session recovers two victories, one retreat, 16 EXP and
+24 Gella. The original exploration field, quicksave and exact pixels
+remain unchanged.
+
+This closes a test gap: prior ninth/tenth NeXium guest experiments
+cover restart of **retreat counts**, which have zero rewards. This
+native host integration test instead explicitly covers nonzero EXP
+and Gella across multiple independent in-memory game session objects
+and real file-system write/reload boundaries. It is **not** a complete
+physical Switch/NeXium win+reward restart test and must pass its own
+exact-head CI before any green claim. Original PlayStation awards
+remain unknown; current values are synthetic placeholders.
