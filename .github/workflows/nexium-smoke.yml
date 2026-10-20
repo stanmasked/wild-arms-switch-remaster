@@ -2123,6 +2123,157 @@ jobs:
             --prior-valid-rewards nexium-probe/battle-alternating-screens/02_twentieth_four_rewards.png \
             --output nexium-probe/battle-corruption-warning-audit.json
 
+      - name: Stage371 SHA-pinned external backup staging without touching original SDMC
+        run: |
+          set -eu
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-stage365-double-victory"
+          mkdir -p nexium-probe/battle-external-recovery
+          base="$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/battle-progress"
+          /usr/bin/python3 - "$base.a" "$base.b" \
+            nexium-probe/battle-double-corruption/after24.a \
+            nexium-probe/battle-double-corruption/after24.b <<'PY'
+          from pathlib import Path
+          import sys
+          a,b,ra,rb=(Path(x) for x in sys.argv[1:])
+          assert a.read_bytes()==ra.read_bytes()
+          assert b.read_bytes()==rb.read_bytes()
+          PY
+          sha_a=$(/usr/bin/python3 -c 'import json; x=json.load(open("nexium-probe/battle-alternating-audit.json")); assert x["all_checks_passed"]; print(x["sha256"]["after22_a"])')
+          sha_b=$(/usr/bin/python3 -c 'import json; x=json.load(open("nexium-probe/battle-alternating-audit.json")); assert x["all_checks_passed"]; print(x["sha256"]["after22_b"])')
+          /usr/bin/python3 tools/stage_verified_battle_backup.py \
+            --damaged-a "$base.a" --damaged-b "$base.b" \
+            --backup-a nexium-probe/battle-double-corruption/intact-gen5.a \
+            --backup-b nexium-probe/battle-double-corruption/intact-gen6.b \
+            --sha256-a "$sha_a" --sha256-b "$sha_b" \
+            --output-dir nexium-probe/battle-external-recovery/verified-package \
+            > nexium-probe/battle-external-recovery/dry-run.json
+          test ! -e nexium-probe/battle-external-recovery/verified-package
+          /usr/bin/python3 tools/stage_verified_battle_backup.py \
+            --damaged-a "$base.a" --damaged-b "$base.b" \
+            --backup-a nexium-probe/battle-double-corruption/intact-gen5.a \
+            --backup-b nexium-probe/battle-double-corruption/intact-gen6.b \
+            --sha256-a "$sha_a" --sha256-b "$sha_b" \
+            --output-dir nexium-probe/battle-external-recovery/verified-package \
+            --execute > nexium-probe/battle-external-recovery/explicit-staging.json
+          test -f nexium-probe/battle-external-recovery/verified-package/battle-progress.a
+          test ! -e nexium-probe/battle-external-recovery/verified-package/battle-progress.b
+
+      - name: TWENTYFIFTH/TWENTYSIXTH guests reload trusted backup in new isolated SDMC
+        timeout-minutes: 4
+        run: |
+          set -eu
+          mkdir -p nexium-probe/battle-external-recovery-screens
+          export DISPLAY=:99
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-stage371-trusted-backup"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          root="$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field"
+          mkdir -p "$root"
+          base="$root/battle-progress"
+          cp nexium-probe/battle-external-recovery/verified-package/battle-progress.a \
+            "$base.a"
+          test ! -e "$base.b"
+          dir=nexium-probe/battle-external-recovery
+          shots=nexium-probe/battle-external-recovery-screens
+          : > "$dir/new-guest-pids.txt"
+          : > "$dir/key-edges.log"
+          boot() {
+            label="$1"
+            timeout --signal=TERM --kill-after=8 80s \
+              ./nexium-dist/NeXium/nexium \
+              "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+              > "$dir/$label-process.log" 2>&1 &
+            guest_pid=$!
+            printf '%s %s\n' "$label" "$guest_pid" >> "$dir/new-guest-pids.txt"
+            sleep 15
+            window_id=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null |
+              tail -n 1) || true
+            test -n "$window_id"
+            xdotool windowfocus "$window_id"
+          }
+          press() {
+            printf '%s %s %s\n' "$label" "$(date -u +%FT%TZ)" "$1" \
+              >> "$dir/key-edges.log"
+            xdotool keydown --clearmodifiers "$1"
+            sleep 0.23
+            xdotool keyup "$1"
+            sleep 0.47
+          }
+          shot() {
+            import -display :99 -window root "$shots/$1.png"
+          }
+          panel() {
+            xdotool keydown --clearmodifiers r
+            sleep 0.45
+            shot "$1"
+            xdotool keyup r
+            sleep 0.35
+          }
+          finish() {
+            kill -TERM "$guest_pid" 2>/dev/null || true
+            set +e
+            wait "$guest_pid"
+            result=$?
+            set -e
+            echo "$label $result" >> "$dir/exit-codes.txt"
+            sleep 0.4
+          }
+          label=twentyfifth
+          boot "$label"
+          press x
+          panel 00_twentyfifth_restore_four_wins
+          press e
+          press x
+          shot 01_twentyfifth_after_retreat
+          panel 02_twentyfifth_saved_after_retreat
+          finish
+          test -f "$base.a" && test -f "$base.b"
+          cp "$base.a" "$dir/after25.a"
+          cp "$base.b" "$dir/after25.b"
+          label=twentysixth
+          boot "$label"
+          press x
+          panel 03_twentysixth_reload_saved_four_wins
+          finish
+          cp "$base.a" "$dir/after26.a"
+          cp "$base.b" "$dir/after26.b"
+          live="$RUNNER_TEMP/nexium-stage365-double-victory/sdmc/switch/wild_arms_field/battle-progress"
+          /usr/bin/python3 - "$live.a" "$live.b" \
+            nexium-probe/battle-double-corruption/after24.a \
+            nexium-probe/battle-double-corruption/after24.b <<'PY'
+          from pathlib import Path
+          import sys
+          a,b,ra,rb=(Path(x) for x in sys.argv[1:])
+          assert a.read_bytes()==ra.read_bytes()
+          assert b.read_bytes()==rb.read_bytes()
+          PY
+
+      - name: Audit Stage371 genuine isolated NeXium backup restoration without original data mutation
+        run: |
+          /usr/bin/python3 tools/audit_nexium_battle_external_backup_restore.py \
+            --screens nexium-probe/battle-external-recovery-screens \
+            --prior-field nexium-probe/battle-double-victory-screens/00_first_manual.png \
+            --staged-a nexium-probe/battle-external-recovery/verified-package/battle-progress.a \
+            --original-corrupt-a nexium-probe/battle-double-corruption/after24.a \
+            --original-corrupt-b nexium-probe/battle-double-corruption/after24.b \
+            --live-corrupt-a "$RUNNER_TEMP/nexium-stage365-double-victory/sdmc/switch/wild_arms_field/battle-progress.a" \
+            --live-corrupt-b "$RUNNER_TEMP/nexium-stage365-double-victory/sdmc/switch/wild_arms_field/battle-progress.b" \
+            --after25-a nexium-probe/battle-external-recovery/after25.a \
+            --after25-b nexium-probe/battle-external-recovery/after25.b \
+            --after26-a nexium-probe/battle-external-recovery/after26.a \
+            --after26-b nexium-probe/battle-external-recovery/after26.b \
+            --manifest nexium-probe/battle-external-recovery/verified-package/recovery-manifest.json \
+            --prior-pids nexium-probe/battle-double-corruption/two-pids.txt \
+            --new-pids nexium-probe/battle-external-recovery/new-guest-pids.txt \
+            --keys nexium-probe/battle-external-recovery/key-edges.log \
+            --report nexium-probe/battle-external-recovery-audit.json
+
       - name: Retain NeXium internal host logs from both runs
         if: always()
         run: |
@@ -2283,6 +2434,10 @@ jobs:
           if test -f nexium-probe/battle-recovery-audit.json; then
             echo "Eleventh-process recovery of older valid WABJ after CRC damage:" >> "$GITHUB_STEP_SUMMARY"
             /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-recovery-audit.json")); print("all checks:",r["all_checks_passed"],"count:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/battle-external-recovery-audit.json; then
+            echo "Stage371: two real NeXium guests boot separate SHA-pinned backup; original damaged A/B unchanged:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/battle-external-recovery-audit.json")); print("all checks:",r["all_checks_passed"],"count:",len(r["checks"]))' >> "$GITHUB_STEP_SUMMARY"
           fi
           if test -f nexium-probe/battle-corruption-warning-audit.json; then
             echo "Stage370: actual NeXium warning shown on ZL only, no false normal save alarm:" >> "$GITHUB_STEP_SUMMARY"
