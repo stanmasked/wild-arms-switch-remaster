@@ -104,6 +104,11 @@ add_executable(wa_field_battle_results_tests tests/test_field_battle_results.cpp
 target_link_libraries(wa_field_battle_results_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_battle_results_tests COMMAND wa_field_battle_results_tests)
 
+# Stage 357: deterministic, session-only battle victory payout.
+add_executable(wa_field_battle_rewards_tests tests/test_field_battle_rewards.cpp)
+target_link_libraries(wa_field_battle_rewards_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_battle_rewards_tests COMMAND wa_field_battle_rewards_tests)
+
 # Host validation of the exact software framebuffer algorithm used by libnx.
 add_executable(wa_field_pixels_tests tests/test_field_pixels.cpp)
 target_link_libraries(wa_field_pixels_tests PRIVATE wa_field_core)

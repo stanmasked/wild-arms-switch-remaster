@@ -258,3 +258,28 @@ the PS1 battle database.
 The eight-guest workflow must pass on its **exact source commit**
 before the ZL panel is considered emulator-verified. Stage 355 source
 and earlier NeXium evidence are unchanged while that check runs.
+
+## Stage 357 — ROM-free victory reward prototype
+
+A validated **Victory** followed by the **first B exit** now credits
+a deterministic placeholder reward of **8 EXP and 12 Gella** to the
+volatile `FieldBattleSession::rewards` account. These amounts are
+synthetic design parameters, **not original PlayStation reward tables**.
+No payout occurs on `Defeat`, early `Retreat`, invalid input/state,
+held B, or reopening a new battle. The payout reported on close is the
+**actual** added amount after saturating `uint32_t` arithmetic, never
+an unbounded nominal value.
+
+The normal field game image remains unchanged. Explicitly **holding ZL**
+displays a read-only balance in the existing battle-results panel;
+releasing ZL restores identical field pixels. No changes are made to
+the original 40-byte field save, clue journal, quicksave or emulator
+R/ZR opt-in input routes. The earned EXP/Gella remain **session-only**
+until a separate, versioned battle-progress save format is implemented.
+
+`wa_field_battle_rewards_tests` exercises genuine two-hit terminal
+wins, two successive wins, defeat and retreat with no rewards,
+exactly-once B close, saturated balances reporting actual payout,
+corrupt battle refusal, original pixel parity and an opt-in panel
+without state mutation. This feature requires its own Host Core
+and Switch NRO CI checks before claiming to work in the emulator.
