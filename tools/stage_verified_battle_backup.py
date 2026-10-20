@@ -23,11 +23,65 @@ MANIFEST_FILE = "recovery-manifest.json"
 
 
 def _read_regular(path):
+    # Open and validate the SAME inode. lstat()+Path.read_bytes() alone
+    # can follow a symlink swapped in between those two operations.
     path = Path(path)
-    info = path.lstat()
-    if not stat.S_ISREG(info.st_mode):
+    before = path.lstat()
+    if not stat.S_ISREG(before.st_mode):
         raise ValueError("sources must be regular files, not links/devices")
-    return path.read_bytes()
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    with os.fdopen(os.open(path, flags), "rb") as file:
+        opened = os.fstat(file.fileno())
+        if (not stat.S_ISREG(opened.st_mode)
+                or (before.st_dev, before.st_ino) !=
+                   (opened.st_dev, opened.st_ino)):
+            raise ValueError("source changed identity before safe read")
+        if opened.st_size != 52:
+            raise ValueError("WABJ source must be exactly 52 bytes")
+        return file.read(53)
+
+
+def _publish_exclusive(stage, destination):
+    """Atomically publish a staged DIRECTORY only if the name is absent.
+
+    POSIX os.rename() is not enough: it silently replaces a concurrently
+    created EMPTY directory. Require kernel-enforced no-replace semantics.
+    Fail closed on unsupported platforms rather than falling back to an
+    unsafe check-then-rename. Linux renameat2 and Darwin renamex_np work
+    with the same-filesystem staging directory used by prepare_recovery.
+    """
+    import ctypes
+    import errno
+    import sys
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    src, dst = os.fsencode(stage), os.fsencode(destination)
+    # ctypes c_char_p truncates at NUL: reject impossible filesystem names
+    # explicitly so a malformed destination cannot redirect publication.
+    if b"\x00" in src or b"\x00" in dst:
+        raise ValueError("NUL byte forbidden in recovery publication path")
+    if sys.platform.startswith("linux"):
+        func = getattr(libc, "renameat2", None)
+        if func is None:
+            raise OSError(errno.ENOTSUP, "atomic no-replace rename unavailable")
+        func.argtypes = (ctypes.c_int, ctypes.c_char_p,
+                         ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
+        func.restype = ctypes.c_int
+        # AT_FDCWD = -100; RENAME_NOREPLACE = 1.
+        result = func(-100, src, -100, dst, 1)
+    elif sys.platform == "darwin":
+        func = getattr(libc, "renamex_np", None)
+        if func is None:
+            raise OSError(errno.ENOTSUP, "atomic no-replace rename unavailable")
+        func.argtypes = (ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint)
+        func.restype = ctypes.c_int
+        # Darwin sys/stdio.h RENAME_EXCL = 0x00000004.
+        result = func(src, dst, 0x00000004)
+    else:
+        raise OSError(errno.ENOTSUP, "atomic no-replace rename unavailable")
+    if result != 0:
+        code = ctypes.get_errno()
+        raise OSError(code, os.strerror(code), str(destination))
 
 
 def _sha(blob):
@@ -135,8 +189,19 @@ def prepare_recovery(damaged_a, damaged_b, backup_a, backup_b,
         raise FileNotFoundError("recovery parent directory does not exist")
     # Reject staging into any supplied source path or its enclosing directory.
     parent_real = parent.resolve(strict=True)
+    # A recovery package must never be created inside the source game's
+    # live battle save directory, including nested and symlinked parents.
+    for damaged_path in paths[:2]:
+        live_parent = damaged_path.parent.resolve(strict=True)
+        if parent_real == live_parent or live_parent in parent_real.parents:
+            raise ValueError("recovery output must be outside live save directories")
     if any(out.resolve(strict=False) == p.resolve(strict=True) for p in paths):
         raise ValueError("recovery output aliases a source file")
+    # Publish via the canonical validated parent, not through the original
+    # parent symlink which could be redirected while staging is prepared.
+    out = parent_real / out.name
+    if out.exists() or out.is_symlink():
+        raise FileExistsError("canonical destination already exists")
     evidence = {
         "kind": "stage371_offline_verified_WABJ_staging",
         "backup_used": slot,
@@ -183,9 +248,19 @@ def prepare_recovery(damaged_a, damaged_b, backup_a, backup_b,
             os.fsync(fd)
         finally:
             os.close(fd)
-        if out.exists() or out.is_symlink():
-            raise FileExistsError("destination appeared during staging")
-        os.rename(stage, out)
+        # Kernel-enforced no-overwrite, including a competing EMPTY dir.
+        # No mkdir reservation / check-then-rename race is possible here.
+        _publish_exclusive(stage, out)
+        # Persist the newly published destination name, not just the
+        # already-fsynced files and staging directory. If this fails,
+        # report failure and leave the complete package in place for
+        # offline inspection; never delete a possibly published save.
+        parent_fd = os.open(parent_real, os.O_RDONLY |
+                            getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
     except BaseException:
         if stage.exists():
             shutil.rmtree(stage)

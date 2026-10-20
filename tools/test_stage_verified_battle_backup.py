@@ -5,6 +5,7 @@ import json
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from stage_verified_battle_backup import prepare_recovery, _journal_from_bytes
@@ -17,10 +18,12 @@ def digest(blob):
 
 def fixture(root):
     root = Path(root)
-    good_a = root / "separate-external-gen5.a"
-    good_b = root / "separate-external-gen6.b"
-    bad_a = root / "damaged-live.a"
-    bad_b = root / "damaged-live.b"
+    (root / "live-save").mkdir()
+    (root / "independent-backups").mkdir()
+    good_a = root / "independent-backups" / "separate-external-gen5.a"
+    good_b = root / "independent-backups" / "separate-external-gen6.b"
+    bad_a = root / "live-save" / "damaged-live.a"
+    bad_b = root / "live-save" / "damaged-live.b"
     journal(good_a, 5, 1, 4, 1, 32, 48)
     journal(good_b, 6, 3, 4, 2, 32, 48)
     for src, dest in ((good_a, bad_a), (good_b, bad_b)):
@@ -212,6 +215,265 @@ class SafeOfflineRecoveryTests(unittest.TestCase):
             os.link(a[0], a[2])
             with self.assertRaises(ValueError):
                 call(a)
+
+    def test_staging_beside_corrupt_live_saves_is_forbidden_even_in_preview(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            a[-1] = a[0].parent / "accidental-live-recovery"
+            before = [p.read_bytes() for p in a[:4]]
+            for execute in (False, True):
+                with self.assertRaisesRegex(ValueError, "outside live save"):
+                    call(a, execute=execute)
+            self.assertFalse(a[-1].exists())
+            self.assertEqual([p.read_bytes() for p in a[:4]], before)
+
+    def test_nested_live_save_subdirectory_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            inside = a[0].parent / "old-copies"
+            inside.mkdir()
+            a[-1] = inside / "new-package"
+            with self.assertRaisesRegex(ValueError, "outside live save"):
+                call(a, execute=True)
+            self.assertEqual(list(inside.iterdir()), [])
+
+    def test_symlinked_parent_into_live_save_directory_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = list(fixture(d))
+            link = Path(d) / "looks-safe"
+            link.symlink_to(a[0].parent, target_is_directory=True)
+            a[-1] = link / "accidental-package"
+            with self.assertRaisesRegex(ValueError, "outside live save"):
+                call(a, execute=True)
+            self.assertFalse((a[0].parent / "accidental-package").exists())
+
+    def test_sibling_external_directory_is_allowed(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            result = call(a, execute=True)
+            self.assertTrue(result["staged"])
+            self.assertTrue((a[-1] / "recovery-manifest.json").is_file())
+
+    def test_failed_publication_leaves_no_incomplete_output(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            originals = [p.read_bytes() for p in a[:4]]
+            with mock.patch("stage_verified_battle_backup._publish_exclusive",
+                            side_effect=OSError("simulated publication failure")):
+                with self.assertRaises(OSError):
+                    call(a, execute=True)
+            self.assertFalse(a[-1].exists())
+            self.assertFalse(list(Path(d).glob(".wild-arms-stage371-*")))
+            self.assertEqual([p.read_bytes() for p in a[:4]], originals)
+
+    def test_linux_exclusive_rename_uses_kernel_no_replace_flag(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        import ctypes
+        native = mock.Mock()
+        native.renameat2.return_value = 0
+        with mock.patch("sys.platform", "linux"), \
+             mock.patch.object(ctypes, "CDLL", return_value=native):
+            _publish_exclusive(Path("/tmp/recovery-stage"),
+                               Path("/tmp/recovery-final"))
+        native.renameat2.assert_called_once_with(
+            -100, b"/tmp/recovery-stage", -100, b"/tmp/recovery-final", 1)
+        native.renamex_np.assert_not_called()
+
+    def test_mac_intel_exclusive_rename_uses_rename_excl_flag(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        import ctypes
+        native = mock.Mock()
+        native.renamex_np.return_value = 0
+        with mock.patch("sys.platform", "darwin"), \
+             mock.patch.object(ctypes, "CDLL", return_value=native):
+            _publish_exclusive(Path("/tmp/recovery-stage"),
+                               Path("/tmp/recovery-final"))
+        native.renamex_np.assert_called_once_with(
+            b"/tmp/recovery-stage", b"/tmp/recovery-final", 0x4)
+        native.renameat2.assert_not_called()
+
+    def test_unsupported_platform_fails_without_rename_fallback(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        import errno
+        with mock.patch("sys.platform", "freebsd14"):
+            with self.assertRaises(OSError) as caught:
+                _publish_exclusive(Path("/tmp/stage"), Path("/tmp/dest"))
+        self.assertEqual(caught.exception.errno, errno.ENOTSUP)
+
+    def test_kernel_collision_is_reported_as_file_exists_not_success(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        import ctypes
+        import errno
+        native = mock.Mock()
+        native.renameat2.return_value = -1
+        with mock.patch("sys.platform", "linux"), \
+             mock.patch.object(ctypes, "CDLL", return_value=native), \
+             mock.patch.object(ctypes, "get_errno", return_value=errno.EEXIST):
+            with self.assertRaises(FileExistsError) as caught:
+                _publish_exclusive(Path("/tmp/stage"), Path("/tmp/dest"))
+        self.assertEqual(caught.exception.errno, errno.EEXIST)
+        native.renameat2.assert_called_once()
+
+    def test_linux_unsupported_filesystem_fails_without_fallback(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        import ctypes
+        import errno
+        native = mock.Mock()
+        native.renameat2.return_value = -1
+        with tempfile.TemporaryDirectory() as d:
+            stage = Path(d) / "staged"
+            target = Path(d) / "new-target"
+            stage.mkdir()
+            (stage / "backup.bin").write_bytes(b"keep")
+            with mock.patch("sys.platform", "linux"), \
+                 mock.patch.object(ctypes, "CDLL", return_value=native), \
+                 mock.patch.object(ctypes, "get_errno", return_value=errno.ENOTSUP):
+                with self.assertRaises(OSError) as caught:
+                    _publish_exclusive(stage, target)
+            self.assertEqual(caught.exception.errno, errno.ENOTSUP)
+            self.assertFalse(target.exists())
+            self.assertEqual((stage / "backup.bin").read_bytes(), b"keep")
+            native.renameat2.assert_called_once()
+
+    def test_macos_unsupported_exclusive_rename_fails_without_fallback(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        import ctypes
+        import errno
+        native = mock.Mock()
+        native.renamex_np.return_value = -1
+        with tempfile.TemporaryDirectory() as d:
+            stage = Path(d) / "staged"
+            target = Path(d) / "new-target"
+            stage.mkdir()
+            (stage / "backup.bin").write_bytes(b"keep")
+            with mock.patch("sys.platform", "darwin"), \
+                 mock.patch.object(ctypes, "CDLL", return_value=native), \
+                 mock.patch.object(ctypes, "get_errno", return_value=errno.ENOTSUP):
+                with self.assertRaises(OSError) as caught:
+                    _publish_exclusive(stage, target)
+            self.assertEqual(caught.exception.errno, errno.ENOTSUP)
+            self.assertFalse(target.exists())
+            self.assertEqual((stage / "backup.bin").read_bytes(), b"keep")
+            native.renamex_np.assert_called_once()
+
+    def test_exclusive_publisher_rejects_nul_truncated_path(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        with tempfile.TemporaryDirectory() as d:
+            source = Path(d) / "staged"
+            source.mkdir()
+            destination = Path(d) / "hidden\x00suffix"
+            with self.assertRaisesRegex(ValueError, "NUL byte"):
+                _publish_exclusive(source, destination)
+            self.assertTrue(source.is_dir())
+            self.assertFalse((Path(d) / "hidden").exists())
+
+    def test_staged_publication_fsyncs_parent_after_directory_rename(self):
+        import os
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            original_fsync = os.fsync
+            calls = []
+            def track(fd):
+                calls.append(fd)
+                return original_fsync(fd)
+            with mock.patch("stage_verified_battle_backup.os.fsync", new=track):
+                result = call(a, execute=True)
+            self.assertTrue(result["staged"])
+            # Two output files, staging directory, then destination parent.
+            self.assertEqual(len(calls), 4)
+
+    def test_failed_parent_directory_fsync_reports_failure_without_erasing_package(self):
+        import os
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            before = [p.read_bytes() for p in a[:4]]
+            original_fsync = os.fsync
+            count = [0]
+            def fail_at_parent(fd):
+                count[0] += 1
+                if count[0] == 4:
+                    raise OSError("simulated parent directory durability failure")
+                return original_fsync(fd)
+            with mock.patch("stage_verified_battle_backup.os.fsync", new=fail_at_parent):
+                with self.assertRaisesRegex(OSError, "durability failure"):
+                    call(a, execute=True)
+            self.assertEqual(count[0], 4)
+            # The already published package must not be silently deleted
+            # or reported as durably complete after the failed fsync.
+            self.assertEqual(sorted(p.name for p in a[-1].iterdir()),
+                             ["battle-progress.a", "recovery-manifest.json"])
+            self.assertEqual((a[-1] / "battle-progress.a").read_bytes(), before[3])
+            self.assertEqual([p.read_bytes() for p in a[:4]], before)
+
+    def test_competing_new_destination_must_not_be_replaced(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            def race(stage, destination):
+                Path(destination).mkdir()
+                (Path(destination) / "owner-data.txt").write_text(
+                    "belongs to someone else")
+                return _publish_exclusive(stage, destination)
+            with mock.patch("stage_verified_battle_backup._publish_exclusive",
+                            new=race):
+                with self.assertRaises(FileExistsError):
+                    call(a, execute=True)
+            self.assertEqual((a[-1] / "owner-data.txt").read_text(),
+                             "belongs to someone else")
+            self.assertFalse(list(Path(d).glob(".wild-arms-stage371-*")))
+
+    def test_competing_empty_directory_is_not_replaced(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            def race(stage, destination):
+                Path(destination).mkdir()
+                return _publish_exclusive(stage, destination)
+            with mock.patch("stage_verified_battle_backup._publish_exclusive",
+                            new=race):
+                with self.assertRaises(FileExistsError):
+                    call(a, execute=True)
+            self.assertTrue(a[-1].is_dir())
+            self.assertEqual(list(a[-1].iterdir()), [])
+            self.assertFalse(list(Path(d).glob(".wild-arms-stage371-*")))
+
+    def test_competing_symlink_destination_is_not_replaced(self):
+        from stage_verified_battle_backup import _publish_exclusive
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            target = Path(d) / "other-owner"
+            target.mkdir()
+            (target / "keep.txt").write_text("independent")
+            def race(stage, destination):
+                Path(destination).symlink_to(target, target_is_directory=True)
+                return _publish_exclusive(stage, destination)
+            with mock.patch("stage_verified_battle_backup._publish_exclusive",
+                            new=race):
+                with self.assertRaises(FileExistsError):
+                    call(a, execute=True)
+            self.assertTrue(a[-1].is_symlink())
+            self.assertEqual((target / "keep.txt").read_text(), "independent")
+            self.assertFalse(list(Path(d).glob(".wild-arms-stage371-*")))
+
+    def test_swapped_symlink_during_source_open_rejected(self):
+        import os
+        with tempfile.TemporaryDirectory() as d:
+            a = fixture(d)
+            target = a[3]
+            parked = target.with_suffix(".parked")
+            original_open = os.open
+            was_swapped = [False]
+            def swap(path, flags, *args, **kwargs):
+                if Path(path) == target and not was_swapped[0]:
+                    was_swapped[0] = True
+                    target.rename(parked)
+                    target.symlink_to(a[0])
+                return original_open(path, flags, *args, **kwargs)
+            with mock.patch("stage_verified_battle_backup.os.open", new=swap):
+                with self.assertRaises((ValueError, OSError)):
+                    call(a, execute=True)
+            self.assertTrue(was_swapped[0])
+            self.assertFalse(a[-1].exists())
 
     def test_stage_does_not_include_an_unverified_second_slot(self):
         with tempfile.TemporaryDirectory() as d:

@@ -1,0 +1,52 @@
+name: Battle save offline integrity
+
+on:
+  push:
+    branches:
+      - 'stage-372-*'
+  pull_request:
+    paths:
+      - '.github/workflows/battle-save-offline-integrity.yml'
+      - 'tools/stage_verified_battle_backup.py'
+      - 'tools/test_stage_verified_battle_backup.py'
+      - 'tools/audit_nexium_battle_external_backup_restore.py'
+      - 'tools/test_audit_nexium_battle_external_backup_restore.py'
+      - 'tools/audit_nexium_battle_corruption_warning.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-save-recovery:
+    name: Offline WABJ ${{ matrix.os }}, Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15-intel]
+        python-version: ['3.11', '3.13']
+    steps:
+      - name: Check out exact test head
+        uses: actions/checkout@v4
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install test-only image oracle dependency
+        run: python -m pip install 'Pillow>=10,<13'
+      - name: Check Python source syntax
+        run: |
+          python -m py_compile tools/stage_verified_battle_backup.py
+          python -m py_compile tools/audit_nexium_battle_external_backup_restore.py
+          python -m py_compile tools/test_stage_verified_battle_backup.py
+          python -m py_compile tools/test_audit_nexium_battle_external_backup_restore.py
+      - name: Offline backup and filesystem attacks
+        run: python -m unittest discover -s tools -p 'test_stage_verified_battle_backup.py' -v
+      - name: Recovery oracle and synthetic guest images
+        run: python -m unittest discover -s tools -p 'test_audit_nexium_battle_external_backup_restore.py' -v
+      - name: Report test scope
+        run: |
+          echo 'This workflow exercises SYNTHETIC fixtures only.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Real guest25/guest26 frames and persistence require the separate NeXium CI job.' >> "$GITHUB_STEP_SUMMARY"
