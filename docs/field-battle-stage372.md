@@ -64,3 +64,20 @@ oracle's synthetic positive/adversarial tests on Python 3.11 and 3.13.
 These are fast **synthetic** tests and cannot replace the real NeXium
 guest trial. Do not mark restoration confirmed until the exact-head
 NeXium run provides distinct process logs and real verified screenshots.
+
+## Stage374 manifest/source chain of custody
+
+The independent NeXium audit now checks the staged recovery manifest
+against SHA-256 of **both** archived corrupted originals in addition to
+the verified candidate. It enforces the expected offline staging kind,
+`battle-progress.a` output name and explicit-manual-restore flag.
+
+Three adversarial tests deliberately replace the manifest hash for slot A,
+replace the hash for slot B, and falsely turn off the manual-only safeguard.
+Each must fail the specific manifest/source binding check. This prevents
+mistakenly reusing a good backup's manifest as evidence for unrelated
+damaged source records.
+
+The 27 filesystem cases and 19 synthetic screenshot-oracle cases give 46
+distinct cases in the focused CI test suite. These are **test definitions**,
+not a claim that CI or real NeXium guests passed.
