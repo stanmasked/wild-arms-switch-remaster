@@ -119,6 +119,62 @@ void test_battle_actions_own_input_and_field_pixels_restore_exactly() {
   assert(p.display.buffer==original);
 }
 
+void test_prior_clue_and_real_quicksave_survive_combat_overlay() {
+  Replay p;
+  p.step();
+  // Seed a genuinely valid, preexisting session clue and RAM snapshot.
+  // Unlike the empty-map fixture, the returned pixels now include the
+  // distinctive discovered-clue marker.
+  assert(record_discovery(p.world, p.field.discoveries, 0, 4, 1) ==
+         DiscoveryResult::Recorded);
+  assert(valid_discovery_journal(p.world, p.field.discoveries));
+  assert(save_field_snapshot(p.world, p.field.manual, p.field.quicksave) ==
+         SnapshotOutcome::Stored);
+  assert(p.field.quicksave.occupied);
+  const WorldState saved = p.field.quicksave.world;
+  p.step();
+  const auto rendered_clue_field = p.display.buffer;
+
+  assert(p.step(true).entered);
+  assert(p.battle.active);
+  // The new battle is free to change its own combat stats only.
+  BattlePad strike{}; strike.confirm=true;
+  const auto attacked=p.step(false,false,strike);
+  assert(attacked.control.status==BattleControlStatus::ActionApplied);
+  assert(p.battle.battle.enemies[0].hp==8);
+  p.step(); // A released.
+  BattlePad defend{}; defend.guard=true;
+  const auto guarded=p.step(false,false,defend);
+  assert(guarded.control.status==BattleControlStatus::ActionApplied);
+  assert(p.battle.battle.guarding[1]);
+  assert(p.field.discoveries.count==1);
+  assert(has_discovered_clue(p.field.discoveries,0,4,1));
+  assert(p.field.quicksave.occupied);
+  assert(p.field.quicksave.world.area==saved.area);
+  assert(p.field.quicksave.world.player.x==saved.player.x);
+  assert(p.field.quicksave.world.player.y==saved.player.y);
+  assert(p.field.quicksave.world.player.successful_moves==
+         saved.player.successful_moves);
+  assert(p.field.quicksave.world.pending==saved.pending);
+  assert(p.field.quicksave.world.decoder.confirm_down==
+         saved.decoder.confirm_down);
+
+  assert(p.step(false,true).exited);
+  assert(!p.battle.active);
+  assert(p.display.buffer==rendered_clue_field);
+  assert(p.field.discoveries.count==1);
+  assert(valid_discovery_journal(p.world,p.field.discoveries));
+  assert(p.field.quicksave.occupied);
+  // A battle return must not replace the player's original quicksave.
+  WorldState recovered{};
+  assert(load_field_snapshot(
+      p.world,p.field.quicksave,recovered)==SnapshotOutcome::Restored);
+  assert(recovered.area==saved.area && recovered.player.x==saved.player.x &&
+         recovered.player.y==saved.player.y &&
+         recovered.pending==saved.pending);
+  p.display.guards();
+}
+
 void test_exploration_resumes_from_same_tile_after_battle() {
   Replay p;
   p.step();
@@ -142,4 +198,5 @@ void test_exploration_resumes_from_same_tile_after_battle() {
 int main(){
   test_battle_actions_own_input_and_field_pixels_restore_exactly();
   test_exploration_resumes_from_same_tile_after_battle();
+  test_prior_clue_and_real_quicksave_survive_combat_overlay();
 }
