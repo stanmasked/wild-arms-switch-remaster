@@ -135,3 +135,20 @@ CI has completed.
 References:
 - Linux renameat2 RENAME_NOREPLACE (kernel-enforced no replacement).
 - Apple renamex_np RENAME_EXCL (macOS 10.12+, filesystem-dependent).
+
+## Stage378 Linux/Darwin syscall contract regressions
+
+Four synthetic tests now cover the **actual arguments** passed to the
+native, no-replace directory publisher, rather than only exercising
+filesystem behavior: Linux `renameat2` must receive `AT_FDCWD=-100`
+for both directories and `RENAME_NOREPLACE=1`; Intel macOS
+`renamex_np` must receive `RENAME_EXCL=4`. The unsupported-platform
+case refuses a normal `rename` fallback; an EEXIST kernel response
+becomes `FileExistsError` instead of a false success.
+
+The exact test inventory is **36 offline filesystem cases** plus
+**19 synthetic screenshot/journal cases** = **55 definitions**.
+The Linux host syscall smoke (EEXIST for preexisting empty destination,
+successful publish into absent name) was independently repeated on
+2026-10-21. Apple-native implementation and real NeXium guest behavior
+remain unconfirmed pending CI.
