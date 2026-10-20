@@ -47,3 +47,28 @@ NeXium screenshot references, NRO runtime or save serialization.
 A portable, deterministic 1280×720 pixel renderer displays three party cards and two enemies with numeric HP, proportional health bars, selected unit/target borders, current round, READY/ACTED/GUARD/DOWN status, command legend, and victory/defeat overlays. The renderer checks the battle, cursor and pixel target before any writes, never mutating the underlying battle or saved state. It uses an original 5×7 synthetic bitmap alphabet; no PS1 assets are included.
 
 The new `wa_field_battle_view_tests` covers golden geometry and colors, proportional bars, selected units, deterministic full-frame parity, invalid input no-write behavior, framebuffer stride sentinels, and result overlays. `wa_field_battle_capture` exports synthetic host-only initial/guard/victory PPM frames. A separate workflow converts them to PNG using a Python standard-library script, retaining provenance as **host reference screenshots, not NeXium or real Nintendo Switch captures**. No change to the existing playable exploration NRO or its save format.
+
+## Stage 341 — optional interactive battle mode in the Switch NRO
+
+A separate `FieldBattleSession` owns its own temporary combat stats,
+cursor and button latches. On a real Switch in **manual exploration**,
+tap **R** to open a new synthetic battle. While it is open:
+**D-pad Left/Right** selects a ready hero; **Up/Down** selects a living
+opponent; **A** strikes; **Y** guards; **B** closes the battle and returns
+to the exact live field state. **Plus** still exits the homebrew.
+
+Battle owns the controller sample: the existing field runtime advances
+on a **neutral pad frame** so its timing remains valid but a battle A/Y/B
+does not inspect or acknowledge world events, change maps, or write a
+quicksave. Opening R while the autoplay demonstration is running is
+ignored. R+A on entry cannot attack until A has been released; holding
+A during later frames never repeats an attack. Returning to R starts a
+fresh synthetic encounter rather than reusing the previous encounter.
+
+New `wa_field_battle_session_tests` cover entry/reentry and exit,
+input ownership, same-frame R+A edge latching, actual visible HP damage,
+guard sentinel pixels, and validation failures without screen or state
+writes. The Switch source **now includes** the battle HUD and mode selector;
+compilation and actual execution in NeXium or physical Switch must still
+be confirmed by the new exact-head CI. No original PS1 sprites, music,
+encounter triggers, saves, or completion storyline are claimed.
