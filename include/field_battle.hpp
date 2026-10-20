@@ -12,7 +12,7 @@ struct BattleFighter {
   std::uint16_t hp=0, max_hp=0, attack=0, armor=0;
 };
 enum class BattlePhase : std::uint8_t { Player, Victory, Defeat };
-enum class BattleMove : std::uint8_t { Strike, Guard };
+enum class BattleMove : std::uint8_t { Strike, Guard, Reload };
 struct FieldBattle {
   std::array<BattleFighter, kBattlePartySize> party{};
   std::array<BattleFighter, kBattleEnemyCount> enemies{};
@@ -71,22 +71,25 @@ template <std::size_t N>
     return {BattleStep::InvalidState,current.phase};
   if (current.phase!=BattlePhase::Player || actor>=kBattlePartySize ||
       current.party[actor].hp==0 || current.acted[actor] ||
-      (move!=BattleMove::Strike && move!=BattleMove::Guard) ||
+      (move!=BattleMove::Strike && move!=BattleMove::Guard &&
+       move!=BattleMove::Reload) ||
       (move==BattleMove::Strike &&
        (target>=kBattleEnemyCount || current.enemies[target].hp==0)) ||
-      (move==BattleMove::Guard && target!=0))
+      ((move==BattleMove::Guard || move==BattleMove::Reload) && target!=0))
     return {BattleStep::InvalidChoice,current.phase};
   FieldBattle next=current;
   BattleUpdate result{BattleStep::Applied,current.phase};
   next.acted[actor]=true;
   if (move==BattleMove::Guard) {
     next.guarding[actor]=true;
-  } else {
+  } else if (move==BattleMove::Strike) {
     auto& enemy=next.enemies[target];
     const auto nominal=battle_damage(next.party[actor].attack,enemy.armor,false);
     result.inflicted=nominal<enemy.hp ? nominal : enemy.hp;
     enemy.hp=static_cast<std::uint16_t>(enemy.hp-result.inflicted);
   }
+  // Reload consumes a normal action without the GUARD damage reduction.
+  // The ammo accounting lives in the optional ARM adapter, never here.
   if (!battle_any_living(next.enemies)) {
     next.phase=BattlePhase::Victory;
     result.phase=next.phase;
