@@ -114,6 +114,11 @@ add_executable(wa_field_battle_record_tests tests/test_field_battle_record.cpp)
 target_link_libraries(wa_field_battle_record_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_battle_record_tests COMMAND wa_field_battle_record_tests)
 
+# Stage 359: battle-only crash/recovery SD journal (independent of WAFS).
+add_executable(wa_field_battle_file_tests tests/test_field_battle_file.cpp)
+target_link_libraries(wa_field_battle_file_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_battle_file_tests COMMAND wa_field_battle_file_tests)
+
 # Host validation of the exact software framebuffer algorithm used by libnx.
 add_executable(wa_field_pixels_tests tests/test_field_pixels.cpp)
 target_link_libraries(wa_field_pixels_tests PRIVATE wa_field_core)

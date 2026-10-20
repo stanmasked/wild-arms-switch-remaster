@@ -11,6 +11,7 @@
 #include "field_battle_session.hpp"
 #include "field_encounters.hpp"
 #include "field_save_file.hpp"
+#include "field_battle_file.hpp"
 #include "field_save_feedback.hpp"
 
 #include <algorithm>
@@ -31,6 +32,9 @@ constexpr Viewport kViewport{11, 7};
 constexpr const char* kSaveRoot = "sdmc:/switch/wild_arms_field";
 constexpr const char* kSaveBase =
     "sdmc:/switch/wild_arms_field/field-save";
+// Distinct journal namespace; never share a slot with field exploration.
+constexpr const char* kBattleSaveBase =
+    "sdmc:/switch/wild_arms_field/battle-progress";
 
 [[nodiscard]] bool ensure_directory(const char* path) noexcept {
   if (::mkdir(path, 0777) == 0) return true;
@@ -102,6 +106,16 @@ int main() {
   // Separate nonpersistent demonstration fight, explicitly opened with R
   // in manual mode; the original exploration runtime stays intact.
   FieldBattleSession battle_scene{};
+  // Recover only a fully validated independent battle-progress journal.
+  // Missing/corrupt records cannot change the default volatile counters.
+  if (storage_ready) {
+    BattleProgress restored{};
+    const auto loaded=load_battle_progress_file(kBattleSaveBase,restored);
+    if (loaded.status==BattleJournalStatus::Loaded) {
+      battle_scene.history=restored.history;
+      battle_scene.rewards=restored.rewards;
+    }
+  }
   // ZR explicitly toggles optional step encounters. Default is off so
   // previous NeXium autoplay, saves and field captures stay unchanged.
   EncounterDirector encounters{};
@@ -196,6 +210,20 @@ int main() {
         battle_frame.status == BattleSceneStatus::InvalidController) {
       framebufferEnd(&fb);
       break;
+    }
+
+    // Only a fully validated first B-close writes battle progress.
+    // Never write to field-save.a/.b or the 40-byte exploration record.
+    // File errors are nonfatal: gameplay and volatile counters continue.
+    if (battle_frame.exited && storage_ready) {
+      const BattleProgress record{battle_scene.history,battle_scene.rewards};
+      const auto saved=store_battle_progress_file(record,kBattleSaveBase);
+      char trace[96]{};
+      const int length=std::snprintf(trace,sizeof(trace),
+          "WA_BATTLE_PROGRESS v1 result=%d",
+          static_cast<int>(saved));
+      if (length>0 && length<static_cast<int>(sizeof(trace)))
+        (void)svcOutputDebugString(trace,static_cast<std::size_t>(length));
     }
 
     // The deterministic game-field framebuffer was drawn first.
