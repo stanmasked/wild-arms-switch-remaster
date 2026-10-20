@@ -83,7 +83,9 @@ class BattleGuestAuditTests(unittest.TestCase):
             with Image.open(path) as image:
                 native = image.convert("RGB")
             # Alter the inner active game region to mimic a second attack.
-            native.putpixel((VIEW_X + 780, 240), RED)
+            # Pick a non-renderer color: the original location is red
+            # in the enemy HP bar, so writing RED again is a no-op.
+            native.putpixel((VIEW_X + 780, 240), (1, 255, 23))
             native.save(path)
             result = audit_battle(root, Path(root) / "report.json")
             self.assertFalse(result["checks"]["held_a_did_not_trigger_another_action"])
