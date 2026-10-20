@@ -21,6 +21,11 @@ CXXFLAGS := $(CFLAGS) -std=gnu++20 -fno-rtti -fno-exceptions
 ifeq ($(WA_NEXIUM_SAVE_TRACE),1)
 CXXFLAGS += -DWA_NEXIUM_SAVE_TRACE=1
 endif
+# Never enable the experimental ARM training UI in ordinary NRO builds.
+# Explicitly select make -C switch WA_ARM_EXPERIMENTAL=1 for a separate NRO.
+ifeq ($(WA_ARM_EXPERIMENTAL),1)
+CXXFLAGS += -DWA_ARM_EXPERIMENTAL=1
+endif
 ASFLAGS  := -g $(ARCH)
 LDFLAGS  := -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 LIBS     := -lnx

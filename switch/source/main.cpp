@@ -9,6 +9,9 @@
 #include "field_frame_ticks.hpp"
 #include "field_runtime.hpp"
 #include "field_battle_session.hpp"
+#if defined(WA_ARM_EXPERIMENTAL)
+#include "field_battle_arm_training.hpp"
+#endif
 #include "field_encounters.hpp"
 #include "field_save_file.hpp"
 #include "field_battle_file.hpp"
@@ -107,6 +110,11 @@ int main() {
   // Separate nonpersistent demonstration fight, explicitly opened with R
   // in manual mode; the original exploration runtime stays intact.
   FieldBattleSession battle_scene{};
+#if defined(WA_ARM_EXPERIMENTAL)
+  // Experimental ARM mode is compiled ONLY with WA_ARM_EXPERIMENTAL=1.
+  // It is volatile and never uses the game's on-disk WABJ v1 journal.
+  ArmTrainingSession arm_scene{};
+#endif
   bool battle_journal_corrupt = false;
   // Recover only a fully validated independent battle-progress journal.
   // Missing/corrupt records cannot change the default volatile counters.
@@ -130,11 +138,32 @@ int main() {
     const u64 pressed = padGetButtonsDown(&pad);
     const u64 held = padGetButtons(&pad);
     if (pressed & HidNpadButton_Plus) break;
-    // New opt-in Switch R battle does not interrupt the 23-step autoplay.
-    // Whenever battle owns input, the field receives a neutral sample.
+    // Regular R opens the previously validated battle, unchanged.
+    // The experiment is gated TWICE: build flag plus held ZL + fresh R.
+    // No experimental mode can open during autoplay or another battle.
+#if defined(WA_ARM_EXPERIMENTAL)
+    const bool open_arm =
+        (pressed & HidNpadButton_R) != 0 &&
+        (held & HidNpadButton_ZL) != 0 && !runtime.autoplay &&
+        !battle_scene.active && !arm_scene.active;
+#else
+    const bool open_arm = false;
+#endif
     const bool open_battle =
-        (pressed & HidNpadButton_R) != 0 && !runtime.autoplay;
-    const bool battle_owns_input = battle_scene.active || open_battle;
+        (pressed & HidNpadButton_R) != 0 && !runtime.autoplay &&
+        !open_arm
+#if defined(WA_ARM_EXPERIMENTAL)
+        && !arm_scene.active
+#endif
+        ;
+    // Both overlays own input: field quicksaves, triggers and walking
+    // receive the same neutral sample as an ordinary active battle.
+    const bool battle_owns_input =
+        battle_scene.active || open_battle || open_arm
+#if defined(WA_ARM_EXPERIMENTAL)
+        || arm_scene.active
+#endif
+        ;
 
     u32 stride_bytes = 0;
     u32* pixels = static_cast<u32*>(framebufferBegin(&fb, &stride_bytes));
@@ -183,8 +212,12 @@ int main() {
     const EncounterControls encounter_controls{
         (pressed & HidNpadButton_ZR) != 0,
         !result.autoplay,
-        battle_scene.active,
-        open_battle,
+        battle_scene.active
+#if defined(WA_ARM_EXPERIMENTAL)
+            || arm_scene.active
+#endif
+        ,
+        open_battle || open_arm,
         result.snapshot_restored,
         result.journal_visible || input.start_demo || input.cancel_demo ||
             input.save_snapshot || input.load_snapshot ||
@@ -217,6 +250,33 @@ int main() {
       framebufferEnd(&fb);
       break;
     }
+
+#if defined(WA_ARM_EXPERIMENTAL)
+    // Dedicated opt-in training scene: Switch X = ARM Fire; Minus = Reload.
+    // Ordinary A/Y and D-pad still have their usual in-battle semantics.
+    // Unlike B-close of an ordinary fight, ARM B-close MUST NOT persist
+    // volatile training awards, ammo, or overwrite the WABJ v1 slots.
+    const ArmTrainingInput arm_input{
+        open_arm,
+        arm_scene.active && (pressed & HidNpadButton_B) != 0,
+        !runtime.autoplay,
+        {(held & HidNpadButton_Left) != 0,
+         (held & HidNpadButton_Right) != 0,
+         (held & HidNpadButton_Up) != 0,
+         (held & HidNpadButton_Down) != 0,
+         (held & HidNpadButton_A) != 0,
+         (held & HidNpadButton_Y) != 0},
+        {(held & HidNpadButton_X) != 0,
+         (held & HidNpadButton_Minus) != 0}};
+    const ArmTrainingFrame arm_frame =
+        advance_arm_training_session(arm_scene,arm_input,output);
+    if (arm_frame.status == ArmTrainingStatus::InvalidTarget ||
+        arm_frame.status == ArmTrainingStatus::InvalidState ||
+        arm_frame.status == ArmTrainingStatus::InvalidController) {
+      framebufferEnd(&fb);
+      break;
+    }
+#endif
 
     // Only a fully validated first B-close writes battle progress.
     // Never write to field-save.a/.b or the 40-byte exploration record.
@@ -295,7 +355,11 @@ int main() {
                               attempted_read));
     }
     // Never draw leftover save feedback over the opaque battle HUD.
-    if (!battle_scene.active) {
+    if (!battle_scene.active
+#if defined(WA_ARM_EXPERIMENTAL)
+        && !arm_scene.active && !open_arm && !arm_frame.exited
+#endif
+        ) {
       (void)draw_storage_notice(output, feedback);
       // Small opt-in indicator outside the map: golden when ZR mode is
       // active. With encounters off, original pixel captures are identical.
