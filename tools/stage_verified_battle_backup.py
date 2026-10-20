@@ -41,6 +41,45 @@ def _read_regular(path):
         return file.read(53)
 
 
+def _publish_exclusive(stage, destination):
+    """Atomically publish a staged DIRECTORY only if the name is absent.
+
+    POSIX os.rename() is not enough: it silently replaces a concurrently
+    created EMPTY directory. Require kernel-enforced no-replace semantics.
+    Fail closed on unsupported platforms rather than falling back to an
+    unsafe check-then-rename. Linux renameat2 and Darwin renamex_np work
+    with the same-filesystem staging directory used by prepare_recovery.
+    """
+    import ctypes
+    import errno
+    import sys
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    src, dst = os.fsencode(stage), os.fsencode(destination)
+    if sys.platform.startswith("linux"):
+        func = getattr(libc, "renameat2", None)
+        if func is None:
+            raise OSError(errno.ENOTSUP, "atomic no-replace rename unavailable")
+        func.argtypes = (ctypes.c_int, ctypes.c_char_p,
+                         ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
+        func.restype = ctypes.c_int
+        # AT_FDCWD = -100; RENAME_NOREPLACE = 1.
+        result = func(-100, src, -100, dst, 1)
+    elif sys.platform == "darwin":
+        func = getattr(libc, "renamex_np", None)
+        if func is None:
+            raise OSError(errno.ENOTSUP, "atomic no-replace rename unavailable")
+        func.argtypes = (ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint)
+        func.restype = ctypes.c_int
+        # Darwin sys/stdio.h RENAME_EXCL = 0x00000004.
+        result = func(src, dst, 0x00000004)
+    else:
+        raise OSError(errno.ENOTSUP, "atomic no-replace rename unavailable")
+    if result != 0:
+        code = ctypes.get_errno()
+        raise OSError(code, os.strerror(code), str(destination))
+
+
 def _sha(blob):
     return hashlib.sha256(blob).hexdigest()
 
@@ -205,32 +244,19 @@ def prepare_recovery(damaged_a, damaged_b, backup_a, backup_b,
             os.fsync(fd)
         finally:
             os.close(fd)
-        # Atomically reserve a fresh directory. A check-then-rename alone
-        # can replace somebody else's concurrently created EMPTY directory.
-        # POSIX rename atomically exchanges our staged directory for our
-        # own still-empty 0700 reservation, without touching user contents.
-        if out.exists() or out.is_symlink():
-            raise FileExistsError("destination appeared during staging")
-        out.mkdir(mode=0o700)
+        # Kernel-enforced no-overwrite, including a competing EMPTY dir.
+        # No mkdir reservation / check-then-rename race is possible here.
+        _publish_exclusive(stage, out)
+        # Persist the newly published destination name, not just the
+        # already-fsynced files and staging directory. If this fails,
+        # report failure and leave the complete package in place for
+        # offline inspection; never delete a possibly published save.
+        parent_fd = os.open(parent_real, os.O_RDONLY |
+                            getattr(os, "O_DIRECTORY", 0))
         try:
-            os.rename(stage, out)
-            # Persist the newly published destination name, not just the
-            # already-fsynced files and staging directory. If this fails,
-            # report failure and leave the complete package in place for
-            # offline inspection; never delete a possibly published save.
-            parent_fd = os.open(parent_real, os.O_RDONLY |
-                                getattr(os, "O_DIRECTORY", 0))
-            try:
-                os.fsync(parent_fd)
-            finally:
-                os.close(parent_fd)
-        except BaseException:
-            # Never delete a directory which another process has populated.
-            try:
-                out.rmdir()
-            except OSError:
-                pass
-            raise
+            os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
     except BaseException:
         if stage.exists():
             shutil.rmtree(stage)
