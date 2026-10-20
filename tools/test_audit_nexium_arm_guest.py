@@ -81,6 +81,30 @@ class StrictArmGuestAuditorTests(unittest.TestCase):
             self.assertFalse(result["all_checks_passed"])
             self.assertFalse(result["checks"]["held_x_did_not_double_fire"])
 
+    def test_panel_only_late_change_is_detected_outside_game_roi(self):
+        # If only the HUD flickers/updates on a held X, central game
+        # pixels cannot reveal it. Entire displayed ammo panel must match.
+        with tempfile.TemporaryDirectory() as temp:
+            args = fixture(temp)
+            path = args[0] / "05_arm_fire_held.png"
+            with Image.open(path) as original:
+                held = original.convert("RGB")
+            put(held, (944 + 90, 622 + 25), RED)
+            held.save(path)
+            result = audit_arm_guests(*args)
+            self.assertFalse(result["checks"]["held_x_did_not_double_fire"])
+
+    def test_held_shot_fully_preserves_bar_not_only_enemy_hp(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args = fixture(temp)
+            path = args[0] / "05_arm_fire_held.png"
+            with Image.open(path) as original:
+                held = original.convert("RGB")
+            put(held, ARM_FULL_BAR, GOLD)
+            held.save(path)
+            result = audit_arm_guests(*args)
+            self.assertFalse(result["checks"]["held_x_did_not_double_fire"])
+
     def test_any_arm_journal_created_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
             a=fixture(temp)
