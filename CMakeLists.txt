@@ -93,6 +93,13 @@ target_link_libraries(wa_field_battle_arm_view_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_battle_arm_view_tests
          COMMAND wa_field_battle_arm_view_tests)
 
+# Stage 388: opt-in host-only integrated ARM battle training screen.
+add_executable(wa_field_battle_arm_training_tests
+               tests/test_field_battle_arm_training.cpp)
+target_link_libraries(wa_field_battle_arm_training_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_battle_arm_training_tests
+         COMMAND wa_field_battle_arm_training_tests)
+
 # Stage 339: standalone battle D-pad/action edge decoder.
 add_executable(wa_field_battle_controller_tests tests/test_field_battle_controller.cpp)
 target_link_libraries(wa_field_battle_controller_tests PRIVATE wa_field_core)
