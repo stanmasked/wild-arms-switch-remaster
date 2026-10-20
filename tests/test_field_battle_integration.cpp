@@ -175,6 +175,54 @@ void test_prior_clue_and_real_quicksave_survive_combat_overlay() {
   p.display.guards();
 }
 
+void test_pending_event_survives_battle_then_accepts_real_a() {
+  Replay p;
+  p.step();
+  // Travel with the actual held D-pad until stepping onto the synthetic
+  // area-0 marker, whose event pauses the exploration movement clock.
+  const RuntimeControls right{PadSample{.dpad_right=true}};
+  constexpr std::uint64_t travel = kFreq*160/1000;
+  for (int frame=0;frame<3;++frame) {
+    const auto moved=advance_field_runtime(
+        p.world,p.field,p.tick+=travel,right,p.display.target);
+    assert(moved.status==RuntimeStatus::Rendered);
+  }
+  assert(p.field.manual.area==0);
+  assert(p.field.manual.player.x==4 && p.field.manual.player.y==1);
+  assert(p.field.manual.pending==Trigger::Event);
+  assert(p.field.manual.clock.paused_for_trigger);
+  const auto paused_map=p.display.buffer;
+  // The field's amber pending-event status should remain stable despite
+  // A and Y being used exclusively by the synthetic battle.
+  assert(p.step(true).entered);
+  BattlePad a{};a.confirm=true;
+  const auto hit=p.step(false,false,a);
+  assert(hit.control.status==BattleControlStatus::ActionApplied);
+  assert(hit.control.action.inflicted==6);
+  p.step();  // Release the A latch before Y.
+  BattlePad y{};y.guard=true;
+  const auto defend=p.step(false,false,y);
+  assert(defend.control.status==BattleControlStatus::ActionApplied);
+  assert(p.field.manual.pending==Trigger::Event);
+  assert(p.field.manual.clock.paused_for_trigger);
+  assert(p.field.manual.player.x==4);
+  assert(p.field.discoveries.count==0);
+  assert(!p.field.quicksave.occupied);
+  assert(p.step(false,true).exited);
+  assert(p.display.buffer==paused_map);
+  assert(p.field.manual.pending==Trigger::Event);
+  // Now A is sent to the actual field, not the combat controller.
+  const RuntimeControls acknowledge{PadSample{.confirm=true}};
+  const auto result=advance_field_runtime(
+      p.world,p.field,p.tick+=kStep,acknowledge,p.display.target);
+  assert(result.status==RuntimeStatus::Rendered);
+  assert(p.field.manual.pending==Trigger::None);
+  assert(!p.field.manual.clock.paused_for_trigger);
+  assert(p.field.manual.player.x==4 && p.field.manual.player.y==1);
+  assert(p.field.manual.area==0);
+  p.display.guards();
+}
+
 void test_exploration_resumes_from_same_tile_after_battle() {
   Replay p;
   p.step();
@@ -198,5 +246,6 @@ void test_exploration_resumes_from_same_tile_after_battle() {
 int main(){
   test_battle_actions_own_input_and_field_pixels_restore_exactly();
   test_exploration_resumes_from_same_tile_after_battle();
+  test_pending_event_survives_battle_then_accepts_real_a();
   test_prior_clue_and_real_quicksave_survive_combat_overlay();
 }
