@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PIL import ImageChops
 
-from audit_nexium_checkpoints import GAME_ROI
+from audit_nexium_checkpoints import GAME_ROI, screen_point
 from audit_nexium_field_journal import native_pixel, read_rgb
 from stage_verified_battle_backup import _journal_from_bytes
 
@@ -39,6 +39,17 @@ ARM_PAST_PARTIAL = (944 + 20 + 146, 622 + 38)
 
 def same_game(a, b):
     return ImageChops.difference(a.crop(GAME_ROI), b.crop(GAME_ROI)).getbbox() is None
+
+
+def same_arm_panel(a, b):
+    # The ammo panel is outside GAME_ROI; compare its actual projected
+    # NeXium pixels, not only a few bar samples or the game center.
+    left, top = screen_point(944, 622)
+    right, bottom = screen_point(1230, 706)
+    return ImageChops.difference(
+        a.crop((left, top, right + 1, bottom + 1)),
+        b.crop((left, top, right + 1, bottom + 1)),
+    ).getbbox() is None
 
 
 def battle_slots(data_root):
@@ -106,6 +117,7 @@ def audit_arm_guests(screenshots, baseline_root, arm_root, processes, report):
             # The ARM panel lies BELOW GAME_ROI. Comparing only the
             # central gameplay region misses ammo-only held-fire bugs.
             same_game(fired, held)
+            and same_arm_panel(fired, held)
             and native_pixel(held, *ARM_BORDER) == GOLD
             and native_pixel(held, *ARM_PARTIAL_BAR) == GOLD
             and native_pixel(held, *ARM_PAST_PARTIAL) == DARK
