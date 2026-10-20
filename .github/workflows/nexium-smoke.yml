@@ -55,6 +55,7 @@ on:
       - 'tools/test_audit_nexium_battle_reward_restart.py'
       - 'tools/audit_nexium_battle_two_victories.py'
       - 'tools/test_audit_nexium_battle_two_victories.py'
+      - 'docs/field-battle-stage365.md'
       - 'include/field_battle_file.hpp'
       - 'tests/test_field_battle_file.cpp'
       - 'include/field_battle_results.hpp'
