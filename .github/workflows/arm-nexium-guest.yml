@@ -125,7 +125,15 @@ jobs:
             kill -TERM "$guest_pid" 2>/dev/null || true
             set +e
             wait "$guest_pid"
+            exit_code=$?
             set -e
+            # Exit is read from the actual observed wait, not manufactured
+            # after screenshots. 143 is our deliberate SIGTERM stop.
+            case "$exit_code" in
+              0|143) ;;
+              *) echo "Unexpected NeXium $label exit: $exit_code" >&2; return 1 ;;
+            esac
+            printf -v "${label}_wait_status" '%s' "$exit_code"
             sleep 1
           }
           # First independent guest: ordinary R is unchanged. B-close
@@ -165,14 +173,19 @@ jobs:
           capture 07_arm_return
           stop_guest
 
-          BASELINE_PID="$baseline_pid" ARM_PID="$arm_pid" python3 -c '
+          BASELINE_PID="$baseline_pid" ARM_PID="$arm_pid" \
+          BASELINE_WAIT_STATUS="$baseline_wait_status" \
+          ARM_WAIT_STATUS="$arm_wait_status" python3 -c '
           import json,os
           from pathlib import Path
           Path("arm-guest/processes.json").write_text(
               json.dumps({"baseline_pid":int(os.environ["BASELINE_PID"]),
                           "arm_pid":int(os.environ["ARM_PID"]),
                           "baseline_wait_completed":True,
-                          "arm_wait_completed":True},sort_keys=True)+"\n")
+                          "arm_wait_completed":True,
+                          "baseline_wait_status":int(os.environ["BASELINE_WAIT_STATUS"]),
+                          "arm_wait_status":int(os.environ["ARM_WAIT_STATUS"])},
+                         sort_keys=True)+"\n")
           '
       - name: Strict pixel, guest process and isolated save-file audit
         run: |
