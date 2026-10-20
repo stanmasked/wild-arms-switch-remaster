@@ -811,6 +811,9 @@ jobs:
             nexium-probe/battle-scene/00_field_before.png
           # Verified NeXium default keyboard binding: Switch R => host E.
           battle_key e
+          # Render a settled guest battle frame after key-release; a
+          # screenshot taken immediately can catch a stale GUI frame.
+          sleep 0.8
           import -display :99 -window root \
             nexium-probe/battle-scene/01_battle_open.png
           # Switch A => C: keep SAME key held across both screenshots.
