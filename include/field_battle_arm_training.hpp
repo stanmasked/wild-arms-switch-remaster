@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 
 namespace wa::field {
 
@@ -17,6 +18,8 @@ struct ArmTrainingSession {
   ArmEdgeState arm_edges{};
   BattleHistory history{};
   BattleRewardAccount rewards{};
+  // ROM-free in-memory balancing, never part of WABJ or SDMC.
+  BattleRewardPayout victory_offer{kPrototypeVictoryExp,kPrototypeVictoryGella};
   bool active=false;
 };
 
@@ -78,7 +81,8 @@ struct ArmTrainingFrame {
       return {ArmTrainingStatus::InvalidState};
     if (input.close) {
       const auto resolution=record_battle_exit(next.history,next.battle.phase);
-      const auto payout=credit_battle_reward(next.rewards,resolution);
+      const auto payout=credit_battle_reward(
+          next.rewards,resolution,next.victory_offer);
       next.active=false;
       current=next;
       return {ArmTrainingStatus::Inactive,false,true,{},{},resolution,payout};
@@ -129,8 +133,26 @@ struct ArmTrainingFrame {
   // an actual ARM Victory frame. The B close still performs the one-time
   // credit; viewing this banner does not mutate rewards or history.
   // Victory popup x320..960, y294..400: text at x440, y368 fits within.
-  if (next.battle.phase==BattlePhase::Victory)
-    battle_text(target,440,368,"B CLAIM EXP 8  GELLA 12",kBattleGreen);
+  if (next.battle.phase==BattlePhase::Victory) {
+    // The exact same pure saturating calculation drives the preview
+    // and the later B-close credit. Avoid fixed "8/12" HUD literals.
+    const auto expected=preview_battle_reward(
+        next.rewards,BattleResolution::Victory,next.victory_offer);
+    char claim[64]{};
+    (void)std::snprintf(claim,sizeof(claim),"B CLAIM EXP %u  GELLA %u",
+        static_cast<unsigned>(expected.experience),
+        static_cast<unsigned>(expected.gella));
+    // Up to 10 decimal digits per unsigned amount (40 glyphs total).
+    // Keep the existing x440 position for the default 8/12 image;
+    // shift exceptionally long labels left so no glyph cuts the popup.
+    constexpr int kPopupRight=960-5;
+    const auto length=std::strlen(claim);
+    const int ink_width=length
+        ? static_cast<int>((length-1)*13+10) : 0;
+    const int claim_x=ink_width+440>kPopupRight
+        ? kPopupRight-ink_width : 440;
+    battle_text(target,claim_x,368,claim,kBattleGreen);
+  }
   draw_previous_battle_history(target,next.history);
   // Only after a completed victory, display volatile ROM-free
   // placeholder rewards on the next ARM entry. No WABJ interaction.
