@@ -528,7 +528,7 @@ void confirmed_arm_victory_persists_only_after_b_and_restores_in_fresh_session()
   const std::string regular_base=std::string(dir)+"/battle-progress";
 
   ArmTrainingSession first{};Frame picture;
-  finish_dynamic_victory(first,picture);
+  enter_and_finish_custom_arm_victory(first,picture);
   assert(first.battle.phase==BattlePhase::Victory);
   assert(first.rewards.experience==0 && first.rewards.gella==0);
   BattleProgress loaded{};
