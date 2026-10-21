@@ -81,8 +81,8 @@ def audit_reward_persistence(screenshots, first_journal, after_restart_journal,
         process["second_wait_status"] in (0, 137, 143)
     )
     roots_valid = (
-        process["first_root"] == root and
-        process["second_root"] == root
+        Path(process["first_root"]).resolve() == Path(root) and
+        Path(process["second_root"]).resolve() == Path(root)
     )
 
     game_dir = Path(data_root) / "sdmc" / "switch" / "wild_arms_field"
