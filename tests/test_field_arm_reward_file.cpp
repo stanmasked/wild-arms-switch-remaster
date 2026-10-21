@@ -29,7 +29,8 @@ struct TempDir {
 std::vector<std::uint8_t> read_bytes(const std::string& path) {
   std::ifstream file(path,std::ios::binary);
   assert(file.good());
-  return {std::istreambuf_iterator<char>(file),{}};
+  return std::vector<std::uint8_t>(
+      std::istreambuf_iterator<char>(file),std::istreambuf_iterator<char>());
 }
 void write_bytes(const std::string& path,const std::vector<std::uint8_t>& bytes) {
   std::ofstream file(path,std::ios::binary|std::ios::trunc);
@@ -188,7 +189,8 @@ void test_generation_exhaustion_fails_closed() {
   assert(encode_arm_reward_record(
       std::numeric_limits<std::uint64_t>::max(),{8,12},bytes)==
       ArmRewardRecordStatus::Encoded);
-  write_bytes(dir.base()+".a",{bytes.begin(),bytes.end()});
+  write_bytes(dir.base()+".a",
+              std::vector<std::uint8_t>(bytes.begin(),bytes.end()));
   const auto before=read_bytes(dir.base()+".a");
   assert(store_arm_reward_file({16,24},dir.base())==
          ArmRewardJournalStatus::SequenceExhausted);
