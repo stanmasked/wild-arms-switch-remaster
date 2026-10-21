@@ -129,18 +129,61 @@ jobs:
             sleep 0.75
           }
           stop_guest() {
+            # An actual NeXium first guest on #39519963779 rendered
+            # three valid images, but the CI script hung at bare wait(2)
+            # after TERM for seven minutes. Do not wait on a live emulator.
+            echo "stopping $label pid=$guest_pid at $(date -u +%FT%TZ)" \
+              >> arm-guest/termination-events.log
             kill -TERM "$guest_pid" 2>/dev/null || true
+            stopped=false
+            forced=false
+            for attempt in $(seq 1 40); do
+              status=$(ps -o stat= -p "$guest_pid" 2>/dev/null | tr -d ' ') || true
+              if test -z "$status" || [[ "$status" == Z* ]]; then
+                stopped=true
+                break
+              fi
+              sleep 0.25
+            done
+            if test "$stopped" != true; then
+              # SIGKILL is a bounded fallback on the same verified PID,
+              # NEVER a fabricated "normal" NeXium exit.
+              forced=true
+              echo "SIGTERM ignored by $label; issuing monitored SIGKILL" \
+                >> arm-guest/termination-events.log
+              kill -KILL "$guest_pid" 2>/dev/null || true
+              for attempt in $(seq 1 30); do
+                status=$(ps -o stat= -p "$guest_pid" 2>/dev/null | tr -d ' ') || true
+                if test -z "$status" || [[ "$status" == Z* ]]; then
+                  stopped=true
+                  break
+                fi
+                sleep 0.2
+              done
+            fi
+            if test "$stopped" != true; then
+              echo "Guest $label could not be stopped after bounded TERM/KILL" >&2
+              return 1
+            fi
+            # The OS now reports the child stopped/zombie, so wait is safe.
             set +e
             wait "$guest_pid"
             exit_code=$?
             set -e
-            # Exit is read from the actual observed wait, not manufactured
-            # after screenshots. 143 is our deliberate SIGTERM stop.
-            case "$exit_code" in
-              0|143) ;;
-              *) echo "Unexpected NeXium $label exit: $exit_code" >&2; return 1 ;;
-            esac
+            if test "$forced" = true; then
+              test "$exit_code" -eq 137 || {
+                echo "Forced $label exit !=137: $exit_code" >&2; return 1;
+              }
+            else
+              case "$exit_code" in
+                0|143) ;;
+                *) echo "Unexpected $label exit: $exit_code" >&2; return 1 ;;
+              esac
+            fi
+            echo "stopped $label pid=$guest_pid exit=$exit_code forced=$forced" \
+              >> arm-guest/termination-events.log
             printf -v "${label}_wait_status" '%s' "$exit_code"
+            printf -v "${label}_force_killed" '%s' "$forced"
             sleep 1
           }
           # First independent guest: ordinary R is unchanged. B-close
@@ -182,7 +225,9 @@ jobs:
 
           BASELINE_PID="$baseline_pid" ARM_PID="$arm_pid" \
           BASELINE_WAIT_STATUS="$baseline_wait_status" \
-          ARM_WAIT_STATUS="$arm_wait_status" python3 -c '
+          ARM_WAIT_STATUS="$arm_wait_status" \
+          BASELINE_FORCE_KILLED="$baseline_force_killed" \
+          ARM_FORCE_KILLED="$arm_force_killed" python3 -c '
           import json,os
           from pathlib import Path
           Path("arm-guest/processes.json").write_text(
@@ -191,7 +236,9 @@ jobs:
                           "baseline_wait_completed":True,
                           "arm_wait_completed":True,
                           "baseline_wait_status":int(os.environ["BASELINE_WAIT_STATUS"]),
-                          "arm_wait_status":int(os.environ["ARM_WAIT_STATUS"])},
+                          "arm_wait_status":int(os.environ["ARM_WAIT_STATUS"]),
+                          "baseline_force_killed":os.environ["BASELINE_FORCE_KILLED"]=="true",
+                          "arm_force_killed":os.environ["ARM_FORCE_KILLED"]=="true"},
                          sort_keys=True)+"\n")
           '
       - name: Strict pixel, guest process and isolated save-file audit
