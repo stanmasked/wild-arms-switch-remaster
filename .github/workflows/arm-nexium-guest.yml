@@ -229,7 +229,16 @@ jobs:
           press z
           press n  # Switch Minus => ARM Reload on renewed actor 0.
           capture 06_arm_reloaded
-          press x  # B exits ARM; unlike ordinary R, MUST NOT write WABJ.
+          # Stage396: a fresh 3/3 after cold restart proves nothing unless
+          # the PREVIOUS guest actually EXITED with spent ammunition.
+          # Reload consumed hero 0 turn; let heroes 1/2 Guard, then take a
+          # second genuine ARM shot in round 3 before closing to SDMC.
+          press z
+          press z
+          press v  # 3/3 -> 2/3; foe 1 now down with a real shot.
+          import -display :99 -window root \
+            arm-guest/coldboot/08_arm_spent_before_exit.png
+          press x  # B exits ARM with 2/3 still volatile; NO WABJ.
           capture 07_arm_return
           stop_guest
 
@@ -256,17 +265,17 @@ jobs:
           # begin from 3/3 again with zero persisted game files.
           launch armrestart arm
           import -display :99 -window root \
-            arm-guest/coldboot/08_arm_restart_field.png
+            arm-guest/coldboot/09_arm_restart_field.png
           xdotool keydown --clearmodifiers r
           sleep 0.16
           press e
           xdotool keyup r
           sleep 0.38
           import -display :99 -window root \
-            arm-guest/coldboot/09_arm_restart_full.png
+            arm-guest/coldboot/10_arm_restart_full.png
           press x
           import -display :99 -window root \
-            arm-guest/coldboot/10_arm_restart_return.png
+            arm-guest/coldboot/11_arm_restart_return.png
           stop_guest
 
           ARMRESTART_PID="$armrestart_pid" \
