@@ -1,11 +1,12 @@
 #pragma once
-// Stage388: opt-in HOST-ONLY integrated ARM battle screen.
-// Never called by Nintendo Switch main.cpp; WABJ v1 is unchanged.
+// Stage401: optional ARM battle session shared by host and gated Switch.
+// Volatile outcomes only: never writes WABJ v1 or field save slots.
 #include "field_battle_arm_controller.hpp"
 #include "field_battle_arm_view.hpp"
 #include "field_battle_rewards.hpp"
 
 #include <cstdint>
+#include <cstdio>
 
 namespace wa::field {
 
@@ -125,6 +126,17 @@ struct ArmTrainingFrame {
     return {ArmTrainingStatus::InvalidState};
   (void)draw_battle_arm_status(target,next.battle,next.magazine);
   draw_previous_battle_history(target,next.history);
+  // Only after a completed victory, display volatile ROM-free
+  // placeholder rewards on the next ARM entry. No WABJ interaction.
+  // This is between the ordinary input hint and previous result line,
+  // completely outside the ARM ammunition panel.
+  if (next.history.victories > 0) {
+    char balance[64]{};
+    (void)std::snprintf(balance,sizeof(balance),"EXP %u  GELLA %u",
+        static_cast<unsigned>(next.rewards.experience),
+        static_cast<unsigned>(next.rewards.gella));
+    battle_text(target,70,667,balance,kBattleGreen);
+  }
 
   next.active=true;
   current=next;
