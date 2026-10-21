@@ -85,6 +85,15 @@ int main() {
   invalid_draw(12, 35, target);
   invalid_draw(12, 8, PixelTarget{screen.data(),width,height,width-1});
   invalid_draw(12, 8, PixelTarget{nullptr,width,height,stride});
+  // An invalid caller-constructed image cannot partially paint the screen.
+  {
+    PrivateIcon bad = icon;
+    bad.indices[13337] = 17;
+    std::fill(screen.begin(), screen.end(), untouched);
+    assert(!draw_private_icon(bad, target, 12, 8));
+    assert(std::all_of(screen.begin(), screen.end(),
+                       [](std::uint32_t px){return px == untouched;}));
+  }
 
   // Every invalid file clears a previously valid preview.
   auto reject = [&](std::vector<std::uint8_t> candidate) {
