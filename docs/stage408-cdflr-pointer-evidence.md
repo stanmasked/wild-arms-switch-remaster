@@ -16,10 +16,26 @@ The source is the **private, user-provided Wild Arms USA PlayStation image**. `C
 
 These observations are internally coherent with a RAM-relocated pointer table into an early section of the file. The chosen base is **hypothetical**: it is inferred from the 256-byte boundary and is not yet proven by the original loader. These values do **not** prove that any entries represent field maps, textures, sprites, events, or playable content.
 
+## Independent executable-literal cross-check
+
+From the actual PlayStation disc, `EXE/WILDARMS.EXE;1` (794,624 bytes)
+contains **one aligned** 32-bit literal `0x80183000` in its text/data region
+at file offset `0xC1B40` (793,408 decimal). It is within an adjacent group
+of RAM-address-like words in the main executable, independent of the CDFLR
+pointer-table prefix.
+
+The optional `--executable /private/path/WILDARMS.EXE` option checks the
+PS-X EXE header and declared text extent, scans it for a four-byte-aligned
+candidate-base literal, and emits only match counts/file offsets. This is
+stronger corroboration of the proposed address but **does not establish**
+which loader function uses it, whether CDFLR is loaded there at runtime,
+or whether any of the targets represent sprites/maps.
+
 ## Reproducible private verification
 
 ```sh
 python tools/inspect_cdflr_pointer_table.py /private/path/CDFLR.BIN \
+  --executable /private/path/WILDARMS.EXE \
   > /private/path/cdflr-pointer-evidence.json
 ```
 
