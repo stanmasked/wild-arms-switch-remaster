@@ -1,0 +1,37 @@
+# Stage407 — candidate CDSTG fixed-stride record structure
+
+## Local source/provenance
+
+A user-supplied private ZIP contains a 637,163,856-byte `Wild Arms (USA).bin` and its 81-byte `MODE2/2352` cue. The ZIP passed CRC verification, and the full BIN SHA-256 matched the previously saved **local candidate** hash. This comparison is not an external authenticity certification.
+
+The ISO9660 primary volume identifier is `WILDARMS`. Sector-validated local extraction of `BIN/CDSTG.BIN;1` (76,021,760 bytes, LBA 1383) and `BIN/CDFLR.BIN;1` (15,917,056 bytes, LBA 38503) matched both previously recorded **256-byte prefix hashes**. These original files and analysis reports remain outside git.
+
+## Observed candidate structure of CDSTG.BIN
+
+- Exact division: 76,021,760 / 593,920 = **128 fixed-length blocks**, no remainder.
+- 593,920 bytes = **290** logical Form1 sectors of 2048 bytes.
+- **127 of 128** blocks have ASCII `Sony` at relative offset `0x3C`.
+- **127 of 128** blocks have PS1 KSEG0 RAM-address-like little-endian words at both relative byte offsets `0x00` and `0x08`.
+- Block index **25** (zero-based) is the sole exception to the marker and RAM-like-header patterns. Its bytes must **not** be discarded or reinterpreted as a standard block without further proof.
+- All **128 block SHA-256 hashes are distinct**.
+
+This demonstrates a repeatable *candidate* record layout. It **does not** prove that the blocks correspond one-to-one with maps, scenes, levels, or executable overlays. A `Sony` marker and RAM-like words are insufficient to infer their roles or decode graphics.
+
+## Reproducing the metadata-only verification
+
+```sh
+python tools/inspect_stage_records.py /private/path/CDSTG.BIN \
+  > /private/path/cdstg-record-index.json
+```
+
+The output includes only record indexes, hashes, flags and offsets. Do not publish the private report, original ZIP/BIN, extracted files, dialogue, art, or sound assets. CI uses synthetic fixtures only.
+
+## Next verification gate
+
+1. Compare repeated internal offsets and size fields between normal blocks without assuming their meanings.
+2. Investigate exceptional block #25 separately.
+3. Identify a verifiable and safely bounded graphics/layout section in one block.
+4. Produce a local-only decoded frame and compare it against a known PS1 reference capture before calling it an original scene.
+5. Integrate proven scene data through a local asset pipeline, without shipping original game assets in the public repository.
+
+Keep this track independent from battle/ARM persistence and do not modify existing field-save formats.
