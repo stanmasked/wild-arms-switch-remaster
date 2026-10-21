@@ -68,6 +68,7 @@ class StreamBoundaryTests(unittest.TestCase):
         self.assertTrue(last["is_last_unbounded_stream"])
         self.assertEqual(last["count"], 1)
         self.assertEqual(last["candidate_flag_tokens_truncated"], 0)
+        self.assertEqual(last["candidate_flag_tokens_overshoot"], 0)
         self.assertEqual(last["candidate_flag_tokens_early_or_trailing"], 0)
         self.assertEqual(last["candidate_flag_tokens_near_boundary"], 0)
 
@@ -80,6 +81,11 @@ class StreamBoundaryTests(unittest.TestCase):
         self.assertEqual(status, "EARLY_OR_TRAILING_DATA")
         status, _, _ = probe_flag_tokens(literal[:-2], expected_output=8)
         self.assertEqual(status, "TRUNCATED")
+        # A reference token may exceed the requested output byte budget.
+        oversized = bytes.fromhex("00800000") + bytes([0x00, 0x00, 0xF0])
+        status, produced, _ = probe_flag_tokens(oversized, expected_output=8)
+        self.assertEqual(status, "OUTPUT_OVERSHOOT")
+        self.assertEqual(produced, 18)
 
     def test_bad_geometry_and_order_fail_closed(self):
         with self.assertRaisesRegex(ValueError, "whole number"):
