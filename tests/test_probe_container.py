@@ -24,6 +24,8 @@ class ProbeContainerTests(unittest.TestCase):
         self.assertEqual(result["sample"]["limit_bytes"], 64)
         self.assertEqual(result["sample"]["windows"][0]["offset"], 0)
         self.assertEqual(result["sample"]["windows"][-1]["offset"], len(data) - 8)
+        sampled = b"".join(data[offset:offset + length] for offset, length in ((w["offset"], w["bytes_read"]) for w in result["sample"]["windows"]))
+        self.assertEqual(result["sample"]["sha256"], hashlib.sha256(sampled).hexdigest())
         self.assertLessEqual(result["sample"]["bytes_read"], 64)
         self.assertEqual(result["pointer_like_words"][0], {"value": 0x100, "count": 2})
         self.assertTrue(result["interpretation"]["payload_bytes_emitted"] is False)
