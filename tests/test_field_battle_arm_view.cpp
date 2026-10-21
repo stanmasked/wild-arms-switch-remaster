@@ -123,6 +123,52 @@ void gold_zr_burst_hint_is_bounded_and_independent_of_ammo() {
     }
 }
 
+void burst_readiness_colour_and_exact_letter_shapes_track_ammo() {
+  const auto battle=make_demo_battle();
+  ArmMagazine magazine{};
+  Frame full,two,one,empty;
+  assert(draw_battle_arm_status(full.target,battle,magazine)==
+         ArmHudStatus::Rendered);
+  magazine.rounds=2;
+  assert(draw_battle_arm_status(two.target,battle,magazine)==
+         ArmHudStatus::Rendered);
+  magazine.rounds=1;
+  assert(draw_battle_arm_status(one.target,battle,magazine)==
+         ArmHudStatus::Rendered);
+  magazine.rounds=0;
+  assert(draw_battle_arm_status(empty.target,battle,magazine)==
+         ArmHudStatus::Rendered);
+
+  // First letter B of both BURST labels uses a lit top-left pixel.
+  // Green means >=2 rounds and gold warns when exactly 1 round.
+  constexpr int x=kArmHudX+20, y=kArmHudY+48;
+  assert(full.at(x,y)==kBattleGreen);
+  assert(two.at(x,y)==kBattleGreen);
+  assert(one.at(x,y)==kBattleGold);
+  // At zero rounds the label reads ARM EMPTY: the first A's top-left
+  // is dark but the next column is a red lit glyph pixel.
+  assert(empty.at(x,y)==kBattlePanel);
+  assert(empty.at(x+2,y)==kBattleRed);
+
+  // Sixth character is a space; the seventh distinguishes READY (R)
+  // from NEED (N) at glyph column 1 of its upper row.
+  const int word_x=x+6*13;
+  assert(full.at(word_x+2,y)==kBattleGreen);
+  assert(two.at(word_x+2,y)==kBattleGreen);
+  assert(one.at(word_x+2,y)==kBattlePanel);
+  assert(one.at(word_x+8,y)==kBattleGold);
+
+  // All labels are bounded to the existing panel, and do not paint
+  // either the control instruction below or the bottom/right border.
+  for(const auto* frame : {&full,&two,&one,&empty}) {
+    assert(frame->at(kArmHudX+kArmHudWidth-4,y)==kBattleGold);
+    assert(frame->at(kArmHudX+20,kArmHudY+80)==kBattleGold);
+    assert(frame->at(kArmHudX+20,kArmHudY+65)==kBattleWhite);
+    frame->check_padding();
+  }
+  assert(magazine.rounds==0 && battle.party[0].attack==7);
+}
+
 void bad_target_state_and_magazine_never_touch_any_pixel() {
   auto battle=make_demo_battle(); ArmMagazine mag{}; Frame f;
   const auto untouched=f.pixels;
@@ -184,6 +230,7 @@ int main() {
   spent_ammo_changes_only_its_bar_and_label();
   hint_is_identical_for_full_partial_and_empty_magazines();
   gold_zr_burst_hint_is_bounded_and_independent_of_ammo();
+  burst_readiness_colour_and_exact_letter_shapes_track_ammo();
   bad_target_state_and_magazine_never_touch_any_pixel();
   display_matches_explicit_arm_fire_and_reload_but_never_controls_game();
   maximal_capacity_has_bounded_math_and_read_only_render();
