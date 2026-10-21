@@ -46,7 +46,7 @@ class ProbeContainerTests(unittest.TestCase):
     def test_zero_heavy_sample_statistics(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "zero.bin"
-            path.write_bytes(b"\\x00" * 128 + b"\\xff" * 128)
+            path.write_bytes(b"\x00" * 128 + b"\xff" * 128)
             result = probe(path, sample_bytes=256)
         self.assertEqual(result["sample"]["zero_byte_fraction"], 0.5)
         self.assertEqual(result["sample"]["shannon_entropy_bits_per_byte"], 1.0)
