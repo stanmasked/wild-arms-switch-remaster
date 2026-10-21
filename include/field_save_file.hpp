@@ -1,0 +1,431 @@
+#pragma once
+
+#include "field_save_codec.hpp"
+
+#include <array>
+#include <cerrno>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <limits>
+#include <string>
+#include <unistd.h>
+
+namespace wa::field {
+
+// Stage 294: two generations, each on its own validated file.
+// A complete older slot is never removed during a normal write of a
+// replacement into the *other* slot. No game assets are embedded here.
+// SD/FAT crash consistency and physical hardware operation are NOT assured.
+constexpr std::size_t kFieldJournalBytes = 56;
+using FieldJournalBytes = std::array<std::uint8_t, kFieldJournalBytes>;
+
+enum class FileSaveStatus {
+  Stored, Loaded, Missing, Corrupt, InvalidWorld, InvalidState,
+  IoError, SequenceExhausted
+};
+
+// Test-only simulated interruption points. Production calls use the default
+// None: no storage hooks, no deliberate errors. These are deterministic
+// host-file-system simulations, not a substitute for physical power cuts.
+enum class JournalInterruption {
+  None,
+  AfterShortTemporaryWrite,
+  AfterTemporarySynced,
+  AfterTemporaryValidated,
+  AfterPreviousSlotRemoved,
+  AfterNewSlotRenamed,
+  // Test-only false negatives, not crashes; verification still proceeds.
+  AfterNewSlotRenamedReportedFailure,
+  AfterPostPublishFirstReadRejected,
+  // Corrupt only the redundant target after a successful rename.
+  // Exercise exactly the CRC mismatch observed in the NeXium guest.
+  AfterPublishedTargetCrcDamaged,
+  // Simulate power interruption while safely rewriting only the
+  // redundant target: previous valid generation remains untouched.
+  AfterRescueShortWrite
+};
+
+struct FileSaveSlot {
+  FileSaveStatus status = FileSaveStatus::Missing;
+  std::uint64_t generation = 0;
+  WorldState world{};
+  FieldJournalBytes bytes{};
+};
+
+// Stage 303: physical per-open readback observations, with no bytes,
+// gameplay state, addresses or file paths captured in diagnostic output.
+struct JournalReadDiagnostic {
+  std::uint8_t bytes_read = 0;
+  bool eof_after_probe = false;
+  bool extra_byte = false;
+  bool stream_error = false;
+  bool closed_ok = false;
+  bool header_ok = false;
+  bool crc_ok = false;
+  bool decoded_ok = false;
+};
+
+// Stage 302: optional, bounded diagnostics of one write attempt. No host
+// paths, game data, or memory addresses are recorded. Caller may inspect
+// these even when the result is IoError. Production save rules are unchanged.
+enum class JournalWriteStep : std::uint8_t {
+  Preflight, PreviousSlotsRead, TemporaryOpened, TemporarySynced,
+  TemporaryValidated, OldSlotRemoved, RenameAttempted,
+  PostPublishReadback, VerifiedCommitted, FailedTemporaryWrite,
+  FailedTemporaryVerification, FailedTargetRemoval, FailedReadback,
+  RescueWriteAttempted, RescueWriteVerified, RescueWriteFailed
+};
+struct JournalWriteDiagnostic {
+  JournalWriteStep step = JournalWriteStep::Preflight;
+  FileSaveStatus existing_a = FileSaveStatus::Missing;
+  FileSaveStatus existing_b = FileSaveStatus::Missing;
+  FileSaveStatus temporary_status = FileSaveStatus::Missing;
+  FileSaveStatus published_status = FileSaveStatus::Missing;
+  std::uint64_t intended_generation = 0;
+  std::uint8_t read_attempts = 0;
+  bool rename_succeeded = false;
+  bool published_bytes_equal = false;
+  int os_error_code = 0;
+  JournalReadDiagnostic postpublish_read{};
+};
+
+[[nodiscard]] inline FileSaveSlot read_field_journal_slot(
+    const FieldWorld& world, const std::string& path,
+    JournalReadDiagnostic* evidence = nullptr) noexcept {
+  if (evidence) *evidence = JournalReadDiagnostic{};
+  FileSaveSlot slot{};
+  errno = 0;
+  std::FILE* f = std::fopen(path.c_str(), "rb");
+  if (!f) {
+    slot.status = errno == ENOENT ? FileSaveStatus::Missing
+                                  : FileSaveStatus::IoError;
+    return slot;
+  }
+  const std::size_t count =
+      std::fread(slot.bytes.data(), 1, slot.bytes.size(), f);
+  const int extra = std::fgetc(f);
+  const bool eof_after_probe = std::feof(f) != 0;
+  const bool io_error = std::ferror(f) != 0;
+  const bool closed = std::fclose(f) == 0;
+  if (evidence) {
+    evidence->bytes_read = static_cast<std::uint8_t>(count);
+    evidence->eof_after_probe = eof_after_probe;
+    evidence->extra_byte = extra != EOF;
+    evidence->stream_error = io_error;
+    evidence->closed_ok = closed;
+  }
+  if (io_error || !closed) {
+    slot.status = FileSaveStatus::IoError;
+    return slot;
+  }
+  if (count != slot.bytes.size() || extra != EOF) {
+    slot.status = FileSaveStatus::Corrupt;
+    return slot;
+  }
+  const auto& p = slot.bytes;
+  const bool header_ok =
+      p[0] == 'W' && p[1] == 'A' && p[2] == 'J' && p[3] == '1';
+  const bool crc_ok =
+      save_crc32(p.data(), 52) == save_get_u32(p.data() + 52);
+  if (evidence) {
+    evidence->header_ok = header_ok;
+    evidence->crc_ok = crc_ok;
+  }
+  if (!header_ok || !crc_ok) {
+    slot.status = FileSaveStatus::Corrupt;
+    return slot;
+  }
+  slot.generation = save_get_u64(p.data() + 4);
+  if (slot.generation == 0 ||
+      decode_field_save(world, p.data() + 12, kFieldSaveRecordSize,
+                        slot.world) != FieldSaveStatus::Decoded) {
+    slot.status = FileSaveStatus::Corrupt;
+    return slot;
+  }
+  if (evidence) evidence->decoded_ok = true;
+  slot.status = FileSaveStatus::Loaded;
+  return slot;
+}
+
+// A readable slot plus a damaged peer is still a successful load, but its
+// redundancy is compromised. Preserve the original FileSaveStatus ABI and
+// expose a separate diagnostic for the frontend; never replace the world
+// unless a complete validated journal is available.
+struct FileSaveLoadResult {
+  FileSaveStatus status = FileSaveStatus::Missing;
+  bool degraded = false;  // Another committed slot was unreadable/corrupt.
+  std::uint64_t selected_generation = 0;
+};
+
+// Valid newer generations take precedence. A damaged peer can be bypassed,
+// but never interpreted as a valid save or used to modify the destination.
+[[nodiscard]] inline FileSaveLoadResult load_field_save_file_detailed(
+    const FieldWorld& world, const std::string& base_path,
+    WorldState& destination) noexcept {
+  if (!world.valid()) return {FileSaveStatus::InvalidWorld};
+  const FileSaveSlot a = read_field_journal_slot(world, base_path + ".a");
+  const FileSaveSlot b = read_field_journal_slot(world, base_path + ".b");
+  if (a.status == FileSaveStatus::IoError ||
+      b.status == FileSaveStatus::IoError)
+    return {FileSaveStatus::IoError};
+  const bool av = a.status == FileSaveStatus::Loaded;
+  const bool bv = b.status == FileSaveStatus::Loaded;
+  if (av && bv && a.generation == b.generation &&
+      a.bytes != b.bytes)
+    return {FileSaveStatus::Corrupt};
+  if (av || bv) {
+    const FileSaveSlot& selected =
+        (!bv || (av && a.generation >= b.generation)) ? a : b;
+    destination = selected.world;
+    return {FileSaveStatus::Loaded,
+            a.status == FileSaveStatus::Corrupt ||
+            b.status == FileSaveStatus::Corrupt,
+            selected.generation};
+  }
+  return {(a.status == FileSaveStatus::Missing &&
+           b.status == FileSaveStatus::Missing)
+              ? FileSaveStatus::Missing : FileSaveStatus::Corrupt};
+}
+
+[[nodiscard]] inline FileSaveStatus load_field_save_file(
+    const FieldWorld& world, const std::string& base_path,
+    WorldState& destination) noexcept {
+  return load_field_save_file_detailed(world, base_path, destination).status;
+}
+
+[[nodiscard]] inline FileSaveStatus store_field_save_file(
+    const FieldWorld& world, const WorldState& state,
+    const std::string& base_path,
+    JournalInterruption simulate = JournalInterruption::None,
+    JournalWriteDiagnostic* trace = nullptr) noexcept {
+  if (trace) *trace = JournalWriteDiagnostic{};
+  if (!world.valid()) return FileSaveStatus::InvalidWorld;
+  FieldSaveRecord encoded{};
+  if (encode_field_save(world, state, encoded) != FieldSaveStatus::Encoded)
+    return FileSaveStatus::InvalidState;
+
+  const FileSaveSlot a = read_field_journal_slot(world, base_path + ".a");
+  const FileSaveSlot b = read_field_journal_slot(world, base_path + ".b");
+  if (trace) {
+    trace->step = JournalWriteStep::PreviousSlotsRead;
+    trace->existing_a = a.status;
+    trace->existing_b = b.status;
+  }
+  if (a.status == FileSaveStatus::IoError ||
+      b.status == FileSaveStatus::IoError)
+    return FileSaveStatus::IoError;
+  const bool av = a.status == FileSaveStatus::Loaded;
+  const bool bv = b.status == FileSaveStatus::Loaded;
+  if (av && bv && a.generation == b.generation &&
+      a.bytes != b.bytes)
+    return FileSaveStatus::Corrupt;
+  const bool latest_is_a = av && (!bv || a.generation >= b.generation);
+  const std::uint64_t latest =
+      av || bv ? (latest_is_a ? a.generation : b.generation) : 0;
+  if (latest == std::numeric_limits<std::uint64_t>::max())
+    return FileSaveStatus::SequenceExhausted;
+
+  // If the most recent valid generation is A, target B; otherwise target A.
+  // The latest verified slot is not unlinked or overwritten.
+  const std::string target = base_path + (latest_is_a ? ".b" : ".a");
+  const std::string temporary = target + ".tmp";
+  FieldJournalBytes payload{};
+  payload[0] = 'W'; payload[1] = 'A'; payload[2] = 'J'; payload[3] = '1';
+  save_put_u64(payload.data() + 4, latest + 1);
+  if (trace) trace->intended_generation = latest + 1;
+  for (std::size_t i = 0; i < encoded.size(); ++i)
+    payload[12 + i] = encoded[i];
+  save_put_u32(payload.data() + 52, save_crc32(payload.data(), 52));
+
+  // The temporary file is never considered a committed save at load time.
+  std::FILE* f = std::fopen(temporary.c_str(), "wb");
+  if (!f) {
+    if (trace) trace->os_error_code = errno;
+    return FileSaveStatus::IoError;
+  }
+  if (trace) trace->step = JournalWriteStep::TemporaryOpened;
+  if (simulate == JournalInterruption::AfterShortTemporaryWrite) {
+    // A process stop while writing the 56 bytes: a deliberately incomplete
+    // .tmp is left. Neither .a nor .b is touched; readers never load .tmp.
+    (void)std::fwrite(payload.data(), 1, 11, f);
+    (void)std::fclose(f);
+    return FileSaveStatus::IoError;
+  }
+  const bool complete =
+      std::fwrite(payload.data(), 1, payload.size(), f) == payload.size() &&
+      std::fflush(f) == 0 && ::fsync(::fileno(f)) == 0;
+  const bool closed = std::fclose(f) == 0;
+  if (!complete || !closed) {
+    if (trace) {
+      trace->step = JournalWriteStep::FailedTemporaryWrite;
+      trace->os_error_code = errno;
+    }
+    (void)std::remove(temporary.c_str());
+    return FileSaveStatus::IoError;
+  }
+  if (trace) trace->step = JournalWriteStep::TemporarySynced;
+  if (simulate == JournalInterruption::AfterTemporarySynced)
+    return FileSaveStatus::IoError;  // Complete uncommitted .tmp survives.
+
+  // Re-open and validate from storage before making the new file visible.
+  const FileSaveSlot verified = read_field_journal_slot(world, temporary);
+  if (trace) trace->temporary_status = verified.status;
+  if (verified.status != FileSaveStatus::Loaded ||
+      verified.bytes != payload) {
+    if (trace) {
+      trace->step = JournalWriteStep::FailedTemporaryVerification;
+      trace->os_error_code = errno;
+    }
+    (void)std::remove(temporary.c_str());
+    return FileSaveStatus::IoError;
+  }
+  if (trace) trace->step = JournalWriteStep::TemporaryValidated;
+  if (simulate == JournalInterruption::AfterTemporaryValidated)
+    return FileSaveStatus::IoError;
+
+  // libnx's sdmc rename does not promise POSIX overwrite. Only the *older*
+  // slot can be deleted; the newest valid generation survives any failure.
+  errno = 0;
+  if (std::remove(target.c_str()) != 0 && errno != ENOENT) {
+    if (trace) {
+      trace->step = JournalWriteStep::FailedTargetRemoval;
+      trace->os_error_code = errno;
+    }
+    (void)std::remove(temporary.c_str());
+    return FileSaveStatus::IoError;
+  }
+  if (trace) trace->step = JournalWriteStep::OldSlotRemoved;
+  if (simulate == JournalInterruption::AfterPreviousSlotRemoved)
+    return FileSaveStatus::IoError;
+  // NeXium's emulated filesystem can return a false-negative publishing
+  // status after a complete record has become visible. Only the actual
+  // *fully validated record*, never the API return code alone, proves
+  // durability at this emulated-filesystem level.
+  const bool renamed = std::rename(temporary.c_str(), target.c_str()) == 0;
+  if (trace) {
+    trace->step = JournalWriteStep::RenameAttempted;
+    trace->rename_succeeded = renamed;
+    trace->os_error_code = renamed ? 0 : errno;
+  }
+  const bool rename_reported_success =
+      renamed &&
+      simulate != JournalInterruption::AfterNewSlotRenamedReportedFailure;
+  if (simulate == JournalInterruption::AfterNewSlotRenamed && renamed)
+    return FileSaveStatus::IoError;  // Simulated interrupted process.
+
+  // Test-only reproduction of an invalid CRC readback following an
+  // apparently successful rename. The intact older slot is untouched.
+  if (renamed &&
+      (simulate == JournalInterruption::AfterPublishedTargetCrcDamaged ||
+       simulate == JournalInterruption::AfterRescueShortWrite)) {
+    std::FILE* faulty = std::fopen(target.c_str(), "r+b");
+    if (!faulty) return FileSaveStatus::IoError;
+    const bool modified =
+        std::fseek(faulty, 52, SEEK_SET) == 0 &&
+        std::fputc(static_cast<int>(payload[52] ^ 0x80), faulty) != EOF &&
+        std::fflush(faulty) == 0;
+    const bool closed = std::fclose(faulty) == 0;
+    if (!modified || !closed) return FileSaveStatus::IoError;
+  }
+
+  // Try a bounded number of separately opened full record reads. The
+  // payload comparison includes journal generation, encoded world and CRC.
+  constexpr int kPostPublishReadAttempts = 3;
+  bool observed_corrupt_published_record = false;
+  for (int attempt = 0; attempt < kPostPublishReadAttempts; ++attempt) {
+    FileSaveSlot published{};
+    if (simulate == JournalInterruption::AfterPostPublishFirstReadRejected &&
+        attempt == 0) {
+      published.status = FileSaveStatus::IoError;  // Test-only false read.
+    } else {
+      JournalReadDiagnostic read_evidence{};
+      published = read_field_journal_slot(world, target, &read_evidence);
+      if (trace) trace->postpublish_read = read_evidence;
+    }
+    if (trace) {
+      trace->step = JournalWriteStep::PostPublishReadback;
+      trace->read_attempts = static_cast<std::uint8_t>(attempt + 1);
+      trace->published_status = published.status;
+      trace->published_bytes_equal =
+          published.status == FileSaveStatus::Loaded &&
+          published.bytes == payload;
+    }
+    if (published.status == FileSaveStatus::Corrupt)
+      observed_corrupt_published_record = true;
+    if (published.status == FileSaveStatus::Loaded &&
+        published.bytes == payload) {
+      if (trace) trace->step = JournalWriteStep::VerifiedCommitted;
+      // A non-successful rename report cannot override exact committed
+      // content. If the move actually failed, discard any leftover .tmp.
+      if (!rename_reported_success)
+        (void)std::remove(temporary.c_str());
+      return FileSaveStatus::Stored;
+    }
+  }
+  // Stage 304. A false-negative CRC read was reproduced in NeXium
+  // after the rename of a previously corrupt B. Retry at most once
+  // by overwriting ONLY the redundant target, never the newest intact
+  // generation. The older generation was validated before this write.
+  //
+  // This is a bounded, fail-closed repair: no Stored without a complete
+  // independent reopen, CRC/world validation and exact byte comparison.
+  // A crash or short write can damage only the *non-latest* slot.
+  if (renamed && (av || bv) && observed_corrupt_published_record) {
+    if (trace) trace->step = JournalWriteStep::RescueWriteAttempted;
+    std::FILE* repair = std::fopen(target.c_str(), "wb");
+    if (!repair) {
+      if (trace) {
+        trace->step = JournalWriteStep::RescueWriteFailed;
+        trace->os_error_code = errno;
+      }
+      return FileSaveStatus::IoError;
+    }
+    if (simulate == JournalInterruption::AfterRescueShortWrite) {
+      (void)std::fwrite(payload.data(), 1, 11, repair);
+      (void)std::fclose(repair);
+      if (trace) trace->step = JournalWriteStep::RescueWriteFailed;
+      return FileSaveStatus::IoError;
+    }
+    const bool copied =
+        std::fwrite(payload.data(), 1, payload.size(), repair) ==
+            payload.size() &&
+        std::fflush(repair) == 0 &&
+        ::fsync(::fileno(repair)) == 0;
+    const bool closed = std::fclose(repair) == 0;
+    if (!copied || !closed) {
+      if (trace) {
+        trace->step = JournalWriteStep::RescueWriteFailed;
+        trace->os_error_code = errno;
+      }
+      return FileSaveStatus::IoError;
+    }
+    JournalReadDiagnostic rescued_read{};
+    const FileSaveSlot rescued =
+        read_field_journal_slot(world, target, &rescued_read);
+    if (trace) {
+      trace->read_attempts =
+          static_cast<std::uint8_t>(kPostPublishReadAttempts + 1);
+      trace->published_status = rescued.status;
+      trace->postpublish_read = rescued_read;
+      trace->published_bytes_equal =
+          rescued.status == FileSaveStatus::Loaded &&
+          rescued.bytes == payload;
+    }
+    if (rescued.status == FileSaveStatus::Loaded &&
+        rescued.bytes == payload) {
+      if (trace) trace->step = JournalWriteStep::RescueWriteVerified;
+      return FileSaveStatus::Stored;
+    }
+    if (trace) trace->step = JournalWriteStep::RescueWriteFailed;
+    return FileSaveStatus::IoError;
+  }
+  // Neither the rename result nor a partially written file proves a
+  // successful save. A complete older generation always remains available.
+  if (trace) trace->step = JournalWriteStep::FailedReadback;
+  (void)std::remove(temporary.c_str());
+  return FileSaveStatus::IoError;
+}
+
+}  // namespace wa::field

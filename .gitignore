@@ -4,3 +4,10 @@ build/
 *.iso
 *.img
 assets/private/
+
+# Asset-free native Switch build outputs
+switch/build/
+switch/*.elf
+switch/*.nro
+switch/*.nacp
+switch/*.map

@@ -1,0 +1,851 @@
+name: NeXium Linux NRO smoke (experimental)
+
+concurrency:
+  # Preserve one pending/running execution per workflow + event + PR/branch.
+  # Do not let historical field-prototype commits consume the queue.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    paths:
+      - '.github/workflows/nexium-smoke.yml'
+      - 'tools/audit_nexium_probe.py'
+      - 'tools/test_audit_nexium_probe.py'
+      - 'tools/audit_nexium_launch_control.py'
+      - 'tools/test_audit_nexium_launch_control.py'
+      - 'tools/audit_nexium_session.py'
+      - 'tools/test_audit_nexium_session.py'
+      - 'tools/prepare_nexium_nro_probe.py'
+      - 'tools/test_prepare_nexium_nro_probe.py'
+      - 'tools/audit_nexium_autoplay.py'
+      - 'tools/test_audit_nexium_autoplay.py'
+      - 'tools/audit_nexium_checkpoints.py'
+      - 'tools/test_audit_nexium_checkpoints.py'
+      - 'tools/audit_nexium_pixel_parity.py'
+      - 'tools/test_audit_nexium_pixel_parity.py'
+      - 'tools/audit_nexium_manual_snapshot.py'
+      - 'tools/test_audit_nexium_manual_snapshot.py'
+      - 'tests/field_capture.cpp'
+      - 'include/field_pixels.hpp'
+      - 'include/field_save_codec.hpp'
+      - 'include/field_save_file.hpp'
+      - 'include/field_snapshot.hpp'
+      - 'include/field_runtime.hpp'
+      - 'include/field_world.hpp'
+      - 'include/field_inspection_ui.hpp'
+      - 'include/field_discovery.hpp'
+      - 'include/field_clue_notes.hpp'
+      - 'include/field_journal_view.hpp'
+      - 'tools/audit_nexium_field_journal.py'
+      - 'tools/test_audit_nexium_field_journal.py'
+      - 'tests/test_field_journal_view.cpp'
+      - 'tests/test_field_runtime.cpp'
+      - 'tests/test_field_discovery.cpp'
+      - 'docs/field-journal-regressions-stage312.md'
+      - 'docs/field-manual-preflight-stage313.md'
+      - 'docs/field-journal-movement-cadence-stage314.md'
+      - 'docs/field-journal-confirm-edges-stage315.md'
+      - 'docs/field-journal-autoplay-exit-stage316.md'
+      - 'docs/field-journal-two-step-inspection-stage317.md'
+      - 'docs/field-confirm-modal-handoff-stage318.md'
+      - 'include/field_save_feedback.hpp'
+      - 'tools/audit_nexium_storage_feedback.py'
+      - 'tools/test_audit_nexium_storage_feedback.py'
+      - 'tools/audit_nexium_process_restart.py'
+      - 'tools/audit_nexium_sd_recovery.py'
+      - 'tools/audit_nexium_sd_repair.py'
+      - 'tools/audit_nexium_write_trace.py'
+      - 'tools/test_audit_nexium_write_trace.py'
+      - 'tools/test_audit_nexium_sd_repair.py'
+      - 'tools/test_audit_nexium_sd_recovery.py'
+      - 'tools/test_audit_nexium_process_restart.py'
+      - 'tests/field_save_process.cpp'
+      - 'tests/test_field_save_process_restart.py'
+      - 'switch/source/main.cpp'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-homebrew:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build actual asset-free Switch NRO with isolated diagnostics
+        run: make -C switch -j2 WA_NEXIUM_SAVE_TRACE=1
+      - name: Check NRO0 format and manifest
+        run: |
+          python3 tools/audit_switch_nro.py switch/wild_arms_field.nro --json switch/wild_arms_field.nro.audit.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexium-smoke-nro
+          path: |
+            switch/wild_arms_field.nro
+            switch/wild_arms_field.nro.audit.json
+          if-no-files-found: error
+
+  host-references:
+    name: Build same-commit host reference PNGs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and execute real portable core reference capture
+        run: |
+          cmake -S . -B build
+          cmake --build build --target wa_field_capture --parallel
+          ./build/wa_field_capture field-host-a
+          ./build/wa_field_capture field-host-b
+          python3 tools/audit_field_capture.py field-host-a field-host-b --output field-host-refs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexium-five-host-checkpoints
+          path: field-host-refs/
+          if-no-files-found: error
+
+  nexium-smoke:
+    needs: [build-homebrew, host-references]
+    runs-on: ubuntu-24.04
+    # Official Oct-2026 Linux NeXium binary needs GLIBC_2.43.
+    # Fedora 44 supplies 2.43; Ubuntu 24.04's libc cannot start it.
+    container:
+      image: fedora:44
+    timeout-minutes: 15
+    env:
+      NEXIUM_URL: https://github.com/nexium-emu/nexium-nightly/releases/download/nightly/nexium-linux-x86_64.tar.gz
+      # Official GitHub release archive digest observed 2026-10-18.
+      # Fail closed if the rolling nightly changes; re-verify before updating.
+      NEXIUM_ARCHIVE_SHA256: 0ec2da5d58b6b362a9f0a4c927af0e55d36a0b50d1ab3f035dd075ea12d76761
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: nexium-smoke-nro
+          path: native-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          name: nexium-five-host-checkpoints
+          path: same-commit-host-references
+      - name: Install Fedora 44 GLIBC 2.43 and software Vulkan tools
+        run: |
+          dnf install -y --setopt=install_weak_deps=False \
+            mesa-vulkan-drivers vulkan-tools xorg-x11-server-Xvfb \
+            xdotool ImageMagick python3-pillow gtk3 alsa-lib systemd-libs \
+            libxkbcommon libxkbcommon-x11 vulkan-loader \
+            file curl tar gzip coreutils procps-ng
+          ldd --version | head -n 1
+          ldconfig -p | grep 'libxkbcommon-x11.so'
+      - name: Unit-test NeXium exact projected RGB parity
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_pixel_parity.py' -v
+      - name: Unit-test short-lived manual save feedback screenshots
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_storage_feedback.py' -v
+      - name: Unit-test independent NeXium process SD-restore auditor
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_process_restart.py' -v
+      - name: Unit-test NeXium SD corruption and recovery auditor
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_sd_recovery.py' -v
+      - name: Unit-test guest save-trace parser
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_write_trace.py' -v
+      - name: Unit-test fourth/fifth guest journal repair and fresh SD reload auditor
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_sd_repair.py' -v
+      - name: Unit-test manual quicksave and event restore desktop audit
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_manual_snapshot.py' -v
+      - name: Unit-test independent NeXium L journal Xvfb audit
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_field_journal.py' -v
+      - name: Unit-test ordered five-checkpoint reference matcher
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_checkpoints.py' -v
+      - name: Verify synthetic frame evidence classifier
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_probe.py' -v
+      - name: Unit-test with/without NRO screenshot comparison
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_launch_control.py' -v
+      - name: Verify internal NeXium session-log parser with synthetic logs
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_session.py' -v
+      - name: Verify visual movement audit using invented screenshots
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_autoplay.py' -v
+      - name: Download exact verified official NeXium Linux archive
+        run: |
+          set -euo pipefail
+          mkdir -p nexium-dist nexium-probe
+          curl -fL --retry 3 --connect-timeout 20 --max-time 240 \
+            "$NEXIUM_URL" -o nexium-dist/nexium.tar.gz
+          echo "$NEXIUM_ARCHIVE_SHA256  nexium-dist/nexium.tar.gz" | sha256sum -c -
+          tar -xzf nexium-dist/nexium.tar.gz -C nexium-dist/
+          test -x nexium-dist/NeXium/nexium
+          file nexium-dist/NeXium/nexium
+          ldd nexium-dist/NeXium/nexium > nexium-probe/ldd.txt || true
+          /usr/bin/vulkaninfo --summary > nexium-probe/vulkan.txt 2>&1 || true
+      - name: Verify loader compatibility probe on synthetic NRO fixtures
+        run: /usr/bin/python3 -m unittest discover -s tools -p 'test_prepare_nexium_nro_probe.py' -v
+      - name: Generate clearly marked nonstandard emulator-only loader probe
+        run: |
+          mkdir -p nexium-probe
+          /usr/bin/python3 tools/prepare_nexium_nro_probe.py \
+            native-artifact/wild_arms_field.nro \
+            nexium-probe/ne_loader_probe_only.nro \
+            --report nexium-probe/loader-probe-manifest.json
+      - name: Attempt NeXium guest execution with monitored Vulkan process
+        id: attempt
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          set -u
+          mkdir -p nexium-probe
+          Xvfb :99 -screen 0 1600x900x24 -nolisten tcp \
+            > nexium-probe/xvfb.log 2>&1 &
+          echo $! > nexium-probe/xvfb.pid
+          sleep 4
+          export DISPLAY=:99
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-wild-arms-data"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          export RUST_LOG=info
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          # 137 may indicate a forced timeout kill; do not label it an OOM
+          # without independent memory/cgroup evidence.
+          timeout --signal=TERM --kill-after=10 130s \
+            ./nexium-dist/NeXium/nexium \
+            "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+            > nexium-probe/nexium.log 2>&1 &
+          emulator_pid=$!
+          echo "$emulator_pid" > nexium-probe/first-process.pid
+          (
+            while kill -0 "$emulator_pid" 2>/dev/null; do
+              date -u +'%Y-%m-%dT%H:%M:%SZ'
+              ps -eo pid,ppid,etime,%cpu,%mem,rss,stat,comm |
+                grep -E 'PID|[n]exium|[t]imeout' || true
+              if test -r /sys/fs/cgroup/memory.current; then
+                cat /sys/fs/cgroup/memory.current
+              fi
+              sleep 10
+            done
+          ) > nexium-probe/process-samples.log 2>&1 &
+          monitor_pid=$!
+
+          sleep 15
+          import -display :99 -window root nexium-probe/screen-initial.png || true
+
+          # X11 focus works without an EWMH-compatible window manager,
+          # unlike xdotool windowactivate.
+          window_id=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null | head -n 1) || true
+          if test -n "$window_id"; then
+            echo "$window_id" > nexium-probe/window-id.txt
+            xdotool getwindowgeometry "$window_id" \
+              > nexium-probe/window-geometry.txt 2>&1 || true
+            xdotool windowfocus "$window_id" \
+              > nexium-probe/window-focus.log 2>&1 || true
+            # NeXium default keyboard bindings map Switch X to V.
+            # Host X maps Switch B, so it previously cancelled nothing.
+            printf 'Switch X -> host V at %s\n' "$(date -u +%FT%TZ)" \
+              >> nexium-probe/window-focus.log
+            xdotool keydown --clearmodifiers v \
+              >> nexium-probe/window-focus.log 2>&1 || true
+            sleep 0.18
+            xdotool keyup --clearmodifiers v \
+              >> nexium-probe/window-focus.log 2>&1 || true
+          fi
+
+          # 80 real 1600x900 desktop frames sampled during the short
+          # 23-step autoplay route. Preserve the original screenshots to
+          # reveal missed or unexpected transitions.
+          mkdir -p nexium-probe/timeline
+          for frame in $(seq -w 0 79); do
+            import -display :99 -window root \
+              "nexium-probe/timeline/frame-$frame.png" || true
+            sleep 0.22
+          done
+
+          # Stage 292: after the unchanged 80-frame autoplay evidence,
+          # switch to MANUAL via Switch B (host X) and test quicksave.
+          # Actual default NeXium keyboard mappings (controller_config.rs):
+          # Switch B=X, Y=Z, Minus=N, A=C, DRight=ArrowRight.
+          # Independent Xvfb evidence is kept separate from autoplay PNGs.
+          mkdir -p nexium-probe/manual-snapshot nexium-probe/status-feedback
+          if test -n "${window_id:-}"; then
+            xdotool windowfocus "$window_id" || true
+            send_manual_key() {
+              printf 'host keyboard %s at %s\n' "$1" "$(date -u +%FT%TZ)" \
+                >> nexium-probe/manual-snapshot/key-events.log
+              xdotool keydown --clearmodifiers "$1"
+              sleep 0.22
+              xdotool keyup "$1"
+              if test "${2:-}" != ""; then
+                sleep 0.15
+                import -display :99 -window root \
+                  "nexium-probe/status-feedback/$2.png"
+              fi
+              # The 900ms gameplay indicator must expire *before* the
+              # original strict manual screenshot RGB parity check.
+              sleep 1.20
+            }
+            capture_manual() {
+              import -display :99 -window root \
+                "nexium-probe/manual-snapshot/$1.png"
+            }
+            walk_to_event() {
+              xdotool keydown --clearmodifiers Right
+              sleep 2.4
+              xdotool keyup Right
+              sleep 0.45
+            }
+            send_manual_key x     # Switch B ends completed demo and resets manual
+            capture_manual 00_manual_start
+            send_manual_key z save-start     # Switch Y quicksave at x1
+            capture_manual 01_start_saved
+            walk_to_event        # x1 -> x4; '!' waits for A
+            capture_manual 02_event_after_walk
+            send_manual_key n load-start     # Switch Minus restores x1 / no event
+            capture_manual 03_start_restored
+            # Stage 309: collect one synthetic clue in the FIRST guest
+            # before returning to the existing second pending-event save.
+            # Official NeXium default keyboard maps Switch L to Q.
+            mkdir -p nexium-probe/field-journal
+            xdotool keydown --clearmodifiers q
+            sleep 0.25
+            import -display :99 -window root \
+              nexium-probe/field-journal/00_empty_open.png
+            xdotool keyup q
+            sleep 0.20
+            import -display :99 -window root \
+              nexium-probe/field-journal/01_empty_closed.png
+            # Two 160ms cadence steps from x1 to x3, stopping before ! at x4.
+            xdotool keydown --clearmodifiers Right
+            sleep 0.38
+            xdotool keyup Right
+            sleep 0.12
+            import -display :99 -window root \
+              nexium-probe/field-journal/02_at_marker.png
+            # Real A inspection followed by B within the 900ms timeout.
+            xdotool keydown --clearmodifiers c
+            sleep 0.12
+            xdotool keyup c
+            sleep 0.08
+            import -display :99 -window root \
+              nexium-probe/field-journal/03_inspected.png
+            xdotool keydown --clearmodifiers x
+            sleep 0.12
+            xdotool keyup x
+            sleep 0.08
+            xdotool keydown --clearmodifiers q
+            sleep 0.12
+            import -display :99 -window root \
+              nexium-probe/field-journal/04_one_open.png
+            # Holding L prevents a movement despite 400ms of Right.
+            xdotool keydown --clearmodifiers Right
+            sleep 0.40
+            xdotool keyup Right
+            import -display :99 -window root \
+              nexium-probe/field-journal/05_one_open_right_held.png
+            xdotool keyup q
+            sleep 0.14
+            import -display :99 -window root \
+              nexium-probe/field-journal/06_one_closed.png
+            # Stage 323: first let the PREVIOUS CLUE NOTED caption
+            # expire, otherwise a stale old overlay could fake success.
+            sleep 1.20
+            import -display :99 -window root \
+              nexium-probe/field-journal/07_previous_caption_expired.png
+            # A reinspection of the ALREADY recorded clue must
+            # *create* fresh blue CLUE NOTED, without another B press.
+            xdotool keydown --clearmodifiers c
+            sleep 0.12
+            xdotool keyup c
+            sleep 0.08
+            import -display :99 -window root \
+              nexium-probe/field-journal/08_revisited_noted.png
+            xdotool keydown --clearmodifiers q
+            sleep 0.12
+            import -display :99 -window root \
+              nexium-probe/field-journal/09_revisit_journal.png
+            xdotool keyup q
+            sleep 1.20
+            import -display :99 -window root \
+              nexium-probe/field-journal/10_revisit_expired.png
+            walk_to_event
+            capture_manual 04_event_again
+            send_manual_key z save-event     # Store pending event in quicksave slot
+            capture_manual 05_event_saved
+            send_manual_key c     # Switch A acknowledges; bar becomes green
+            capture_manual 06_event_acknowledged
+            send_manual_key n load-event     # Restores pending event + yellow status
+            capture_manual 07_event_restored
+          else
+            printf '%s\n' 'No NeXium guest window; manual test not performed' \
+              > nexium-probe/manual-snapshot/input-error.txt
+          fi
+
+          set +e
+          wait "$emulator_pid"
+          result=$?
+          kill "$monitor_pid" 2>/dev/null
+          wait "$monitor_pid" 2>/dev/null
+          set -e
+          echo "$result" > nexium-probe/process-exit-code.txt
+          exit 0
+      - name: Prove FIRST guest visibly saved the pending event on SD
+        run: |
+          /usr/bin/python3 tools/audit_nexium_storage_feedback.py \
+            --screenshots nexium-probe/status-feedback \
+            --report nexium-probe/storage-feedback-audit.json
+      - name: Launch SECOND fresh NeXium process and reload event from SD
+        id: restart
+        timeout-minutes: 3
+        run: |
+          set -eu
+          mkdir -p nexium-probe/independent-restart
+          test -s nexium-probe/first-process.pid
+          test -s nexium-probe/process-exit-code.txt
+          test -f nexium-probe/storage-feedback-audit.json
+          export DISPLAY=:99
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-wild-arms-data"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          export RUST_LOG=info
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          timeout --signal=TERM --kill-after=8 75s \
+            ./nexium-dist/NeXium/nexium \
+            "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+            > nexium-probe/independent-restart/second-process.log 2>&1 &
+          second_pid=$!
+          printf '%s\n' "$second_pid" > nexium-probe/independent-restart/second.pid
+          sleep 15
+          wid=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null | tail -n 1) || true
+          test -n "$wid"
+          xdotool windowfocus "$wid"
+          import -display :99 -window root \
+            nexium-probe/independent-restart/01_fresh_process_start.png
+          # Second process has never received Y or X: its RAM save is empty.
+          # NeXium maps Switch Minus to the host N key.
+          xdotool keydown --clearmodifiers n
+          sleep 0.23
+          xdotool keyup n
+          sleep 0.19
+          import -display :99 -window root \
+            nexium-probe/independent-restart/02_sd_loaded_notice.png
+          sleep 1.3
+          import -display :99 -window root \
+            nexium-probe/independent-restart/03_restored_pending_event.png
+          # Plus (host M) cleanly exits the application when supported.
+          xdotool keydown --clearmodifiers m || true
+          sleep 0.22
+          xdotool keyup m || true
+          sleep 2
+          # The application may exit while the GUI remains; stop the GUI.
+          kill -TERM "$second_pid" 2>/dev/null || true
+          set +e
+          wait "$second_pid"
+          result=$?
+          set -e
+          echo "$result" > nexium-probe/independent-restart/exit-code.txt
+          FIRST_PID=$(cat nexium-probe/first-process.pid) \
+          SECOND_PID="$second_pid" /usr/bin/python3 -c '
+          import json, os
+          first=int(os.environ["FIRST_PID"])
+          second=int(os.environ["SECOND_PID"])
+          print(json.dumps({"first_pid":first,"second_pid":second,
+              "first_wait_completed":True,
+              "same_emulator_data_root":True},sort_keys=True))' \
+            > nexium-probe/independent-restart/processes.json
+      - name: Prove first-process SD write restored in SECOND guest process
+        run: |
+          /usr/bin/python3 tools/audit_nexium_process_restart.py \
+            --reference same-commit-host-references \
+            --screenshots nexium-probe/independent-restart \
+            --first-notice-json nexium-probe/storage-feedback-audit.json \
+            --first-saved nexium-probe/manual-snapshot/05_event_saved.png \
+            --processes nexium-probe/independent-restart/processes.json \
+            --output nexium-probe/independent-restart-audit.json
+      - name: Verify isolated NeXium SDMC journal then corrupt newest generation
+        run: |
+          /usr/bin/python3 tools/audit_nexium_sd_recovery.py inject \
+            --data-root "$RUNNER_TEMP/nexium-wild-arms-data" \
+            --manifest nexium-probe/sd-fault-manifest.json
+      - name: Launch THIRD independent NeXium process to test SD WARN recovery
+        timeout-minutes: 3
+        run: |
+          set -eu
+          mkdir -p nexium-probe/damaged-sd-recovery
+          export DISPLAY=:99
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-wild-arms-data"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          export RUST_LOG=info
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          timeout --signal=TERM --kill-after=8 70s \
+            ./nexium-dist/NeXium/nexium \
+            "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+            > nexium-probe/damaged-sd-recovery/third-process.log 2>&1 &
+          third_pid=$!
+          sleep 15
+          wid=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null | tail -n 1) || true
+          test -n "$wid"
+          xdotool windowfocus "$wid"
+          import -display :99 -window root \
+            nexium-probe/damaged-sd-recovery/01_fresh_process_start.png
+          xdotool keydown --clearmodifiers n
+          sleep 0.23
+          xdotool keyup n
+          sleep 0.19
+          import -display :99 -window root \
+            nexium-probe/damaged-sd-recovery/02_sd_warn_notice.png
+          sleep 1.3
+          import -display :99 -window root \
+            nexium-probe/damaged-sd-recovery/03_fallback_initial_state.png
+          xdotool keydown --clearmodifiers m || true
+          sleep 0.22
+          xdotool keyup m || true
+          sleep 2
+          kill -TERM "$third_pid" 2>/dev/null || true
+          set +e
+          wait "$third_pid"
+          result=$?
+          set -e
+          echo "$result" > nexium-probe/damaged-sd-recovery/exit-code.txt
+          SECOND_PID=$(cat nexium-probe/independent-restart/second.pid) \
+          THIRD_PID="$third_pid" /usr/bin/python3 -c '
+          import json,os
+          print(json.dumps({
+              "second_pid":int(os.environ["SECOND_PID"]),
+              "third_pid":int(os.environ["THIRD_PID"]),
+              "second_wait_completed":True,
+              "same_emulator_data_root":True},sort_keys=True))' \
+            > nexium-probe/damaged-sd-recovery/processes.json
+      - name: Require actual SD WARN and previous-generation fallback in third guest
+        run: |
+          /usr/bin/python3 tools/audit_nexium_sd_recovery.py verify \
+            --reference same-commit-host-references \
+            --screenshots nexium-probe/damaged-sd-recovery \
+            --data-root "$RUNNER_TEMP/nexium-wild-arms-data" \
+            --manifest nexium-probe/sd-fault-manifest.json \
+            --processes nexium-probe/damaged-sd-recovery/processes.json \
+            --output nexium-probe/sd-recovery-audit.json
+      - name: Launch FOURTH independent guest to repair damaged SD journal
+        timeout-minutes: 3
+        run: |
+          set -eu
+          mkdir -p nexium-probe/repaired-sd
+          export DISPLAY=:99
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-wild-arms-data"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          export RUST_LOG=info,nexium_kernel::kernel::svc=debug
+          export NEXIUM_DIAG=1
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          timeout --signal=TERM --kill-after=8 70s \
+            ./nexium-dist/NeXium/nexium \
+            "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+            > nexium-probe/repaired-sd/fourth-process.log 2>&1 &
+          fourth_pid=$!
+          echo "$fourth_pid" > nexium-probe/repaired-sd/fourth.pid
+          sleep 15
+          wid=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null | tail -n 1) || true
+          test -n "$wid"
+          xdotool windowfocus "$wid"
+          # Fresh RAM is empty; damaged newest B triggers fallback A + SD WARN.
+          xdotool keydown --clearmodifiers n
+          sleep 0.23
+          xdotool keyup n
+          sleep 0.19
+          import -display :99 -window root \
+            nexium-probe/repaired-sd/01_sd_warn_before_repair.png
+          sleep 1.3
+          # Save the recovered state back to disk. The repaired generation B
+          # replaces the CRC-invalid slot; A is never unlinked or rewritten.
+          xdotool keydown --clearmodifiers z
+          sleep 0.23
+          xdotool keyup z
+          sleep 0.19
+          import -display :99 -window root \
+            nexium-probe/repaired-sd/02_sd_saved_after_repair.png
+          sleep 1.3
+          import -display :99 -window root \
+            nexium-probe/repaired-sd/03_repaired_start_scene.png
+          xdotool keydown --clearmodifiers m || true
+          sleep 0.22
+          xdotool keyup m || true
+          sleep 2
+          kill -TERM "$fourth_pid" 2>/dev/null || true
+          set +e
+          wait "$fourth_pid"
+          result=$?
+          set -e
+          echo "$result" > nexium-probe/repaired-sd/fourth-exit-code.txt
+          # Experimental NRO writes one non-sensitive phase line to SDMC.
+          # Copy it BEFORE guest 5 can replace this evidence.
+          guest_trace="$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field/save-phase.txt"
+          if test -s "$guest_trace"; then
+            cp "$guest_trace" nexium-probe/repaired-sd/fourth-save-phase.txt
+          fi
+          # Preserve fourth-process internal debug logs BEFORE fifth starts.
+          logfile=$(find "$NEXIUM_DATA_ROOT/logs" -maxdepth 1 -type f             -name '*.log' -printf '%T@ %p\n' 2>/dev/null             | sort -nr | head -n 1 | cut -d' ' -f2-) || true
+          if test -n "$logfile" && test -f "$logfile"; then
+            cp "$logfile" nexium-probe/repaired-sd/fourth-internal.log
+          fi
+
+      - name: Launch FIFTH guest from repaired SD with no in-memory checkpoint
+        timeout-minutes: 3
+        run: |
+          set -eu
+          mkdir -p nexium-probe/repaired-restart
+          export DISPLAY=:99
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-wild-arms-data"
+          export NEXIUM_VIDEO_FFMPEG=0
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export RUST_BACKTRACE=1
+          export RUST_LOG=info
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          timeout --signal=TERM --kill-after=8 70s \
+            ./nexium-dist/NeXium/nexium \
+            "$PWD/nexium-probe/ne_loader_probe_only.nro" \
+            > nexium-probe/repaired-restart/fifth-process.log 2>&1 &
+          fifth_pid=$!
+          sleep 15
+          wid=$(xdotool search --onlyvisible --class 'nexium' 2>/dev/null | tail -n 1) || true
+          test -n "$wid"
+          xdotool windowfocus "$wid"
+          import -display :99 -window root \
+            nexium-probe/repaired-restart/01_fresh_process_start.png
+          xdotool keydown --clearmodifiers n
+          sleep 0.23
+          xdotool keyup n
+          sleep 0.19
+          import -display :99 -window root \
+            nexium-probe/repaired-restart/02_sd_loaded_notice.png
+          sleep 1.3
+          import -display :99 -window root \
+            nexium-probe/repaired-restart/03_restored_start_scene.png
+          xdotool keydown --clearmodifiers m || true
+          sleep 0.22
+          xdotool keyup m || true
+          sleep 2
+          kill -TERM "$fifth_pid" 2>/dev/null || true
+          set +e
+          wait "$fifth_pid"
+          result=$?
+          set -e
+          echo "$result" > nexium-probe/repaired-restart/exit-code.txt
+          THIRD_PID=$(cat nexium-probe/damaged-sd-recovery/processes.json | \
+            /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin)["third_pid"])') \
+          FOURTH_PID=$(cat nexium-probe/repaired-sd/fourth.pid) \
+          FIFTH_PID="$fifth_pid" /usr/bin/python3 -c '
+          import json,os
+          print(json.dumps({
+            "third_pid":int(os.environ["THIRD_PID"]),
+            "fourth_pid":int(os.environ["FOURTH_PID"]),
+            "fifth_pid":int(os.environ["FIFTH_PID"]),
+            "fourth_wait_completed":True,
+            "fifth_wait_completed":True,
+            "same_emulator_data_root":True},sort_keys=True))' \
+            > nexium-probe/repaired-restart/processes.json
+
+      - name: Extract guest SAVE phase diagnostics for the fourth process
+        if: always()
+        run: |
+          set +e
+          printf 'Fourth guest trace from host log:\n'
+          grep 'WA_SAVE_TRACE' nexium-probe/repaired-sd/fourth-process.log | tail -n 12 || true
+          printf 'Fourth guest trace from internal NeXium logs:\n'
+          grep -h 'WA_SAVE_TRACE' nexium-probe/repaired-sd/fourth-internal.log             | tail -n 12 || true
+          printf 'Fourth guest trace from isolated SDMC:\n'
+          cat nexium-probe/repaired-sd/fourth-save-phase.txt 2>/dev/null || true
+          /usr/bin/python3 tools/audit_nexium_write_trace.py             --output nexium-probe/repaired-sd/write-trace.json             nexium-probe/repaired-sd/fourth-save-phase.txt             nexium-probe/repaired-sd/fourth-process.log             nexium-probe/repaired-sd/fourth-internal.log || true
+      - name: Audit actual fourth guest SD repair and fifth guest clean SD load
+        run: |
+          /usr/bin/python3 tools/audit_nexium_sd_repair.py \
+            --reference same-commit-host-references \
+            --fourth-screens nexium-probe/repaired-sd \
+            --fifth-screens nexium-probe/repaired-restart \
+            --data-root "$RUNNER_TEMP/nexium-wild-arms-data" \
+            --damage-manifest nexium-probe/sd-fault-manifest.json \
+            --process-manifest nexium-probe/repaired-restart/processes.json \
+            --output nexium-probe/sd-repair-audit.json
+      - name: Launch GUI-only control without NRO and compare screen state
+        id: control
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          export DISPLAY=:99
+          export NEXIUM_DATA_ROOT="$RUNNER_TEMP/nexium-empty-control"
+          export SDL_AUDIODRIVER=dummy
+          export WGPU_BACKEND=vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          if test -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json; then
+            export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          fi
+          set +e
+          timeout --signal=TERM --kill-after=8 42s \
+            ./nexium-dist/NeXium/nexium > nexium-probe/no-nro-control.log 2>&1 &
+          pid=$!
+          sleep 25
+          import -display :99 -window root nexium-probe/control-without-nro.png
+          wait "$pid"
+          echo "$?" > nexium-probe/control-exit-code.txt
+          set -e
+          /usr/bin/python3 tools/audit_nexium_launch_control.py \
+            --guest nexium-probe/screen-final.png \
+            --no-nro nexium-probe/control-without-nro.png \
+            --report nexium-probe/control-comparison.json
+
+      - name: Retain NeXium internal host logs from both runs
+        if: always()
+        run: |
+          set -eu
+          mkdir -p nexium-probe
+          for label in guest control; do
+            if test "$label" = guest; then
+              root="$RUNNER_TEMP/nexium-wild-arms-data/logs"
+            else
+              root="$RUNNER_TEMP/nexium-empty-control/logs"
+            fi
+            dest="nexium-probe/$label-internal.log"
+            if test -d "$root"; then
+              latest=$(find "$root" -maxdepth 1 -name 'nexium-*.log' -type f -printf '%T@ %p\n' |
+                sort -nr | head -n 1 | cut -d' ' -f2-) || true
+              if test -n "$latest" && test -f "$latest"; then
+                head -c 2000000 "$latest" > "$dest"
+              fi
+            fi
+            if ! test -f "$dest"; then
+              echo "Internal log not found: $root" > "nexium-probe/$label-internal-missing.txt"
+            fi
+          done
+          /usr/bin/python3 tools/audit_nexium_session.py \
+            --guest nexium-probe/guest-internal.log \
+            --control nexium-probe/control-internal.log \
+            --report nexium-probe/session-audit.json
+      - name: Select five real ordered checkpoints against same-commit host PNGs
+        if: always()
+        run: |
+          /usr/bin/python3 tools/audit_nexium_checkpoints.py \
+            --reference same-commit-host-references \
+            --initial nexium-probe/screen-initial.png \
+            --timeline nexium-probe/timeline \
+            --selected nexium-probe/verified-checkpoints \
+            --report nexium-probe/five-checkpoints.json
+          cp nexium-probe/verified-checkpoints/01_area0_event.png nexium-probe/screen-after-x.png
+          cp nexium-probe/verified-checkpoints/02_area0_exit.png nexium-probe/screen-middle.png
+          cp nexium-probe/verified-checkpoints/03_area1_start.png nexium-probe/screen-later.png
+          cp nexium-probe/verified-checkpoints/04_area0_return.png nexium-probe/screen-final.png
+      - name: Compare all five scaled game images pixel-by-pixel excluding the NeXium HUD
+        if: always()
+        run: |
+          /usr/bin/python3 tools/audit_nexium_pixel_parity.py \
+            --reference same-commit-host-references \
+            --observed nexium-probe/verified-checkpoints \
+            --report nexium-probe/pixel-parity.json
+      - name: Audit actual guest SD/RAM notice colors and text
+        if: always()
+        run: |
+          /usr/bin/python3 tools/audit_nexium_storage_feedback.py \
+            --screenshots nexium-probe/status-feedback \
+            --report nexium-probe/storage-feedback-audit.json
+      - name: Audit real Switch Y/Minus and pending event restore screenshots
+        if: always()
+        run: |
+          /usr/bin/python3 tools/audit_nexium_manual_snapshot.py \
+            --reference same-commit-host-references \
+            --screenshots nexium-probe/manual-snapshot \
+            --report nexium-probe/manual-snapshot-audit.json
+      - name: Audit real guest L-held exploration journal screenshots
+        if: always()
+        run: |
+          /usr/bin/python3 tools/audit_nexium_field_journal.py \
+            --screenshots nexium-probe/field-journal \
+            --report nexium-probe/field-journal-audit.json
+      - name: Verify intended Switch X triggers visible world changes
+        if: always()
+        run: |
+          /usr/bin/python3 tools/audit_nexium_autoplay.py \
+            --initial nexium-probe/screen-initial.png \
+            --intermediate nexium-probe/screen-after-x.png \
+              nexium-probe/screen-middle.png \
+              nexium-probe/screen-later.png \
+              nexium-probe/screen-final.png \
+            --require-event-roundtrip \
+            --report nexium-probe/autoplay-evidence.json
+      - name: Classify pixel evidence; require guest pixels for success
+        id: evidence
+        if: always()
+        run: |
+          /usr/bin/python3 tools/audit_nexium_probe.py \
+            nexium-probe/screen-initial.png \
+            nexium-probe/screen-after-x.png \
+            nexium-probe/screen-middle.png \
+            nexium-probe/screen-later.png \
+            nexium-probe/screen-final.png \
+            --commit "$GITHUB_SHA" \
+            --nexium-archive-sha256 "$NEXIUM_ARCHIVE_SHA256" \
+            --report nexium-probe/evidence.json
+      - name: Record explicit verification status in workflow summary
+        if: always()
+        run: |
+          echo "## NeXium smoke / experimental" >> "$GITHUB_STEP_SUMMARY"
+          echo "Native build succeeded; NeXium guest execution is **not assumed**." >> "$GITHUB_STEP_SUMMARY"
+          if test -f nexium-probe/evidence.json; then
+            cat nexium-probe/evidence.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No classifiable emulator frame evidence was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/process-exit-code.txt; then
+            echo "NeXium process exit code: $(cat nexium-probe/process-exit-code.txt)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/five-checkpoints.json; then
+            echo "Five-scene structural evidence:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; x=json.load(open("nexium-probe/five-checkpoints.json")); print("validated scenes:",len(x["verified_scenes"]),"complete:",x["full_five_checkpoint_sequence_observed"] )' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/sd-repair-audit.json; then
+            echo "Fourth/fifth guest repaired SD journal and clean reload:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/sd-repair-audit.json")); print("complete:",r["all_checks_passed"],"status pixel mismatches:",sum(r["status_plaque_mismatches"].values()))' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/sd-recovery-audit.json; then
+            echo "Third-process damaged-SD recovery:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/sd-recovery-audit.json")); print("recovered:",r["all_checks_passed"],"notice mismatches:",r["sd_warn_mismatched_pixels"])' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/independent-restart-audit.json; then
+            echo "Independent process SD reload:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; r=json.load(open("nexium-probe/independent-restart-audit.json")); print("complete:",r["all_checks_passed"],"mismatches:",r["notice_rgb_mismatches"])' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/storage-feedback-audit.json; then
+            echo "Real on-screen storage notices:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; d=json.load(open("nexium-probe/storage-feedback-audit.json")); print("all four indicators valid:",d["all_four_indicators_valid"])' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/manual-snapshot-audit.json; then
+            echo "Manual Y/Minus + event restoration audit:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; d=json.load(open("nexium-probe/manual-snapshot-audit.json")); print("manual quicksave and event restore confirmed:",d["manual_quicksave_and_event_restore_confirmed"])' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if test -f nexium-probe/field-journal-audit.json; then
+            echo "Real first-guest L journal screenshot verification:" >> "$GITHUB_STEP_SUMMARY"
+            /usr/bin/python3 -c 'import json; d=json.load(open("nexium-probe/field-journal-audit.json")); print("complete:",d["open_release_collect_reopen_confirmed"],"checks:",len(d["checks"]))' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "No firmware, ROM, BIOS or commercial assets used." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nexium-experimental-probe-evidence
+          path: nexium-probe/
+          if-no-files-found: warn

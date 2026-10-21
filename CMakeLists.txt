@@ -5,6 +5,102 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(wa_core src/core.cpp)
 target_include_directories(wa_core PUBLIC include)
 enable_testing()
+add_library(wa_field_core src/field.cpp)
+target_include_directories(wa_field_core PUBLIC include)
+add_executable(wa_field_core_tests tests/test_field.cpp)
+target_link_libraries(wa_field_core_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_core_tests COMMAND wa_field_core_tests)
+
+# Field movement + viewport integration replay (synthetic host-only).
+add_executable(wa_field_pipeline_tests tests/test_field_pipeline.cpp)
+target_link_libraries(wa_field_pipeline_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_pipeline_tests COMMAND wa_field_pipeline_tests)
+
+# Platform-neutral D-pad/analog controller mapping and scene acknowledgement.
+add_executable(wa_field_controls_tests tests/test_field_controls.cpp)
+target_link_libraries(wa_field_controls_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_controls_tests COMMAND wa_field_controls_tests)
+
+# Deterministic area transitions driven by controller acknowledgement.
+add_executable(wa_field_world_tests tests/test_field_world.cpp)
+target_link_libraries(wa_field_world_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_world_tests COMMAND wa_field_world_tests)
+
+# Volatile manual field quicksave/quickload and strict snapshot validation.
+add_executable(wa_field_snapshot_tests tests/test_field_snapshot.cpp)
+target_link_libraries(wa_field_snapshot_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_snapshot_tests COMMAND wa_field_snapshot_tests)
+
+# Stage 293: versioned, portable 40-byte synthetic field save record.
+add_executable(wa_field_save_codec_tests tests/test_field_save_codec.cpp)
+target_link_libraries(wa_field_save_codec_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_save_codec_tests COMMAND wa_field_save_codec_tests)
+
+# Stage 294: two-generation checked journal, temp file + fsync + publish.
+add_executable(wa_field_save_file_tests tests/test_field_save_file.cpp)
+target_link_libraries(wa_field_save_file_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_save_file_tests COMMAND wa_field_save_file_tests)
+
+# Stage 295: timed, platform-neutral storage outcome indicator.
+add_executable(wa_field_save_feedback_tests tests/test_field_save_feedback.cpp)
+target_link_libraries(wa_field_save_feedback_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_save_feedback_tests COMMAND wa_field_save_feedback_tests)
+
+# Stage 297: actual separate OS processes verify journal persistence.
+# Python is needed here before the earlier independent GTE fixture block.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_executable(wa_field_save_process tests/field_save_process.cpp)
+target_link_libraries(wa_field_save_process PRIVATE wa_field_core)
+add_test(NAME wa_field_save_process_restart
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/test_field_save_process_restart.py
+                 $<TARGET_FILE:wa_field_save_process>)
+set_tests_properties(wa_field_save_process_restart PROPERTIES
+                     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+# Stage 307: bounded per-session event discovery ledger, no save-schema change.
+add_executable(wa_field_discovery_tests tests/test_field_discovery.cpp)
+target_link_libraries(wa_field_discovery_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_discovery_tests COMMAND wa_field_discovery_tests)
+
+# Stage 308: L-held on-field read-only clue journal, validated pixel UI.
+add_executable(wa_field_journal_view_tests tests/test_field_journal_view.cpp)
+target_link_libraries(wa_field_journal_view_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_journal_view_tests COMMAND wa_field_journal_view_tests)
+
+# Host validation of the exact software framebuffer algorithm used by libnx.
+add_executable(wa_field_pixels_tests tests/test_field_pixels.cpp)
+target_link_libraries(wa_field_pixels_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_pixels_tests COMMAND wa_field_pixels_tests)
+
+# Executable end-to-end host reference replay with optional PPM exports.
+add_executable(wa_field_capture tests/field_capture.cpp)
+target_link_libraries(wa_field_capture PRIVATE wa_field_core)
+add_test(NAME wa_field_capture_replay COMMAND wa_field_capture)
+
+# Reference screenshots and native autoplay share the same scripted controls.
+add_executable(wa_field_scenario_tests tests/test_field_scenario.cpp)
+target_link_libraries(wa_field_scenario_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_scenario_tests COMMAND wa_field_scenario_tests)
+
+# Pacing for the capture-friendly Switch autoplay, tested on host.
+add_executable(wa_field_autoplay_tests tests/test_field_autoplay.cpp)
+target_link_libraries(wa_field_autoplay_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_autoplay_tests COMMAND wa_field_autoplay_tests)
+
+# Exact fractional millisecond preservation for libnx hardware counter.
+add_executable(wa_field_frame_ticks_tests tests/test_field_frame_ticks.cpp)
+target_link_libraries(wa_field_frame_ticks_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_frame_ticks_tests COMMAND wa_field_frame_ticks_tests)
+
+# End-to-end controller -> hardware clock -> world -> viewport -> RGBA pixels.
+add_executable(wa_field_runtime_tests tests/test_field_runtime.cpp)
+target_link_libraries(wa_field_runtime_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_runtime_tests COMMAND wa_field_runtime_tests)
+
+# Asset-free terminal exploration demo: host-only, NOT a Switch NRO.
+add_executable(wa_field_demo src/field_demo.cpp)
+target_link_libraries(wa_field_demo PRIVATE wa_field_core)
+
 add_executable(wa_core_tests tests/test_core.cpp)
 target_link_libraries(wa_core_tests PRIVATE wa_core)
 add_test(NAME wa_core_tests COMMAND wa_core_tests)
