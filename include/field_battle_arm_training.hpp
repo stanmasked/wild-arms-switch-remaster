@@ -20,6 +20,10 @@ struct ArmTrainingSession {
   BattleRewardAccount rewards{};
   // ROM-free in-memory balancing, never part of WABJ or SDMC.
   BattleRewardPayout victory_offer{kPrototypeVictoryExp,kPrototypeVictoryGella};
+  // Exact delta visible on the last successfully rendered Victory frame.
+  // B claims this snapshot, not a subsequently changed balancing offer.
+  BattleRewardPayout displayed_victory_claim{};
+  bool victory_claim_visible=false;
   bool active=false;
 };
 
@@ -72,6 +76,8 @@ struct ArmTrainingFrame {
     // Opening buttons must be released before becoming gameplay edges.
     next.cursor.previous=input.pad;
     next.arm_edges.previous=input.arm;
+    next.displayed_victory_claim={};
+    next.victory_claim_visible=false;
     next.active=true;
   } else {
     if (!valid_field_battle(next.battle) ||
@@ -81,9 +87,17 @@ struct ArmTrainingFrame {
       return {ArmTrainingStatus::InvalidState};
     if (input.close) {
       const auto resolution=record_battle_exit(next.history,next.battle.phase);
+      // A victory cannot be claimed before its preview was actually rendered.
+      // Otherwise B would award a value the player never saw.
+      if (resolution==BattleResolution::Victory &&
+          !next.victory_claim_visible)
+        return {ArmTrainingStatus::InvalidState};
+      const auto claim_offer=resolution==BattleResolution::Victory
+          ? next.displayed_victory_claim : next.victory_offer;
       const auto payout=credit_battle_reward(
-          next.rewards,resolution,next.victory_offer);
+          next.rewards,resolution,claim_offer);
       next.active=false;
+      next.victory_claim_visible=false;
       current=next;
       return {ArmTrainingStatus::Inactive,false,true,{},{},resolution,payout};
     }
@@ -138,6 +152,9 @@ struct ArmTrainingFrame {
     // and the later B-close credit. Avoid fixed "8/12" HUD literals.
     const auto expected=preview_battle_reward(
         next.rewards,BattleResolution::Victory,next.victory_offer);
+    // Commit the preview snapshot only with this successfully rendered frame.
+    next.displayed_victory_claim=expected;
+    next.victory_claim_visible=true;
     char claim[64]{};
     (void)std::snprintf(claim,sizeof(claim),"B CLAIM EXP %u  GELLA %u",
         static_cast<unsigned>(expected.experience),
@@ -152,6 +169,9 @@ struct ArmTrainingFrame {
     const int claim_x=ink_width+440>kPopupRight
         ? kPopupRight-ink_width : 440;
     battle_text(target,claim_x,368,claim,kBattleGreen);
+  } else {
+    next.displayed_victory_claim={};
+    next.victory_claim_visible=false;
   }
   draw_previous_battle_history(target,next.history);
   // Only after a completed victory, display volatile ROM-free
