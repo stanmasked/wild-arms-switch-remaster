@@ -54,6 +54,8 @@ def probe_flag_tokens(source, expected_output=0x8000):
             cursor += 2
         remaining_flag_bits -= 1
         flags >>= 1
+    if output > expected_output:
+        return "OUTPUT_OVERSHOOT", output, cursor
     return ("NEAR_BOUNDARY" if 0 <= n - cursor <= 3 else "EARLY_OR_TRAILING_DATA",
             output, cursor)
 
@@ -80,6 +82,7 @@ def audit_streams(path, *, slot_bytes=SLOT_BYTES,
                    "marker_0x8000_count": 0,
                    "span_min": None, "span_max": None,
                    "candidate_flag_tokens_truncated": 0,
+                   "candidate_flag_tokens_overshoot": 0,
                    "candidate_flag_tokens_early_or_trailing": 0,
                    "candidate_flag_tokens_near_boundary": 0,
                    "span_larger_than_output_hypothesis": 0}
@@ -125,6 +128,7 @@ def audit_streams(path, *, slot_bytes=SLOT_BYTES,
                     status, _, _ = probe_flag_tokens(stream, output_size_hypothesis)
                     row[{
                         "TRUNCATED": "candidate_flag_tokens_truncated",
+                        "OUTPUT_OVERSHOOT": "candidate_flag_tokens_overshoot",
                         "EARLY_OR_TRAILING_DATA": "candidate_flag_tokens_early_or_trailing",
                         "NEAR_BOUNDARY": "candidate_flag_tokens_near_boundary",
                     }[status]] += 1
