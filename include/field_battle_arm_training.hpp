@@ -1,6 +1,6 @@
 #pragma once
-// Stage401: optional ARM battle session shared by host and gated Switch.
-// Volatile outcomes only: never writes WABJ v1 or field save slots.
+// Stage401/404: opt-in ARM battle session shared by host and gated Switch.
+// Battle history/ammo stay volatile; the reward account uses a separate WAER journal.
 #include "field_battle_arm_controller.hpp"
 #include "field_battle_arm_view.hpp"
 #include "field_battle_rewards.hpp"
@@ -18,9 +18,9 @@ struct ArmTrainingSession {
   ArmEdgeState arm_edges{};
   BattleHistory history{};
   BattleRewardAccount rewards{};
-  // ROM-free in-memory balancing, never part of WABJ or SDMC.
+  // ROM-free balancing offer. The updated account is serialized separately.
   BattleRewardPayout victory_offer{kPrototypeVictoryExp,kPrototypeVictoryGella};
-  // Visible RAM-only warning if the separate WAER journal is unavailable.
+  // Visible warning if the separate WAER journal is unavailable or degraded.
   bool reward_storage_warning=false;
   bool active=false;
 };
@@ -56,7 +56,7 @@ struct ArmTrainingFrame {
 }
 
 // A complete, independent training screen connecting ARM rules, input,
-// pixel HUD, and VOLATILE battle outcomes. No disk I/O, no libnx mapping.
+// pixel HUD, and session-local battle outcomes. Storage stays in main.cpp; no libnx mapping.
 // Frame errors never commit state or draw partial pixels. Closing renders
 // nothing and awards synthetic EXP/Gella once, only after a real victory.
 [[nodiscard]] inline ArmTrainingFrame advance_arm_training_session(
