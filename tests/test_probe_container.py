@@ -48,6 +48,25 @@ class ProbeContainerTests(unittest.TestCase):
                         previous_offset, previous_length = windows[index - 1]
                         self.assertGreaterEqual(offset, previous_offset + previous_length)
 
+
+    def test_prefix_mode_reproduces_legacy_header_sample_hash(self):
+        data = bytes(range(256)) * 2
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "synthetic.bin"
+            path.write_bytes(data)
+            result = probe(path, sample_bytes=256, layout="prefix")
+        self.assertEqual(result["sample"]["mode"], "prefix")
+        self.assertEqual(result["sample"]["bytes_read"], 256)
+        self.assertEqual(result["sample"]["sha256"], hashlib.sha256(data[:256]).hexdigest())
+        self.assertEqual(result["sample"]["windows"], [{"offset": 0, "bytes_read": 256}])
+
+    def test_rejects_unknown_sample_layout(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "candidate.bin"
+            path.write_bytes(b"x")
+            with self.assertRaisesRegex(ValueError, "layout"):
+                probe(path, layout="random")
+
     def test_rejects_empty_file(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "empty.bin"
