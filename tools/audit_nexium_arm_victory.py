@@ -11,10 +11,12 @@ from pathlib import Path
 
 from audit_nexium_arm_guest import (
     ARM_FULL_BAR, ARM_PARTIAL_BAR, ARM_PAST_PARTIAL,
-    GOLD, DARK, GREEN, RED, same_game, battle_slots
+    GOLD, DARK, MAP_STATUS, RED, same_game, battle_slots
 )
 from audit_nexium_arm_cold_boot import valid_terminated
 from audit_nexium_field_journal import native_pixel, read_rgb
+
+GREEN=MAP_STATUS
 
 NAMES=(
     "14_victory_field",
