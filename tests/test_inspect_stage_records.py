@@ -11,12 +11,14 @@ from inspect_stage_records import inspect_records  # noqa: E402
 
 class StageRecordProbeTests(unittest.TestCase):
     def test_four_synthetic_slots_one_marker_exception(self):
-        stride = 128
+        stride = 4096
         blocks = []
         for index in range(4):
             record = bytearray(stride)
-            record[0:4] = (0x80150000 + index * 4).to_bytes(4, "little")
-            record[8:12] = (0x8014F040).to_bytes(4, "little")
+            record[0:4] = (0x80150010 + index * 4).to_bytes(4, "little")
+            record[8:12] = (0x80150000).to_bytes(4, "little")
+            record[12:16] = (2048).to_bytes(4, "little")
+            record[32:36] = (0x801FFFF0).to_bytes(4, "little")
             if index != 2:
                 record[60:64] = b"Sony"
             blocks.append(bytes(record))
@@ -30,6 +32,10 @@ class StageRecordProbeTests(unittest.TestCase):
         self.assertEqual(report["unique_record_hash_count"], 4)
         self.assertEqual(report["word0_ram_like_count"], 4)
         self.assertEqual(report["word8_ram_like_count"], 4)
+        self.assertEqual(report["psx_exe_minus16_header_like_count"], 3)
+        self.assertEqual(report["psx_exe_minus16_header_exceptions"], [2])
+        self.assertEqual(report["psx_text_bytes_min"], 2048)
+        self.assertEqual(report["psx_text_bytes_max"], 2048)
         self.assertEqual(report["records"][0]["sha256"], hashlib.sha256(blocks[0]).hexdigest())
         self.assertFalse(report["interpretation"]["copyrighted_payload_emitted"])
 
