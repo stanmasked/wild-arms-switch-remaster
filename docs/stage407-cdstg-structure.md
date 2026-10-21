@@ -15,6 +15,22 @@ The ISO9660 primary volume identifier is `WILDARMS`. Sector-validated local extr
 - Block index **25** (zero-based) is the sole exception to the marker and RAM-like-header patterns. Its bytes must **not** be discarded or reinterpreted as a standard block without further proof.
 - All **128 block SHA-256 hashes are distinct**.
 
+## Stronger header correspondence with native PS-X EXE
+
+We also inspected the actual `EXE/WILDARMS.EXE;1` and `EXE/OPENING.EXE;1` headers from the same private disc. Both contain `PS-X EXE` and `Sony Computer Entertainment Inc.` at the expected native header positions. The 127 regular CDSTG block headers have the same field *layout shifted left by 16 bytes*:
+
+| Header element | Native PS-X EXE offset | CDSTG candidate offset |
+| --- | ---: | ---: |
+| Entry PC | `0x10` | `0x00` |
+| Text load address | `0x18` | `0x08` |
+| Text length | `0x1C` | `0x0C` |
+| Initial stack | `0x30` | `0x20` |
+| Beginning of Sony region string | `0x4C` | `0x3C` |
+
+For all 127 regular records the candidate text load address is `0x8014F040`, GP is zero, and initial stack is `0x801FFFF0`. The entry PC is four-byte aligned and lies in the declared text range. Text sizes are 2048-byte aligned, with 27 distinct sizes ranging from `0x4000` to `0x12800`.
+
+This supports a **trimmed PS-X EXE-like overlay-header hypothesis**, not a claim that a record can already be executed, nor that a block equals a map. The special block #25 does not match and is not treated as a corrupted or disposable record. More loader/relocation evidence is required.
+
 This demonstrates a repeatable *candidate* record layout. It **does not** prove that the blocks correspond one-to-one with maps, scenes, levels, or executable overlays. A `Sony` marker and RAM-like words are insufficient to infer their roles or decode graphics.
 
 ## Reproducing the metadata-only verification
