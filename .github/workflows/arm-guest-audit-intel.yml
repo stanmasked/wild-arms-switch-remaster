@@ -8,6 +8,7 @@ on:
       - 'stage-396-*'
       - 'stage-398-*'
       - 'stage-399-*'
+      - 'stage-400-*'
   pull_request:
     paths:
       - '.github/workflows/arm-guest-audit-intel.yml'
@@ -19,6 +20,8 @@ on:
       - 'tools/test_audit_nexium_arm_controls.py'
       - 'tools/audit_nexium_arm_burst.py'
       - 'tools/test_audit_nexium_arm_burst.py'
+      - 'tools/audit_nexium_arm_readiness.py'
+      - 'tools/test_audit_nexium_arm_readiness.py'
       - 'tools/test_audit_nexium_battle_two_victories.py'
   workflow_dispatch:
 
@@ -51,12 +54,15 @@ jobs:
           python3 -m py_compile tools/test_audit_nexium_arm_controls.py
           python3 -m py_compile tools/audit_nexium_arm_burst.py
           python3 -m py_compile tools/test_audit_nexium_arm_burst.py
-      - name: Run thirty-three synthetic auditor contract scenarios
+          python3 -m py_compile tools/audit_nexium_arm_readiness.py
+          python3 -m py_compile tools/test_audit_nexium_arm_readiness.py
+      - name: Run forty synthetic auditor contract scenarios
         run: |
           python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_guest.py' -v
           python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_cold_boot.py' -v
           python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_controls.py' -v
           python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_burst.py' -v
+          python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_readiness.py' -v
       - name: Record explicitly synthetic boundary
         run: |
           echo 'These synthetic tests validate the AUDITOR only, not an actual NeXium guest.' >> "$GITHUB_STEP_SUMMARY"
