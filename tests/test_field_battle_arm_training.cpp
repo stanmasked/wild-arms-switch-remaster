@@ -304,8 +304,14 @@ void real_two_bursts_victory_credit_once_and_visible_after_reentry() {
   assert(finisher.arm.update.battle.inflicted==13);
   assert(session.magazine.rounds==1 && session.battle.enemies[1].hp==0);
   assert(session.battle.phase==BattlePhase::Victory);
-  // Green victory frame is rendered but no reward is credited until B.
+  // Preview is legible ON the Victory frame, still not a credited payout.
+  // Battle 5x7 glyph pixels: B, the 8, and the 1/2 in "GELLA 12".
   assert(display.at(320,294)==kBattleGreen);
+  assert(display.at(440+2,368)==kBattleGreen);          // B
+  assert(display.at(440+12*13+2,368)==kBattleGreen);    // 8
+  assert(display.at(440+21*13+4,368)==kBattleGreen);    // 1
+  assert(display.at(440+22*13+2,368)==kBattleGreen);    // 2
+  assert(display.at(440+23*13,368)==kBattleBackground); // no overflow
   assert(session.history.victories==0 && session.rewards.experience==0);
   const auto final_picture=display.data;
 
@@ -323,6 +329,8 @@ void real_two_bursts_victory_credit_once_and_visible_after_reentry() {
   assert(advance_arm_training_session(session,reenter,display.target).entered);
   assert(session.magazine.rounds==3 && session.battle.enemies[0].hp==14);
   assert(session.battle.enemies[1].hp==17 && session.history.victories==1);
+  // The claim prompt is only for an ACTUAL Victory frame, never reentry.
+  assert(display.at(440+2,368)!=kBattleGreen);
   assert(display.at(70,667)==kBattleGreen); // "EXP 8  GELLA 12"
   assert(display.at(70,687)==kBattleGold);  // "W 1  L 0  E 0"
   assert(session.rewards.experience==8 && session.rewards.gella==12);
