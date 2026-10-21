@@ -5,6 +5,7 @@ on:
     branches:
       - 'stage-390-*'
       - 'stage-396-*'
+      - 'stage-398-*'
   pull_request:
     paths:
       - '.github/workflows/arm-nexium-guest.yml'
@@ -12,6 +13,8 @@ on:
       - 'tools/test_audit_nexium_arm_guest.py'
       - 'tools/audit_nexium_arm_cold_boot.py'
       - 'tools/test_audit_nexium_arm_cold_boot.py'
+      - 'tools/audit_nexium_arm_controls.py'
+      - 'tools/test_audit_nexium_arm_controls.py'
       - 'switch/source/main.cpp'
       - 'switch/Makefile'
       - 'include/field_battle_arm*.hpp'
@@ -69,6 +72,7 @@ jobs:
           /usr/bin/python3 -m py_compile tools/audit_nexium_arm_guest.py
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_guest.py' -v
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_cold_boot.py' -v
+          /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_controls.py' -v
       - name: Fetch exact SHA-256 verified official NeXium Linux binary
         run: |
           set -euo pipefail
@@ -307,6 +311,12 @@ jobs:
             --cold-process arm-guest/coldboot-process.json \
             --arm-root "$RUNNER_TEMP/wa-arm-arm" \
             --report arm-guest/coldboot-audit.json
+      - name: Verify ARM controls hints on real NeXium battle frames
+        run: |
+          /usr/bin/python3 tools/audit_nexium_arm_controls.py \
+            --main-shots arm-guest/screenshots \
+            --reboot-shots arm-guest/coldboot \
+            --report arm-guest/arm-controls-audit.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
