@@ -22,23 +22,8 @@ def sign16(value):
     return value - 0x10000 if value & 0x8000 else value
 
 
-def audit_slot_writes(path, target=TARGET):
-    path = Path(path)
-    length = path.stat().st_size
-    if not PSX_HEADER + 4 <= length <= MAX_EXE_BYTES:
-        raise ValueError("PS-X EXE outside bounded file size")
-    data = path.read_bytes()
-    if data[:8] != b"PS-X EXE":
-        raise ValueError("PS-X EXE magic mismatch")
-    load_address, text_bytes = struct.unpack_from("<II", data, 0x18)
-    if text_bytes <= 0 or text_bytes % 4 or PSX_HEADER + text_bytes > length:
-        raise ValueError("invalid PS-X EXE declared text size")
-    if not 0x80000000 <= load_address < load_address + text_bytes <= 0x80200000:
-        raise ValueError("PS-X EXE text outside KSEG0 2MiB")
-    if target < 0 or target > 0xFFFFFFFF:
-        raise ValueError("target outside u32 address range")
-
-    words = struct.unpack_from("<" + str(text_bytes // 4) + "I", data, PSX_HEADER)
+def scan_instruction_words(words, target=TARGET):
+    """Check only constant-proven stores in uninterrupted instruction runs."""
     known = {0: 0}
     skip_delay_slot = False
     hits = []
@@ -113,15 +98,42 @@ def audit_slot_writes(path, target=TARGET):
         known[0] = 0
 
     return {
+        "computed_constant_target_store_count": len(hits),
+        "computed_constant_target_store_sites": hits,
+        "unknown_base_same_low_immediate_sites": unexplained_low_immediate_stores,
+        "flow_resets_after_control_transfer": reset_count,
+    }
+
+
+def audit_slot_writes(path, target=TARGET):
+    path = Path(path)
+    length = path.stat().st_size
+    if not PSX_HEADER + 4 <= length <= MAX_EXE_BYTES:
+        raise ValueError("PS-X EXE outside bounded file size")
+    data = path.read_bytes()
+    if data[:8] != b"PS-X EXE":
+        raise ValueError("PS-X EXE magic mismatch")
+    load_address, text_bytes = struct.unpack_from("<II", data, 0x18)
+    if text_bytes <= 0 or text_bytes % 4 or PSX_HEADER + text_bytes > length:
+        raise ValueError("invalid PS-X EXE declared text size")
+    if not 0x80000000 <= load_address < load_address + text_bytes <= 0x80200000:
+        raise ValueError("PS-X EXE text outside KSEG0 2MiB")
+    if target < 0 or target > 0xFFFFFFFF:
+        raise ValueError("target outside u32 address range")
+
+    words = struct.unpack_from("<" + str(text_bytes // 4) + "I", data, PSX_HEADER)
+    scan = scan_instruction_words(words, target)
+
+    return {
         "schema": 1,
         "kind": "WILD_ARMS_STRAIGHT_LINE_STORE_AUDIT",
         "source_name": path.name,
         "declared_text_bytes": text_bytes,
         "target_address": f"0x{target:08X}",
-        "computed_constant_target_store_count": len(hits),
-        "computed_constant_target_store_sites": hits,
-        "unknown_base_same_low_immediate_sites": unexplained_low_immediate_stores,
-        "flow_resets_after_control_transfer": reset_count,
+        "computed_constant_target_store_count": scan["computed_constant_target_store_count"],
+        "computed_constant_target_store_sites": scan["computed_constant_target_store_sites"],
+        "unknown_base_same_low_immediate_sites": scan["unknown_base_same_low_immediate_sites"],
+        "flow_resets_after_control_transfer": scan["flow_resets_after_control_transfer"],
         "interpretation": {
             "only_constant_register_values_within_linear_runs": True,
             "control_transfer_delay_slots_not_audited": True,
