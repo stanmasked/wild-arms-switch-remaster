@@ -103,11 +103,14 @@ def audit_victory(shots,original_shots,processes_path,
         "minus_reload_refills_ammo_before_finisher":
             native_pixel(reloaded,*ARM_FULL_BAR)==GOLD
             and native_pixel(reloaded,*FOE_1_SPENT)==DARK,
-        "second_zr_burst_ends_in_real_victory":
-            one_round(won)
-            and native_pixel(won,*FOE_0)==DARK
-            and native_pixel(won,*FOE_1_DOWN)==DARK
-            and native_pixel(won,*VICTORY_BORDER)==GREEN,
+        "second_zr_burst_spends_two_ammo":
+            one_round(won),
+        "winning_burst_first_enemy_remains_down":
+            native_pixel(won,*FOE_0)==DARK,
+        "winning_burst_second_enemy_hp_reaches_zero":
+            native_pixel(won,*FOE_1_DOWN)==DARK,
+        "actual_victory_overlay_is_green":
+            native_pixel(won,*VICTORY_BORDER)==GREEN,
         "b_exit_restores_exact_prebattle_field":
             same_game(returned,before)
             and same_game(returned,initial),
@@ -129,6 +132,18 @@ def audit_victory(shots,original_shots,processes_path,
         "all_checks_passed":all(checks.values()),
         "sha256":{name:hashlib.sha256((shots/(name+".png")).read_bytes()).hexdigest()
                   for name in NAMES},
+        # Diagnostic provenance: if a real guest differs from the host
+        # renderer, report the ACTUAL RGB values instead of guessing that
+        # the entire battle failed. All 4 individual checks stay strict.
+        "winning_frame_samples":{
+            "ammo_1_last":list(native_pixel(won,*ONE_LAST)),
+            "ammo_1_empty":list(native_pixel(won,*ONE_EMPTY)),
+            "foe_0_hp":list(native_pixel(won,*FOE_0)),
+            "foe_1_hp":list(native_pixel(won,*FOE_1_DOWN)),
+            "victory_frame_border":list(native_pixel(won,*VICTORY_BORDER)),
+            "expected_dark":list(DARK),
+            "expected_green":list(GREEN),
+        },
         "scope":"synthetic_rom_free_volatile_arm_rewards_no_user_files",
     }
     report=Path(report)
