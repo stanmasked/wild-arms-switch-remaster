@@ -25,7 +25,8 @@ That is NOT an authenticated static map layer or a verified PS1 tile.
 - Both must pass Stage432's integrity check on VRAM, screen PNG, and
   CD-info bytes. Snapshot names must differ. Image width/height must
   match exactly; the two raw `cdinfo.json` SHA-256 digests must match.
-  These checks can prevent accidental mismatch but **do not prove**
+  The operator-provided scene labels must also match. These checks
+  can prevent accidental cross-scene mismatch but **do not prove**
   that either screenshot truly depicts the desired Wild Arms map.
 - `x,y,width,height` denote exactly the SAME raw screen rectangle in
   both frames; they are manually selected and bounded by both screens.
