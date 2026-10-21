@@ -77,7 +77,7 @@ int main() {
     std::fill(screen.begin(), screen.end(), untouched);
     assert(!draw_private_icon(icon, dst, x, y));
     assert(std::all_of(screen.begin(), screen.end(),
-                       [](std::uint32_t px){return px == untouched;}));
+                       [untouched](std::uint32_t px){return px == untouched;}));
   };
   invalid_draw(-1, 8, target);
   invalid_draw(12, -1, target);
@@ -92,7 +92,7 @@ int main() {
     std::fill(screen.begin(), screen.end(), untouched);
     assert(!draw_private_icon(bad, target, 12, 8));
     assert(std::all_of(screen.begin(), screen.end(),
-                       [](std::uint32_t px){return px == untouched;}));
+                       [untouched](std::uint32_t px){return px == untouched;}));
   }
 
   // Every invalid file clears a previously valid preview.
