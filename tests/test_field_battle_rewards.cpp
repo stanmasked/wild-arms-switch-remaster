@@ -133,6 +133,43 @@ void test_invalid_state_is_atomic_and_field_save_untouched() {
   assert(!runtime.quicksave.occupied && runtime.discoveries.count==0);
   f.canaries();
 }
+void test_preview_and_credit_share_exact_saturating_policy() {
+  const auto max=std::numeric_limits<std::uint32_t>::max();
+  BattleRewardAccount account{max-3,max-5};
+  const BattleRewardPayout policy{27,43};
+  const auto pure=preview_battle_reward(
+      account,BattleResolution::Victory,policy);
+  static_assert(preview_battle_reward(
+      BattleRewardAccount{0,0},BattleResolution::Victory,
+      BattleRewardPayout{19,27}).experience==19);
+  assert(pure.experience==3 && pure.gella==5);
+  assert(account.experience==max-3 && account.gella==max-5);
+  const auto credit=credit_battle_reward(
+      account,BattleResolution::Victory,policy);
+  assert(credit.experience==pure.experience &&
+         credit.gella==pure.gella);
+  assert(account.experience==max && account.gella==max);
+  assert(preview_battle_reward(account,BattleResolution::Victory,policy)
+         .experience==0);
+  assert(credit_battle_reward(account,BattleResolution::Victory,policy)
+         .gella==0);
+  assert(account.experience==max && account.gella==max);
+}
+
+void test_non_victory_preview_cannot_modify_or_credit() {
+  BattleRewardAccount account{14,21};
+  for(const auto outcome : {BattleResolution::None,
+                            BattleResolution::Defeat,
+                            BattleResolution::Retreat}) {
+    const auto proposed=preview_battle_reward(
+        account,outcome,BattleRewardPayout{100,250});
+    assert(proposed.experience==0 && proposed.gella==0);
+    const auto paid=credit_battle_reward(
+        account,outcome,BattleRewardPayout{100,250});
+    assert(paid.experience==0 && paid.gella==0);
+  }
+  assert(account.experience==14 && account.gella==21);
+}
 void test_opt_in_balance_draw_never_changes_game_state() {
   Frame f;FieldBattleSession s{};
   const auto world=make_demo_world();
@@ -158,4 +195,6 @@ int main() {
  test_saturation_reports_actual_delta_no_rollover();
  test_invalid_state_is_atomic_and_field_save_untouched();
  test_opt_in_balance_draw_never_changes_game_state();
+ test_preview_and_credit_share_exact_saturating_policy();
+ test_non_victory_preview_cannot_modify_or_credit();
 }
