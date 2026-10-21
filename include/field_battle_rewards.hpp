@@ -28,20 +28,29 @@ struct BattleRewardPayout {
       ? std::numeric_limits<std::uint32_t>::max() : a + b;
 }
 
-// May be called only by the already-validated one-time B closure.
-// EXP / Gella are synthetic placeholders until PS1 combat data exists.
-// Return the *actually credited* value (important near saturation).
+// Source of truth for a pending reward. Pure, no account mutation.
+// The optional in-memory offer supports future prototype balancing;
+// the default preserves the already validated 8 EXP / 12 Gella.
+// Preview is exactly the ACTUAL possible credit even near UINT32_MAX.
+[[nodiscard]] constexpr BattleRewardPayout preview_battle_reward(
+    const BattleRewardAccount& account, BattleResolution outcome,
+    BattleRewardPayout offer={
+        kPrototypeVictoryExp,kPrototypeVictoryGella}) noexcept {
+  if (outcome!=BattleResolution::Victory) return {};
+  const auto exp=battle_reward_saturating_add(account.experience,offer.experience);
+  const auto gella=battle_reward_saturating_add(account.gella,offer.gella);
+  return {exp-account.experience,gella-account.gella};
+}
+
+// Called only by validated one-time B closure; uses exactly the same
+// pure preview rule as the Victory UI, never a parallel fixed literal.
 [[nodiscard]] inline BattleRewardPayout credit_battle_reward(
-    BattleRewardAccount& account, BattleResolution outcome) noexcept {
-  if (outcome != BattleResolution::Victory) return {};
-  const auto new_exp = battle_reward_saturating_add(
-      account.experience, kPrototypeVictoryExp);
-  const auto new_gella = battle_reward_saturating_add(
-      account.gella, kPrototypeVictoryGella);
-  const BattleRewardPayout paid{new_exp-account.experience,
-                                new_gella-account.gella};
-  account.experience = new_exp;
-  account.gella = new_gella;
+    BattleRewardAccount& account, BattleResolution outcome,
+    BattleRewardPayout offer={
+        kPrototypeVictoryExp,kPrototypeVictoryGella}) noexcept {
+  const auto paid=preview_battle_reward(account,outcome,offer);
+  account.experience+=paid.experience;
+  account.gella+=paid.gella;
   return paid;
 }
 
