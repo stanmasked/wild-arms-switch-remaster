@@ -40,6 +40,11 @@ def make_slot(*, corrupt_index=None, bad_pointer=False):
             at+=len(value)+(0 if i==57 else 3)
     if at>STRIDE:
         raise AssertionError("synthetic slot exceeds bounded size")
+    if corrupt_index == 57:
+        # Model an incomplete *final* stream with no following pointer:
+        # push its start close enough to the fixed slot boundary that
+        # zero-filled trailing space cannot falsely finish decompression.
+        offsets[57] = STRIDE - 100
     buf=bytearray(STRIDE)
     for i,o in enumerate(offsets):
         struct.pack_into("<I",buf,i*4,0x80183000+o)
