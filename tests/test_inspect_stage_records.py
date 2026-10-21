@@ -36,7 +36,7 @@ class StageRecordProbeTests(unittest.TestCase):
     def test_rejects_invalid_stride_or_incomplete_record(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "synthetic.bin"
-            path.write_bytes(b"\\x00" * 129)
+            path.write_bytes(bytes(129))
             with self.assertRaisesRegex(ValueError, "whole number"):
                 inspect_records(path, 128)
             with self.assertRaisesRegex(ValueError, ">= 64"):
@@ -45,7 +45,7 @@ class StageRecordProbeTests(unittest.TestCase):
     def test_rejects_marker_out_of_bounds(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "synthetic.bin"
-            path.write_bytes(b"\\x00" * 128)
+            path.write_bytes(bytes(128))
             with self.assertRaisesRegex(ValueError, "outside"):
                 inspect_records(path, 128, b"Sony", 126)
 
