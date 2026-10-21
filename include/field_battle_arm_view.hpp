@@ -1,6 +1,7 @@
 #pragma once
-// Stage387: host-only opt-in ARM ammunition overlay.
-// Not called by Switch main loop; canonical NeXium screenshots unaffected.
+// Stage398: experimental opt-in ARM ammunition and controls overlay.
+// Compiled into native Switch only when WA_ARM_EXPERIMENTAL=1;
+// the standard R battle and normal Switch NRO remain unchanged.
 #include "field_battle_arm.hpp"
 #include "field_battle_view.hpp"
 
