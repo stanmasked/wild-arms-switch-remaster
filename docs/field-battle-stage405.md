@@ -24,7 +24,7 @@ Native regression coverage models two session lifetimes and a real journal round
 2. B confirms the Victory and writes generation 1 with 1 win, 8 EXP and 12 Gella.
 3. A new default ARM session restores the persisted account but starts with full 3/3 ammunition and a fresh demo battle.
 4. A subsequent B retreat writes generation 2, preserving 8 EXP / 12 Gella and updating the outcome history.
-5. The ordinary battle journal remains missing, demonstrating namespace isolation.
+5. A pre-existing ordinary battle journal is seeded before the ARM route; its generation, complete bytes, and absent secondary slot remain unchanged after both the ARM victory and retreat commits.
 
 The NeXium workflow adds a fifth independent guest process that reuses the exact SDMC from the fourth process. The strict auditor verifies both CRC-protected WABJ/WABR generations and checks the actual post-cold-boot EXP/Gella and retreat-history pixels.
 
