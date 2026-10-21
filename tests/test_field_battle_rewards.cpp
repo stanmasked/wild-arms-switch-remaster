@@ -170,6 +170,59 @@ void test_non_victory_preview_cannot_modify_or_credit() {
   }
   assert(account.experience==14 && account.gella==21);
 }
+void test_reward_preview_matches_actual_credit_for_variable_and_saturated_offers() {
+  BattleRewardAccount account{};
+  constexpr BattleRewardPayout offer{4,7};
+  const auto before=account;
+  const auto pending=preview_battle_reward(
+      account,BattleResolution::Victory,offer);
+  assert(pending.experience==4 && pending.gella==7);
+  assert(account.experience==before.experience && account.gella==before.gella);
+  const auto paid=credit_battle_reward(account,BattleResolution::Victory,offer);
+  assert(paid.experience==pending.experience && paid.gella==pending.gella);
+  assert(account.experience==4 && account.gella==7);
+
+  // A new second win uses the same configured offer and accumulates it.
+  const auto second=preview_battle_reward(
+      account,BattleResolution::Victory,offer);
+  assert(second.experience==4 && second.gella==7);
+  assert(credit_battle_reward(account,BattleResolution::Victory,offer).experience==4);
+  assert(account.experience==8 && account.gella==14);
+
+  // Non-victories can NEVER advertise or credit a payout.
+  for (const auto outcome : {BattleResolution::None,
+                             BattleResolution::Retreat,
+                             BattleResolution::Defeat}) {
+    const auto proposed=preview_battle_reward(account,outcome,offer);
+    const auto denied=credit_battle_reward(account,outcome,offer);
+    assert(proposed.experience==0 && proposed.gella==0);
+    assert(denied.experience==0 && denied.gella==0);
+    assert(account.experience==8 && account.gella==14);
+  }
+  const auto max=std::numeric_limits<std::uint32_t>::max();
+  account={max-2,max-5};
+  const auto saturated=preview_battle_reward(
+      account,BattleResolution::Victory,{40,90});
+  assert(saturated.experience==2 && saturated.gella==5);
+  assert(account.experience==max-2 && account.gella==max-5);
+  const auto cap=credit_battle_reward(
+      account,BattleResolution::Victory,{40,90});
+  assert(cap.experience==2 && cap.gella==5);
+  assert(account.experience==max && account.gella==max);
+  const auto zero=preview_battle_reward(
+      account,BattleResolution::Victory,{40,90});
+  assert(zero.experience==0 && zero.gella==0);
+  const auto full=credit_battle_reward(account,BattleResolution::Victory,{40,90});
+  assert(full.experience==0 && full.gella==0);
+
+  // Zero-valued configured victory offer cannot invent a reward.
+  account={25,60};
+  const auto no_reward=preview_battle_reward(
+      account,BattleResolution::Victory,{0,0});
+  assert(no_reward.experience==0 && no_reward.gella==0);
+  assert(credit_battle_reward(account,BattleResolution::Victory,{0,0}).gella==0);
+  assert(account.experience==25 && account.gella==60);
+}
 void test_opt_in_balance_draw_never_changes_game_state() {
   Frame f;FieldBattleSession s{};
   const auto world=make_demo_world();
@@ -194,6 +247,7 @@ int main() {
  test_retreat_and_defeat_cannot_earn_rewards();
  test_saturation_reports_actual_delta_no_rollover();
  test_invalid_state_is_atomic_and_field_save_untouched();
+ test_reward_preview_matches_actual_credit_for_variable_and_saturated_offers();
  test_opt_in_balance_draw_never_changes_game_state();
  test_preview_and_credit_share_exact_saturating_policy();
  test_non_victory_preview_cannot_modify_or_credit();
