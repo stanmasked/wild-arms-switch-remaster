@@ -326,7 +326,7 @@ jobs:
           press v  # 3/3 -> 2/3; foe 1 now down with a real shot.
           import -display :99 -window root \
             arm-guest/coldboot/08_arm_spent_before_exit.png
-          press x  # B exits ARM with 2/3 still volatile; NO WABJ.
+          press x  # B records this retreat only in the dedicated ARM WABJ; ammo stays volatile.
           capture 07_arm_return
           stop_guest
 
@@ -349,8 +349,9 @@ jobs:
                          sort_keys=True)+"\n")
           '
           # THIRD genuinely new NeXium guest process, but the exact same
-          # ARM SDMC root used by the second guest. Transient ammo must
-          # begin from 3/3 again with zero persisted game files.
+          # ARM SDMC root used by the second guest. The retreat history is
+          # persistent, but transient ammo must reset to 3/3 and regular
+          # battle/field save slots must remain absent.
           launch_retreat_restart armrestart arm
           import -display :99 -window root \
             arm-guest/coldboot/09_arm_restart_field.png

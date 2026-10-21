@@ -72,7 +72,7 @@ def read_arm_progress_slot(path):
     payload = raw[12:48]
     if payload[:4] != b"WABR" or payload[4] != 1:
         raise ValueError(f"unsupported WABR payload: {path}")
-    if payload[6:8] != b"\\0\\0" or payload[28:32] != b"\\0\\0\\0\\0":
+    if payload[6:8] != b"\0\0" or payload[28:32] != b"\0\0\0\0":
         raise ValueError(f"nonzero WABR reserved bytes: {path}")
     if zlib.crc32(payload[:32]) != struct.unpack_from("<I", payload, 32)[0]:
         raise ValueError(f"invalid inner WABR CRC: {path}")
