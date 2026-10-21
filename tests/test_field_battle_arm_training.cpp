@@ -266,6 +266,97 @@ void zr_conflicts_require_full_release_before_attacking() {
   assert(session.magazine.rounds==1 && session.battle.enemies[0].hp==0);
 }
 
+// Compare every byte of the exact claim glyph rectangle, not only
+// a chosen "8" pixel. The Victory popup clears this region each frame.
+void assert_claim_glyphs(const Frame& actual,const char* expected_message) {
+  Frame expected;
+  fill_raster_rect(expected.target,0,0,kRasterWidth,kRasterHeight,
+                   kBattleBackground);
+  const auto n=std::strlen(expected_message);
+  assert(n>0 && n<64);
+  const int width=static_cast<int>((n-1)*13+10);
+  const int left=width+440>955 ? 955-width : 440;
+  assert(left>=324 && left+width<=955);
+  battle_text(expected.target,left,368,expected_message,kBattleGreen);
+  for (int y=368;y<382;++y)
+    for (int x=324;x<956;++x)
+      assert(actual.at(x,y)==expected.at(x,y));
+}
+
+void enter_and_finish_custom_arm_victory(ArmTrainingSession& s,Frame& f) {
+  launch(s,f);
+  s.battle.enemies[0].hp=1;
+  s.battle.enemies[1].hp=1;
+  ArmTrainingInput fire{};fire.arm.fire=true;
+  assert(advance_arm_training_session(s,fire,f.target).arm.status==
+         ArmControlStatus::Applied);
+  neutral(s,f);
+  ArmTrainingInput strike{};strike.pad.confirm=true;
+  assert(advance_arm_training_session(s,strike,f.target).ordinary.status==
+         BattleControlStatus::ActionApplied);
+  assert(s.battle.phase==BattlePhase::Victory);
+}
+
+void victory_preview_and_paid_amount_use_same_variable_offer() {
+  ArmTrainingSession session{};Frame picture;
+  session.victory_offer={4,7};
+  enter_and_finish_custom_arm_victory(session,picture);
+  assert_claim_glyphs(picture,"B CLAIM EXP 4  GELLA 7");
+  assert(session.rewards.experience==0 && session.rewards.gella==0);
+  assert(session.history.victories==0);
+  picture.padding_unchanged();
+
+  // Read-only Victory UI updates when experimental payout settings
+  // change; credit follows that very same offer on confirmed B close.
+  session.victory_offer={19,23};
+  neutral(session,picture);
+  assert_claim_glyphs(picture,"B CLAIM EXP 19  GELLA 23");
+  assert(session.rewards.experience==0 && session.rewards.gella==0);
+  ArmTrainingInput close{};close.close=true;
+  const auto result=advance_arm_training_session(session,close,picture.target);
+  assert(result.exited && result.resolution==BattleResolution::Victory);
+  assert(result.payout.experience==19 && result.payout.gella==23);
+  assert(session.rewards.experience==19 && session.rewards.gella==23);
+  assert(session.history.victories==1);
+  assert(!advance_arm_training_session(session,close,picture.target).exited);
+  assert(session.rewards.experience==19 && session.rewards.gella==23);
+  picture.padding_unchanged();
+}
+
+void victory_preview_is_actual_saturated_credit_and_text_never_overflows() {
+  const auto maximum=std::numeric_limits<std::uint32_t>::max();
+  ArmTrainingSession session{};Frame picture;
+  session.victory_offer={20,90};
+  session.rewards={maximum-2,maximum-5};
+  enter_and_finish_custom_arm_victory(session,picture);
+  // Proposed 20/90 but only 2/5 are still actually creditable.
+  assert_claim_glyphs(picture,"B CLAIM EXP 2  GELLA 5");
+  assert(session.rewards.experience==maximum-2);
+  ArmTrainingInput close{};close.close=true;
+  const auto capped=advance_arm_training_session(session,close,picture.target);
+  assert(capped.payout.experience==2 && capped.payout.gella==5);
+  assert(session.rewards.experience==maximum && session.rewards.gella==maximum);
+  assert(advance_arm_training_session(session,close,picture.target).payout.gella==0);
+
+  // Once account is full, the preview must show zero and never wrap.
+  session.victory_offer={maximum,maximum};
+  enter_and_finish_custom_arm_victory(session,picture);
+  assert_claim_glyphs(picture,"B CLAIM EXP 0  GELLA 0");
+  const auto zero=advance_arm_training_session(session,close,picture.target);
+  assert(zero.payout.experience==0 && zero.payout.gella==0);
+  assert(session.rewards.experience==maximum && session.rewards.gella==maximum);
+
+  // Worst-case 10-digit values have a 41-glyph label; left-align
+  // inside the same Victory popup, never painting beyond its border.
+  ArmTrainingSession fresh{};Frame long_picture;
+  fresh.victory_offer={maximum,maximum};
+  enter_and_finish_custom_arm_victory(fresh,long_picture);
+  assert_claim_glyphs(long_picture,
+                      "B CLAIM EXP 4294967295  GELLA 4294967295");
+  const auto rich=advance_arm_training_session(fresh,close,long_picture.target);
+  assert(rich.payout.experience==maximum && rich.payout.gella==maximum);
+  long_picture.padding_unchanged();
+}
 void real_two_bursts_victory_credit_once_and_visible_after_reentry() {
   ArmTrainingSession session{};Frame display;launch(session,display);
   ArmTrainingInput burst{};burst.arm.burst=true;
@@ -434,6 +525,8 @@ int main() {
   zr_burst_real_session_turn_then_insufficient_ammo_refusal();
   zr_conflicts_require_full_release_before_attacking();
   real_two_bursts_victory_credit_once_and_visible_after_reentry();
+  victory_preview_and_paid_amount_use_same_variable_offer();
+  victory_preview_is_actual_saturated_credit_and_text_never_overflows();
   custom_volatile_reward_offer_is_previewed_and_credited_once();
   near_limit_preview_matches_actual_saturated_credit();
   maximum_decimal_reward_preview_is_inside_victory_frame();
