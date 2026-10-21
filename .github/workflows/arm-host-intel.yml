@@ -6,11 +6,13 @@ on:
       - 'stage-387-*'
       - 'stage-388-*'
       - 'stage-392-*'
+      - 'stage-398-*'
   pull_request:
     branches:
       - 'stage-386-*'
       - 'stage-387-*'
       - 'stage-390-*'
+      - 'stage-396-*'
     paths:
       - 'include/field_battle.hpp'
       - 'include/field_battle_arm.hpp'
