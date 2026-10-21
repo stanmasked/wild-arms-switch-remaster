@@ -29,6 +29,19 @@ We also inspected the actual `EXE/WILDARMS.EXE;1` and `EXE/OPENING.EXE;1` header
 
 For all 127 regular records the candidate text load address is `0x8014F040`, GP is zero, and initial stack is `0x801FFFF0`. The entry PC is four-byte aligned and lies in the declared text range. Text sizes are 2048-byte aligned, with 27 distinct sizes ranging from `0x4000` to `0x12800`.
 
+## MIPS entry stub cross-check
+
+The 127 regular block headers provide a candidate entry PC and load address. Reading **only 16 bytes** at each corresponding in-record entry offset (`0x40 + entry_pc - text_load`) gives matching MIPS code in all 127 cases:
+
+- `lui gp, immediate`;
+- `addiu gp, gp, signed_immediate`;
+- `j destination`;
+- one delay-slot `nop`.
+
+The first two instructions calculate **GP = entry_PC + 16** in 127/127 cases. The `j` destination resolves to an address **inside that block's declared text range** in 127/127 cases. The analyzer records only boolean results and counts, never opcode bytes or complete disassembly.
+
+This is stronger evidence that these 127 records are executable overlay-like modules. It still does not determine whether a particular overlay describes a map, combat, menus, or another subsystem, and does not establish a safe way to execute the code. The exceptional record #25 fails the header prerequisite and is excluded from stub interpretation.
+
 This supports a **trimmed PS-X EXE-like overlay-header hypothesis**, not a claim that a record can already be executed, nor that a block equals a map. The special block #25 does not match and is not treated as a corrupted or disposable record. More loader/relocation evidence is required.
 
 This demonstrates a repeatable *candidate* record layout. It **does not** prove that the blocks correspond one-to-one with maps, scenes, levels, or executable overlays. A `Sony` marker and RAM-like words are insufficient to infer their roles or decode graphics.
