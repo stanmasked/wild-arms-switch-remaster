@@ -118,7 +118,7 @@ int main() {
   FieldBattleSession battle_scene{};
 #if defined(WA_ARM_EXPERIMENTAL)
   // Experimental ARM mode is compiled ONLY with WA_ARM_EXPERIMENTAL=1.
-  // It is volatile and never uses the game's on-disk WABJ v1 journal.
+  // Battle state is session-local; rewards use a separate WAER v1 journal, never WABJ.
   ArmTrainingSession arm_scene{};
   arm_scene.reward_storage_warning = !storage_ready;
   if (storage_ready) {
