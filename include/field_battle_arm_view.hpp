@@ -41,6 +41,12 @@ constexpr int kArmHudHeight = 84;
                       static_cast<unsigned>(magazine.rounds),
                       static_cast<unsigned>(magazine.capacity));
   battle_text(target,kArmHudX+20,kArmHudY+14,label,kBattleWhite);
+  // 8 glyphs start just to the right of the longest ARM AMMO label;
+  // optional ZR attack is visible without modifying the 20-char hint.
+  constexpr char kBurstHint[]="ZR BURST";
+  static_assert(sizeof(kBurstHint)-1==8);
+  static_assert(174+7*13+10<kArmHudWidth-4);
+  battle_text(target,kArmHudX+174,kArmHudY+14,kBurstHint,kBattleGold);
 
   // 220 * 255 fits uint32; capacity was checked positive.
   constexpr std::uint32_t width=220;
