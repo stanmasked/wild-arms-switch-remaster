@@ -4,11 +4,14 @@ on:
   push:
     branches:
       - 'stage-390-*'
+      - 'stage-396-*'
   pull_request:
     paths:
       - '.github/workflows/arm-nexium-guest.yml'
       - 'tools/audit_nexium_arm_guest.py'
       - 'tools/test_audit_nexium_arm_guest.py'
+      - 'tools/audit_nexium_arm_cold_boot.py'
+      - 'tools/test_audit_nexium_arm_cold_boot.py'
       - 'switch/source/main.cpp'
       - 'switch/Makefile'
       - 'include/field_battle_arm*.hpp'
@@ -65,10 +68,11 @@ jobs:
         run: |
           /usr/bin/python3 -m py_compile tools/audit_nexium_arm_guest.py
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_guest.py' -v
+          /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_cold_boot.py' -v
       - name: Fetch exact SHA-256 verified official NeXium Linux binary
         run: |
           set -euo pipefail
-          mkdir -p nexium-dist arm-guest/screenshots
+          mkdir -p nexium-dist arm-guest/screenshots arm-guest/coldboot
           curl -fL --retry 3 --connect-timeout 20 --max-time 240 \
             "$NEXIUM_URL" -o nexium-dist/nexium.tar.gz
           echo "$NEXIUM_ARCHIVE_SHA256  nexium-dist/nexium.tar.gz" | sha256sum -c -
@@ -106,7 +110,8 @@ jobs:
           }
           launch() {
             label="$1"
-            export NEXIUM_DATA_ROOT="$RUNNER_TEMP/wa-arm-$label"
+            root_key="${2:-$label}"
+            export NEXIUM_DATA_ROOT="$RUNNER_TEMP/wa-arm-$root_key"
             # Prepare only the otherwise absent empty game directory.
             # A mounted/empty ARM directory is a required guest-audit
             # invariant, not an accidental false-negative on first boot.
@@ -246,6 +251,36 @@ jobs:
                           "arm_force_killed":os.environ["ARM_FORCE_KILLED"]=="true"},
                          sort_keys=True)+"\n")
           '
+          # THIRD genuinely new NeXium guest process, but the exact same
+          # ARM SDMC root used by the second guest. Transient ammo must
+          # begin from 3/3 again with zero persisted game files.
+          launch armrestart arm
+          import -display :99 -window root \
+            arm-guest/coldboot/08_arm_restart_field.png
+          xdotool keydown --clearmodifiers r
+          sleep 0.16
+          press e
+          xdotool keyup r
+          sleep 0.38
+          import -display :99 -window root \
+            arm-guest/coldboot/09_arm_restart_full.png
+          press x
+          import -display :99 -window root \
+            arm-guest/coldboot/10_arm_restart_return.png
+          stop_guest
+
+          ARMRESTART_PID="$armrestart_pid" \
+          ARMRESTART_WAIT_STATUS="$armrestart_wait_status" \
+          ARMRESTART_FORCE_KILLED="$armrestart_force_killed" python3 -c '
+          import json,os
+          from pathlib import Path
+          Path("arm-guest/coldboot-process.json").write_text(
+              json.dumps({"armrestart_pid":int(os.environ["ARMRESTART_PID"]),
+                          "armrestart_wait_status":int(os.environ["ARMRESTART_WAIT_STATUS"]),
+                          "armrestart_force_killed":os.environ["ARMRESTART_FORCE_KILLED"]=="true",
+                          "armrestart_wait_completed":True},
+                         sort_keys=True)+"\n")
+          '
       - name: Strict pixel, guest process and isolated save-file audit
         run: |
           /usr/bin/python3 tools/audit_nexium_arm_guest.py \
@@ -254,6 +289,15 @@ jobs:
             --arm-root "$RUNNER_TEMP/wa-arm-arm" \
             --processes arm-guest/processes.json \
             --report arm-guest/arm-audit.json
+      - name: Audit genuine third guest cold boot with the same ARM SDMC
+        run: |
+          /usr/bin/python3 tools/audit_nexium_arm_cold_boot.py \
+            --original-shots arm-guest/screenshots \
+            --cold-shots arm-guest/coldboot \
+            --processes arm-guest/processes.json \
+            --cold-process arm-guest/coldboot-process.json \
+            --arm-root "$RUNNER_TEMP/wa-arm-arm" \
+            --report arm-guest/coldboot-audit.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
