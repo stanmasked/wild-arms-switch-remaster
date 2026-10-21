@@ -70,7 +70,7 @@ class ArmVictoryGuestContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             result=audit_victory(*fixture_victory(tmp))
             self.assertTrue(result["all_checks_passed"],result["checks"])
-            self.assertEqual(len(result["checks"]),10)
+            self.assertEqual(len(result["checks"]),13)
             self.assertEqual(len(result["sha256"]),9)
 
     def test_victory_requires_second_enemy_actually_down(self):
@@ -81,7 +81,32 @@ class ArmVictoryGuestContractTests(unittest.TestCase):
             put(frame,FOE_1_DOWN,RED)
             frame.save(p)
             self.assertFalse(audit_victory(*a)["checks"][
-                "second_zr_burst_ends_in_real_victory"])
+                "winning_burst_second_enemy_hp_reaches_zero"])
+
+    def test_real_victory_must_have_green_banner_border(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            a=fixture_victory(tmp)
+            path=a[0]/(NAMES[5]+".png")
+            with Image.open(path) as src:
+                frame=src.convert("RGB")
+            put(frame,VICTORY_BORDER,DARK)
+            frame.save(path)
+            result=audit_victory(*a)
+            self.assertFalse(result["checks"]["actual_victory_overlay_is_green"])
+            self.assertTrue(result["checks"]["second_zr_burst_spends_two_ammo"])
+            self.assertTrue(result["checks"]["winning_burst_second_enemy_hp_reaches_zero"])
+
+    def test_real_victory_must_expend_burst_ammunition(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            a=fixture_victory(tmp)
+            path=a[0]/(NAMES[5]+".png")
+            with Image.open(path) as src:
+                frame=src.convert("RGB")
+            put(frame,ONE_EMPTY,GOLD)
+            frame.save(path)
+            result=audit_victory(*a)
+            self.assertFalse(result["checks"]["second_zr_burst_spends_two_ammo"])
+            self.assertTrue(result["checks"]["actual_victory_overlay_is_green"])
 
     def test_first_burst_must_expend_two_rounds(self):
         with tempfile.TemporaryDirectory() as tmp:
