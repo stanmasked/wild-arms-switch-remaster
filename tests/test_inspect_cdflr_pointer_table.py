@@ -14,8 +14,8 @@ def image(addresses=(0x80183100, 0x80183140, 0x80183180), size=2048):
     data = bytearray(size)
     for i, address in enumerate(addresses):
         struct.pack_into("<I", data, i * 4, address)
-    struct.pack_into("<I", data, 256, 0x41)
-    struct.pack_into("<I", data, 320, 0x41)
+    struct.pack_into("<5I", data, 256, 0x41, 0, 1, 20, 4)
+    struct.pack_into("<5I", data, 320, 0x41, 0, 1, 20, 4)
     struct.pack_into("<I", data, 384, 0x42)
     return data
 
@@ -38,8 +38,21 @@ class CDFLRPointerTableTests(unittest.TestCase):
         self.assertEqual(report["last_target_file_offset"], 384)
         self.assertEqual(report["target_first_word_0x41_indices"], [0, 1])
         self.assertEqual(report["target_first_word_0x41_count"], 2)
+        self.assertEqual(report["type_0x41_span_rule_candidate_count"], 2)
+        self.assertEqual(report["type_0x41_header_pattern_matches"], 2)
+        self.assertEqual(report["type_0x41_span_rule_matches"], 2)
+        self.assertEqual(report["type_0x41_span_rule_fail_indices"], [])
         self.assertEqual(report["source_sha256"], hashlib.sha256(data).hexdigest())
         self.assertFalse(report["interpretation"]["payload_bytes_emitted"])
+
+    def test_wrong_type_0x41_length_does_not_pass_span_rule(self):
+        data = image()
+        struct.pack_into("<I", data, 256 + 12, 24)
+        report = self.inspect(data)
+        self.assertEqual(report["type_0x41_span_rule_candidate_count"], 2)
+        self.assertEqual(report["type_0x41_header_pattern_matches"], 2)
+        self.assertEqual(report["type_0x41_span_rule_matches"], 1)
+        self.assertEqual(report["type_0x41_span_rule_fail_indices"], [0])
 
     def test_optional_native_exe_literal_correspondence(self):
         with tempfile.TemporaryDirectory() as folder:
