@@ -135,7 +135,7 @@ int main() {
     } else {
       // Preserve both bad copies for external recovery. Show the problem
       // only on an explicitly requested ZL panel, never on normal field.
-      battle_journal_corrupt=progress_journal_needs_warning(loaded.status);
+      progress_journal_corrupt=progress_journal_needs_warning(loaded.status);
     }
 #if defined(WA_ARM_EXPERIMENTAL)
     // ARM progress reuses the validated WABJ v1 codec in its own path;
@@ -146,8 +146,8 @@ int main() {
       arm_scene.history=arm_restored.history;
       arm_scene.rewards=arm_restored.rewards;
     } else {
-      battle_journal_corrupt = battle_journal_corrupt ||
-          battle_journal_needs_warning(arm_loaded.status);
+      progress_journal_corrupt = progress_journal_corrupt ||
+          progress_journal_needs_warning(arm_loaded.status);
     }
 #endif
   }
@@ -403,7 +403,7 @@ int main() {
       if (!runtime.autoplay && (held & HidNpadButton_ZL)) {
         if (draw_field_battle_history(output, battle_scene.history)) {
           draw_battle_reward_balance(output, battle_scene.rewards);
-          (void)draw_progress_journal_warning(output, battle_journal_corrupt);
+          (void)draw_progress_journal_warning(output, progress_journal_corrupt);
         }
       }
     }
