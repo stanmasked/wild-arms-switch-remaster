@@ -5,6 +5,7 @@ on:
     branches:
       - 'stage-389-*'
       - 'stage-400-*'
+      - 'stage-401-*'
   pull_request:
     paths:
       - '.github/workflows/arm-switch-experiment.yml'

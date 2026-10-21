@@ -264,6 +264,81 @@ void zr_conflicts_require_full_release_before_attacking() {
   assert(session.magazine.rounds==1 && session.battle.enemies[0].hp==0);
 }
 
+void real_two_bursts_victory_credit_once_and_visible_after_reentry() {
+  ArmTrainingSession session{};Frame display;launch(session,display);
+  ArmTrainingInput burst{};burst.arm.burst=true;
+  auto start=advance_arm_training_session(session,burst,display.target);
+  assert(start.arm.status==ArmControlStatus::Applied);
+  assert(start.arm.update.battle.inflicted==14);
+  assert(session.magazine.rounds==1 && session.battle.enemies[0].hp==0);
+  neutral(session,display);
+
+  ArmTrainingInput strike{};strike.pad.confirm=true;
+  assert(advance_arm_training_session(session,strike,display.target).ordinary.status==
+         BattleControlStatus::ActionApplied);
+  assert(session.battle.enemies[1].hp==13);
+  neutral(session,display);
+
+  ArmTrainingInput guard{};guard.pad.guard=true;
+  assert(advance_arm_training_session(session,guard,display.target).ordinary.status==
+         BattleControlStatus::ActionApplied);
+  assert(session.battle.round==2 && session.cursor.actor==0);
+  neutral(session,display);
+
+  ArmTrainingInput reload{};reload.arm.reload=true;
+  assert(advance_arm_training_session(session,reload,display.target).arm.status==
+         ArmControlStatus::Applied);
+  assert(session.magazine.rounds==3);
+  neutral(session,display);
+
+  assert(advance_arm_training_session(session,guard,display.target).ordinary.status==
+         BattleControlStatus::ActionApplied);
+  neutral(session,display);
+  assert(advance_arm_training_session(session,guard,display.target).ordinary.status==
+         BattleControlStatus::ActionApplied);
+  assert(session.battle.round==3 && session.cursor.actor==0);
+  neutral(session,display);
+
+  auto finisher=advance_arm_training_session(session,burst,display.target);
+  assert(finisher.arm.status==ArmControlStatus::Applied);
+  assert(finisher.arm.update.battle.inflicted==13);
+  assert(session.magazine.rounds==1 && session.battle.enemies[1].hp==0);
+  assert(session.battle.phase==BattlePhase::Victory);
+  // Green victory frame is rendered but no reward is credited until B.
+  assert(display.at(320,294)==kBattleGreen);
+  assert(session.history.victories==0 && session.rewards.experience==0);
+  const auto final_picture=display.data;
+
+  ArmTrainingInput leave{};leave.close=true;
+  const auto closed=advance_arm_training_session(session,leave,display.target);
+  assert(closed.exited && closed.resolution==BattleResolution::Victory);
+  assert(closed.payout.experience==8 && closed.payout.gella==12);
+  assert(session.history.victories==1 && session.rewards.experience==8);
+  assert(session.rewards.gella==12 && !session.active);
+  assert(display.data==final_picture);
+  assert(!advance_arm_training_session(session,leave,display.target).exited);
+  assert(session.rewards.experience==8 && session.rewards.gella==12);
+
+  ArmTrainingInput reenter{};reenter.open=true;reenter.manual=true;
+  assert(advance_arm_training_session(session,reenter,display.target).entered);
+  assert(session.magazine.rounds==3 && session.battle.enemies[0].hp==14);
+  assert(session.battle.enemies[1].hp==17 && session.history.victories==1);
+  assert(display.at(70,667)==kBattleGreen); // "EXP 8  GELLA 12"
+  assert(display.at(70,687)==kBattleGold);  // "W 1  L 0  E 0"
+  assert(session.rewards.experience==8 && session.rewards.gella==12);
+  display.padding_unchanged();
+
+  // Closing the new unwon battle is a retreat, not a second payout.
+  const auto retreat=advance_arm_training_session(session,leave,display.target);
+  assert(retreat.exited && retreat.resolution==BattleResolution::Retreat);
+  assert(retreat.payout.experience==0 && retreat.payout.gella==0);
+  assert(session.history.victories==1 && session.history.retreats==1);
+  assert(session.rewards.experience==8 && session.rewards.gella==12);
+  assert(advance_arm_training_session(session,reenter,display.target).entered);
+  assert(display.at(70,667)==kBattleGreen);
+  assert(session.rewards.experience==8 && session.rewards.gella==12);
+}
+
 } // namespace
 
 int main() {
@@ -275,4 +350,5 @@ int main() {
   damaged_target_and_magazine_never_consume_input_or_write();
   zr_burst_real_session_turn_then_insufficient_ammo_refusal();
   zr_conflicts_require_full_release_before_attacking();
+  real_two_bursts_victory_credit_once_and_visible_after_reentry();
 }
