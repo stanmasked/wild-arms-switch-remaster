@@ -18,7 +18,34 @@ LOW_RAM = 0x80000000
 HIGH_RAM = 0x80200000
 
 
-def inspect_pointer_table(path):
+def corroborate_base_in_psx_exe(executable_path, base_candidate):
+    """Bounded literal-match check against a native PS-X EXE.
+
+    This does NOT prove the executable loads this container at the address.
+    """
+    executable_path = Path(executable_path)
+    size = executable_path.stat().st_size
+    if size < 0x800 or size > 8 * 1024 * 1024:
+        raise ValueError("PS-X EXE outside bounded inspection size")
+    exe = executable_path.read_bytes()
+    if exe[:8] != b"PS-X EXE":
+        raise ValueError("not a PS-X EXE header")
+    (text_bytes,) = struct.unpack_from("<I", exe, 0x1C)
+    if text_bytes <= 0 or 0x800 + text_bytes > len(exe):
+        raise ValueError("invalid PS-X EXE text bounds")
+    needle = struct.pack("<I", base_candidate)
+    offsets = [i for i in range(0x800, 0x800 + text_bytes, 4)
+               if exe[i:i + 4] == needle]
+    return {
+        "source_name": executable_path.name,
+        "psx_exe_header_verified": True,
+        "aligned_literal_match_count": len(offsets),
+        "aligned_literal_file_offsets": offsets,
+        "loader_relationship_not_proven": True,
+    }
+
+
+def inspect_pointer_table(path, executable_path=None):
     path = Path(path)
     file_size = path.stat().st_size
     if file_size < PREFIX_BYTES + 4:
@@ -70,6 +97,8 @@ def inspect_pointer_table(path):
             source_sha256.update(chunk)
 
     deltas = [b - a for a, b in zip(offsets, offsets[1:])]
+    corroboration = (corroborate_base_in_psx_exe(executable_path, base_candidate)
+                     if executable_path is not None else None)
     return {
         "schema": 1,
         "kind": "PRIVATE_CDFLR_POINTER_TABLE_PROBE",
@@ -88,6 +117,7 @@ def inspect_pointer_table(path):
         "adjacent_target_span_max": max(deltas),
         "target_first_word_0x41_count": target_tags[0x41],
         "target_first_word_0x41_indices": tag_0x41_indices,
+        "independent_executable_literal_check": corroboration,
         "interpretation": {
             "status": "CANDIDATE_POINTER_TABLE_ONLY",
             "base_is_inferred_not_proven": True,
@@ -100,8 +130,9 @@ def inspect_pointer_table(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("path", type=Path, help="local user-owned CDFLR.BIN")
+    parser.add_argument("--executable", type=Path, help="optional local PS-X EXE for independent literal check")
     args = parser.parse_args()
-    print(json.dumps(inspect_pointer_table(args.path), sort_keys=True, indent=2))
+    print(json.dumps(inspect_pointer_table(args.path, args.executable), sort_keys=True, indent=2))
 
 
 if __name__ == "__main__":
