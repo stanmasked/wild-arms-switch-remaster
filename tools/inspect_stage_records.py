@@ -41,6 +41,9 @@ def inspect_records(path, record_bytes=DEFAULT_RECORD_BYTES,
     ram_word8 = 0
     psx_header_like_count = 0
     psx_text_sizes = []
+    mips_entry_stub_count = 0
+    mips_gp_matches_entry_plus16 = 0
+    mips_jump_inside_text_count = 0
     digests = set()
     with path.open("rb") as source:
         for index in range(count):
@@ -71,6 +74,33 @@ def inspect_records(path, record_bytes=DEFAULT_RECORD_BYTES,
             psx_header_like_count += int(psx_header_like)
             if psx_header_like:
                 psx_text_sizes.append(text_bytes)
+            # Probe only 16 bytes at the declared entry PC. This is a
+            # structural MIPS test, not execution or a disassembly export.
+            stub_like = False
+            gp_matches = False
+            jump_inside_text = False
+            entry_offset = word0 - word8
+            if psx_header_like and entry_offset >= 0 and 64 + entry_offset + 16 <= record_bytes:
+                end_position = source.tell()
+                source.seek(index * record_bytes + 64 + entry_offset)
+                stub = source.read(16)
+                source.seek(end_position)
+                if len(stub) != 16:
+                    raise ValueError("entry stub was truncated")
+                lui, addiu, jump, delay = struct.unpack("<4I", stub)
+                stub_like = (lui >> 16 == 0x3C1C and
+                             addiu >> 16 == 0x279C and
+                             jump >> 26 == 2 and delay == 0)
+                if stub_like:
+                    lo = addiu & 0xFFFF
+                    signed_lo = lo if lo < 0x8000 else lo - 0x10000
+                    gp_value = (((lui & 0xFFFF) << 16) + signed_lo) & 0xFFFFFFFF
+                    target = ((word0 + 12) & 0xF0000000) | ((jump & 0x03FFFFFF) << 2)
+                    gp_matches = gp_value == (word0 + 16) & 0xFFFFFFFF
+                    jump_inside_text = word8 <= target < word8 + text_bytes
+            mips_entry_stub_count += int(stub_like)
+            mips_gp_matches_entry_plus16 += int(gp_matches)
+            mips_jump_inside_text_count += int(jump_inside_text)
             kseg0_0 = 0x80000000 <= word0 < 0x80200000
             kseg0_8 = 0x80000000 <= word8 < 0x80200000
             marker_matches += int(marker_match)
@@ -84,6 +114,9 @@ def inspect_records(path, record_bytes=DEFAULT_RECORD_BYTES,
                 "sha256": digest,
                 "marker_match": marker_match,
                 "psx_exe_minus16_header_like": psx_header_like,
+                "mips_entry_stub_like": stub_like,
+                "mips_gp_matches_entry_plus16": gp_matches,
+                "mips_jump_inside_text": jump_inside_text,
                 "word0_ps1_kseg0_2mb_like": kseg0_0,
                 "word8_ps1_kseg0_2mb_like": kseg0_8,
             })
@@ -105,6 +138,9 @@ def inspect_records(path, record_bytes=DEFAULT_RECORD_BYTES,
         "psx_text_bytes_min": min(psx_text_sizes) if psx_text_sizes else None,
         "psx_text_bytes_max": max(psx_text_sizes) if psx_text_sizes else None,
         "psx_text_bytes_distinct": len(set(psx_text_sizes)),
+        "mips_entry_stub_count": mips_entry_stub_count,
+        "mips_gp_matches_entry_plus16_count": mips_gp_matches_entry_plus16,
+        "mips_jump_inside_text_count": mips_jump_inside_text_count,
         "unique_record_hash_count": len(digests),
         "records": records,
         "interpretation": {
@@ -112,6 +148,7 @@ def inspect_records(path, record_bytes=DEFAULT_RECORD_BYTES,
             "gameplay_role_is_not_verified": True,
             "ram_like_words_are_not_proven_pointers": True,
             "psx_header_pattern_is_not_a_verified_executable": True,
+            "machine_code_must_not_be_executed_or_exported": True,
             "copyrighted_payload_emitted": False,
         },
     }
