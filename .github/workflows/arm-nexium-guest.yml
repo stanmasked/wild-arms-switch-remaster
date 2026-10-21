@@ -107,6 +107,11 @@ jobs:
           launch() {
             label="$1"
             export NEXIUM_DATA_ROOT="$RUNNER_TEMP/wa-arm-$label"
+            # Prepare only the otherwise absent empty game directory.
+            # A mounted/empty ARM directory is a required guest-audit
+            # invariant, not an accidental false-negative on first boot.
+            mkdir -p "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field"
+            test -z "$(find "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field" -mindepth 1 -print -quit)"
             # Direct PID: no timeout wrapper may masquerade as a guest.
             # GitHub's timeout-minutes bounds this entire capture step.
             ./nexium-dist/NeXium/nexium \
