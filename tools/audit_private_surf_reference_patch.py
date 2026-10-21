@@ -90,9 +90,12 @@ def compare_opaque_rgb(reference, candidate, width, height, *, threshold=0):
     }, bytes(difference))
 
 
-def _opaque_rgb_png(path):
+def _opaque_rgb_png(raw_png):
+    """Decode exactly the immutable byte sequence whose SHA-256 was checked."""
     from PIL import Image
-    with Image.open(path) as picture:
+    if not isinstance(raw_png, bytes) or not 0 < len(raw_png) <= 16*1024*1024:
+        raise ValueError("private PNG must be a bounded immutable byte string")
+    with Image.open(BytesIO(raw_png)) as picture:
         if picture.format != "PNG":
             raise ValueError("frame comparison input must be actual PNG")
         if (picture.width < 1 or picture.height < 1 or
@@ -125,7 +128,10 @@ def create_private_surf_reference_patch(
     verified = verify_private_frame_witness(witness_directory,
                                             basename=witness_basename)
     screen_path = witness_directory / (witness_basename + ".screen.png")
-    frame_size, screenshot = _opaque_rgb_png(screen_path)
+    original_screen_bytes = screen_path.read_bytes()
+    if hashlib.sha256(original_screen_bytes).hexdigest() != verified["screen_sha256"]:
+        raise ValueError("original screenshot changed after witness verification")
+    frame_size, screenshot = _opaque_rgb_png(original_screen_bytes)
     roi = validate_roi(x, y, width, height, *frame_size)
     patch = screenshot.crop(roi)
     reference_rgb = patch.tobytes()
@@ -161,7 +167,8 @@ def create_private_surf_reference_patch(
         candidate_png = Path(candidate_png)
         if candidate_png.is_symlink() or not candidate_png.is_file():
             raise ValueError("candidate must be an existing, non-symlink PNG file")
-        candidate_size, candidate = _opaque_rgb_png(candidate_png)
+        candidate_png_bytes = candidate_png.read_bytes()
+        candidate_size, candidate = _opaque_rgb_png(candidate_png_bytes)
         if candidate_size != (width, height):
             raise ValueError("candidate must match ROI dimensions exactly; resampling forbidden")
         metrics, difference_rgb = compare_opaque_rgb(
@@ -170,7 +177,7 @@ def create_private_surf_reference_patch(
         result["comparison"] = {
             **metrics,
             "candidate_png_sha256": hashlib.sha256(
-                candidate_png.read_bytes()).hexdigest(),
+                candidate_png_bytes).hexdigest(),
             "candidate_rgb_sha256": hashlib.sha256(candidate.tobytes()).hexdigest(),
             "candidate_filename_only": candidate_png.name,
             "image_metric_is_not_proof_of_original_palette_assignment": True,
