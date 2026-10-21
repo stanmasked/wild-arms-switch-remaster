@@ -11,7 +11,7 @@ from audit_nexium_arm_burst import (
     audit_burst,NAMES,ZR_HINT,FOE_0_HEALTH,
     ONE_ROUND_LAST,ONE_ROUND_FIRST_EMPTY,
 )
-from audit_nexium_arm_guest import ARM_FULL_BAR,GOLD,DARK
+from audit_nexium_arm_guest import ARM_FULL_BAR,GOLD,DARK,RED
 from test_audit_nexium_arm_cold_boot import cold_fixture
 from test_audit_nexium_arm_guest import put
 
@@ -27,6 +27,7 @@ def fixture_burst(root):
         with Image.open(path) as old:
             frame=old.convert("RGB")
         put(frame,ZR_HINT,GOLD)
+        put(frame,FOE_0_HEALTH,RED)
         frame.save(path)
     fired=burst/(NAMES[0]+".png")
     shutil.copyfile(restarted,fired)
