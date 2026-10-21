@@ -38,7 +38,9 @@ def make_slot(*, corrupt_index=None, bad_pointer=False):
         else:
             value=stream if i!=corrupt_index else stream[:100]
             regions[i]=value
-            at+=len(value)+(0 if i==57 else 3)
+            # Real CDFLR next-pointer regions have 32-bit alignment.
+            # Add 0..3 bytes, NOT a fixed three-byte suffix.
+            at+=len(value)+(0 if i==57 else (-len(value))%4)
     if at>STRIDE:
         raise AssertionError("synthetic slot exceeds bounded size")
     if corrupt_index == 57:
