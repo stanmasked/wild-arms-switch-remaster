@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from probe_container import MAX_SAMPLE_BYTES, probe  # noqa: E402
+from probe_container import MAX_SAMPLE_BYTES, _window_offsets, probe  # noqa: E402
 
 
 class ProbeContainerTests(unittest.TestCase):
@@ -31,6 +31,22 @@ class ProbeContainerTests(unittest.TestCase):
         self.assertNotIn("raw_bytes", result)
         self.assertNotIn("sample_data", result)
         self.assertEqual(result["sha256"], hashlib.sha256(data).hexdigest())
+
+
+    def test_distributed_windows_obey_budget_alignment_and_bounds(self):
+        for size in range(1, 130):
+            for budget in range(1, 65):
+                windows = _window_offsets(size, budget)
+                self.assertLessEqual(sum(length for _, length in windows), budget)
+                for index, (offset, length) in enumerate(windows):
+                    self.assertGreaterEqual(offset, 0)
+                    self.assertGreater(length, 0)
+                    self.assertLessEqual(offset + length, size)
+                    if size > budget and budget >= 4:
+                        self.assertEqual(offset % 4, 0)
+                    if index:
+                        previous_offset, previous_length = windows[index - 1]
+                        self.assertGreaterEqual(offset, previous_offset + previous_length)
 
     def test_rejects_empty_file(self):
         with tempfile.TemporaryDirectory() as folder:
