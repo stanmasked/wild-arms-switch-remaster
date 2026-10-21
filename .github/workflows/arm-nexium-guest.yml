@@ -10,6 +10,7 @@ on:
       - 'stage-400-*'
       - 'stage-401-*'
       - 'stage-402-*'
+      - 'stage-403-*'
       - 'stage-399-*'
       - 'stage-400-*'
       - 'stage-401-*'
