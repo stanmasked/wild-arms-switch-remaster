@@ -69,7 +69,8 @@ def audit_arm_guests(screenshots, baseline_root, arm_root, processes, report):
     processes = json.loads(Path(processes).read_text(encoding="utf-8"))
     if set(processes) != {"baseline_pid", "arm_pid", "baseline_wait_completed",
                           "arm_wait_completed",
-                          "baseline_wait_status", "arm_wait_status"}:
+                          "baseline_wait_status", "arm_wait_status",
+                          "baseline_force_killed", "arm_force_killed"}:
         raise ValueError("unknown or missing process evidence")
     if not all(type(processes[key]) is int and processes[key] > 0
                for key in ("baseline_pid", "arm_pid")):
@@ -113,8 +114,20 @@ def audit_arm_guests(screenshots, baseline_root, arm_root, processes, report):
             and processes["arm_wait_completed"] is True
             and type(processes["baseline_wait_status"]) is int
             and type(processes["arm_wait_status"]) is int
-            and processes["baseline_wait_status"] in (0, 143)
-            and processes["arm_wait_status"] in (0, 143),
+            and type(processes["baseline_force_killed"]) is bool
+            and type(processes["arm_force_killed"]) is bool
+            and (
+                (not processes["baseline_force_killed"]
+                 and processes["baseline_wait_status"] in (0, 143))
+                or (processes["baseline_force_killed"]
+                    and processes["baseline_wait_status"] == 137)
+            )
+            and (
+                (not processes["arm_force_killed"]
+                 and processes["arm_wait_status"] in (0, 143))
+                or (processes["arm_force_killed"]
+                    and processes["arm_wait_status"] == 137)
+            ),
         "ordinary_r_opens_unchanged_battle":
             native_pixel(field, 0, 5) == MAP_STATUS
             and native_pixel(plain, 70, 220) == BLUE
