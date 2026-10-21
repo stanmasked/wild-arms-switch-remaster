@@ -86,7 +86,7 @@ jobs:
       - name: Fetch exact SHA-256 verified official NeXium Linux binary
         run: |
           set -euo pipefail
-          mkdir -p nexium-dist arm-guest/screenshots arm-guest/coldboot arm-guest/burst
+          mkdir -p nexium-dist arm-guest/screenshots arm-guest/coldboot arm-guest/burst arm-guest/victory
           curl -fL --retry 3 --connect-timeout 20 --max-time 240 \
             "$NEXIUM_URL" -o nexium-dist/nexium.tar.gz
           echo "$NEXIUM_ARCHIVE_SHA256  nexium-dist/nexium.tar.gz" | sha256sum -c -
@@ -314,6 +314,65 @@ jobs:
                           "armrestart_wait_status":int(os.environ["ARMRESTART_WAIT_STATUS"]),
                           "armrestart_force_killed":os.environ["ARMRESTART_FORCE_KILLED"]=="true",
                           "armrestart_wait_completed":True},
+                         sort_keys=True)+"\n")
+          '
+          # FOURTH independent asset-free NeXium guest. Actually win
+          # with two charged Bursts, take the B payout once, reopen and
+          # show volatile EXP/Gella without touching any WABJ slots.
+          launch victory
+          import -display :99 -window root \
+            arm-guest/victory/14_victory_field.png
+          xdotool keydown --clearmodifiers r
+          sleep 0.16
+          press e
+          xdotool keyup r
+          sleep 0.38
+          import -display :99 -window root \
+            arm-guest/victory/15_victory_full.png
+          press t  # ZR Burst: hero 0 downs foe 0, 3/3 -> 1/3.
+          import -display :99 -window root \
+            arm-guest/victory/16_victory_first_burst.png
+          press c  # Hero 1 A-strikes remaining foe: 17 -> 13 HP.
+          import -display :99 -window root \
+            arm-guest/victory/17_victory_melee.png
+          press z  # Hero 2 guards; enemy retaliates; round two.
+          press n  # Hero 0 reloads magazine to 3/3.
+          import -display :99 -window root \
+            arm-guest/victory/18_victory_reload.png
+          press z  # Hero 1 guards.
+          press z  # Hero 2 guards; round three.
+          press t  # Hero 0 ZR Burst: 13 HP remaining foe down.
+          import -display :99 -window root \
+            arm-guest/victory/19_victory_banner.png
+          press x  # B closes a real Victory: +8 EXP +12 Gella in RAM.
+          import -display :99 -window root \
+            arm-guest/victory/20_victory_return.png
+          xdotool keydown --clearmodifiers r
+          sleep 0.16
+          press e
+          xdotool keyup r
+          sleep 0.4
+          import -display :99 -window root \
+            arm-guest/victory/21_victory_reopen_rewards.png
+          press x  # Retreat: never duplicate previous Victory reward.
+          xdotool keydown --clearmodifiers r
+          sleep 0.16
+          press e
+          xdotool keyup r
+          sleep 0.4
+          import -display :99 -window root \
+            arm-guest/victory/22_victory_second_reopen.png
+          stop_guest
+          VICTORY_PID="$victory_pid" \
+          VICTORY_WAIT_STATUS="$victory_wait_status" \
+          VICTORY_FORCE_KILLED="$victory_force_killed" python3 -c '
+          import json,os
+          from pathlib import Path
+          Path("arm-guest/victory-process.json").write_text(
+              json.dumps({"victory_pid":int(os.environ["VICTORY_PID"]),
+                          "victory_wait_status":int(os.environ["VICTORY_WAIT_STATUS"]),
+                          "victory_force_killed":os.environ["VICTORY_FORCE_KILLED"]=="true",
+                          "victory_wait_completed":True},
                          sort_keys=True)+"\n")
           '
       - name: Strict pixel, guest process and isolated save-file audit
