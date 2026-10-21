@@ -405,6 +405,9 @@ void real_two_bursts_victory_credit_once_and_visible_after_reentry() {
   assert(display.at(440+21*13+4,368)==kBattleGreen);    // 1
   assert(display.at(440+22*13+2,368)==kBattleGreen);    // 2
   assert(display.at(440+23*13,368)==kBattleBackground); // no overflow
+  // Backward compatibility: compare every pixel of the verified default
+  // 8/12 NeXium claim line, not just the four indicator glyphs.
+  assert_claim_glyphs(display,"B CLAIM EXP 8  GELLA 12");
   assert(session.history.victories==0 && session.rewards.experience==0);
   const auto final_picture=display.data;
 
