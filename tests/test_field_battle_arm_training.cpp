@@ -187,6 +187,83 @@ void damaged_target_and_magazine_never_consume_input_or_write() {
   f.padding_unchanged();
 }
 
+void zr_burst_real_session_turn_then_insufficient_ammo_refusal() {
+  ArmTrainingSession session{};Frame pixels;
+  // A ZR key held while opening the scene is not a gameplay press.
+  ArmTrainingInput opening{};
+  opening.open=true;opening.manual=true;opening.arm.burst=true;
+  assert(advance_arm_training_session(session,opening,pixels.target).entered);
+  ArmTrainingInput burst{};burst.arm.burst=true;
+  assert(advance_arm_training_session(session,burst,pixels.target).arm.status==
+         ArmControlStatus::Idle);
+  assert(session.magazine.rounds==3 && session.battle.enemies[0].hp==14);
+  neutral(session,pixels);
+  const auto shot=advance_arm_training_session(session,burst,pixels.target);
+  assert(shot.arm.status==ArmControlStatus::Applied);
+  assert(shot.arm.update.battle.inflicted==14);
+  assert(session.magazine.rounds==1 && session.battle.enemies[0].hp==0);
+  assert(session.cursor.actor==1 && session.cursor.target==1);
+  assert(session.battle.party[0].attack==7);
+  assert(pixels.at(kArmHudX+20+72,kArmHudY+38)==kBattleGold);
+  assert(pixels.at(kArmHudX+20+73,kArmHudY+38)==kBattleBackground);
+  for(int i=0;i<5;++i) {
+    const auto held=advance_arm_training_session(session,burst,pixels.target);
+    assert(held.arm.status==ArmControlStatus::Idle);
+    assert(session.magazine.rounds==1);
+  }
+  neutral(session,pixels);
+  ArmTrainingInput strike{};strike.pad.confirm=true;
+  assert(advance_arm_training_session(session,strike,pixels.target).ordinary.status==
+         BattleControlStatus::ActionApplied);
+  assert(session.battle.enemies[1].hp==13);
+  neutral(session,pixels);
+  ArmTrainingInput guard{};guard.pad.guard=true;
+  assert(advance_arm_training_session(session,guard,pixels.target).ordinary.status==
+         BattleControlStatus::ActionApplied);
+  assert(session.battle.round==2 && session.cursor.actor==0);
+  neutral(session,pixels);
+  const auto before=session.battle;
+  const auto refused=advance_arm_training_session(session,burst,pixels.target);
+  assert(refused.arm.status==ArmControlStatus::Refused);
+  assert(refused.arm.update.step==ArmStep::InsufficientAmmo);
+  assert(session.magazine.rounds==1 && !session.battle.acted[0]);
+  assert(session.battle.enemies[1].hp==before.enemies[1].hp);
+  neutral(session,pixels);
+  ArmTrainingInput regular{};regular.arm.fire=true;
+  assert(advance_arm_training_session(session,regular,pixels.target).arm.status==
+         ArmControlStatus::Applied);
+  assert(session.magazine.rounds==0 && session.battle.enemies[1].hp==5);
+  ArmTrainingInput close{};close.close=true;
+  const auto result=advance_arm_training_session(session,close,pixels.target);
+  assert(result.exited && result.resolution==BattleResolution::Retreat);
+  assert(session.history.retreats==1 && session.rewards.gella==0);
+  pixels.padding_unchanged();
+}
+
+void zr_conflicts_require_full_release_before_attacking() {
+  ArmTrainingSession session{};Frame pixels;launch(session,pixels);
+  ArmTrainingInput both{};both.arm.burst=true;both.arm.fire=true;
+  auto result=advance_arm_training_session(session,both,pixels.target);
+  assert(result.arm.status==ArmControlStatus::Idle);
+  assert(session.magazine.rounds==3 && session.battle.enemies[0].hp==14);
+  ArmTrainingInput still_burst{};still_burst.arm.burst=true;
+  result=advance_arm_training_session(session,still_burst,pixels.target);
+  assert(result.arm.status==ArmControlStatus::Idle);
+  neutral(session,pixels);
+  ArmTrainingInput conflict_with_melee{};
+  conflict_with_melee.arm.burst=true;
+  conflict_with_melee.pad.confirm=true;
+  result=advance_arm_training_session(session,conflict_with_melee,pixels.target);
+  assert(result.arm.status==ArmControlStatus::Idle);
+  assert(result.ordinary.status==BattleControlStatus::Idle);
+  result=advance_arm_training_session(session,still_burst,pixels.target);
+  assert(result.arm.status==ArmControlStatus::Idle);
+  neutral(session,pixels);
+  result=advance_arm_training_session(session,still_burst,pixels.target);
+  assert(result.arm.status==ArmControlStatus::Applied);
+  assert(session.magazine.rounds==1 && session.battle.enemies[0].hp==0);
+}
+
 } // namespace
 
 int main() {
@@ -196,4 +273,6 @@ int main() {
   victory_award_once_on_close_without_persistence_or_pixels();
   retreat_has_no_payout_and_does_not_change_backing_frame();
   damaged_target_and_magazine_never_consume_input_or_write();
+  zr_burst_real_session_turn_then_insufficient_ammo_refusal();
+  zr_conflicts_require_full_release_before_attacking();
 }

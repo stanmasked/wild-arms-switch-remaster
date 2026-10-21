@@ -6,6 +6,8 @@ on:
       - 'stage-390-*'
       - 'stage-396-*'
       - 'stage-398-*'
+      - 'stage-399-*'
+      - 'stage-399-*'
   pull_request:
     paths:
       - '.github/workflows/arm-nexium-guest.yml'
@@ -15,6 +17,8 @@ on:
       - 'tools/test_audit_nexium_arm_cold_boot.py'
       - 'tools/audit_nexium_arm_controls.py'
       - 'tools/test_audit_nexium_arm_controls.py'
+      - 'tools/audit_nexium_arm_burst.py'
+      - 'tools/test_audit_nexium_arm_burst.py'
       - 'switch/source/main.cpp'
       - 'switch/Makefile'
       - 'include/field_battle_arm*.hpp'
@@ -73,10 +77,11 @@ jobs:
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_guest.py' -v
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_cold_boot.py' -v
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_controls.py' -v
+          /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_burst.py' -v
       - name: Fetch exact SHA-256 verified official NeXium Linux binary
         run: |
           set -euo pipefail
-          mkdir -p nexium-dist arm-guest/screenshots arm-guest/coldboot
+          mkdir -p nexium-dist arm-guest/screenshots arm-guest/coldboot arm-guest/burst
           curl -fL --retry 3 --connect-timeout 20 --max-time 240 \
             "$NEXIUM_URL" -o nexium-dist/nexium.tar.gz
           echo "$NEXIUM_ARCHIVE_SHA256  nexium-dist/nexium.tar.gz" | sha256sum -c -
@@ -277,6 +282,18 @@ jobs:
           sleep 0.38
           import -display :99 -window root \
             arm-guest/coldboot/10_arm_restart_full.png
+          # Stage399: Switch ZR maps to host T in the pinned NeXium.
+          # Burst is one tactical turn: 3/3 => 1/3 and first foe down.
+          # Hold without release for a second screenshot to forbid refire.
+          xdotool keydown --clearmodifiers t
+          sleep 0.35
+          import -display :99 -window root \
+            arm-guest/burst/12_arm_burst_fired.png
+          sleep 0.35
+          import -display :99 -window root \
+            arm-guest/burst/13_arm_burst_held.png
+          xdotool keyup t
+          sleep 0.2
           press x
           import -display :99 -window root \
             arm-guest/coldboot/11_arm_restart_return.png
@@ -317,6 +334,13 @@ jobs:
             --main-shots arm-guest/screenshots \
             --reboot-shots arm-guest/coldboot \
             --report arm-guest/arm-controls-audit.json
+      - name: Audit real ZR Burst ammo, downed foe and held-key guest frames
+        run: |
+          /usr/bin/python3 tools/audit_nexium_arm_burst.py \
+            --main-shots arm-guest/screenshots \
+            --cold-shots arm-guest/coldboot \
+            --burst-shots arm-guest/burst \
+            --report arm-guest/arm-burst-audit.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

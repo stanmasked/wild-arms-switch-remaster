@@ -89,7 +89,7 @@ struct ArmTrainingFrame {
 
   ArmTrainingFrame frame{};
   if (!entering) {
-    const bool has_arm=input.arm.fire || input.arm.reload;
+    const bool has_arm=input.arm.fire || input.arm.reload || input.arm.burst;
     const bool has_pad=input.pad.left || input.pad.right ||
                        input.pad.up || input.pad.down ||
                        input.pad.confirm || input.pad.guard;

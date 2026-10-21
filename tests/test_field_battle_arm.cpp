@@ -140,6 +140,56 @@ void overflow_rolls_back_last_round_without_extra_bullets() {
   assert(arm.rounds==3);
 }
 
+void burst_consumes_two_bullets_for_one_real_finishing_turn() {
+  auto b=make_demo_battle();ArmMagazine mag{};
+  const auto before=b.party[0].attack;
+  const auto shot=advance_arm_command(b,mag,0,ArmCommand::Burst,0);
+  assert(shot.step==ArmStep::Applied && shot.battle.step==BattleStep::Applied);
+  assert(shot.battle.inflicted==14); // (10 + 5) - armor 1
+  assert(b.enemies[0].hp==0 && b.enemies[1].hp==17);
+  assert(b.acted[0] && b.phase==BattlePhase::Player);
+  assert(mag.rounds==1 && b.party[0].attack==before);
+  assert(!shot.battle.enemy_turn_completed);
+}
+
+void burst_rejects_one_round_without_losing_turn_or_stat() {
+  auto b=make_demo_battle();ArmMagazine mag{1,3,10};
+  const auto original=b;
+  const auto result=advance_arm_command(b,mag,0,ArmCommand::Burst,0);
+  assert(result.step==ArmStep::InsufficientAmmo);
+  assert(mag.rounds==1 && !b.acted[0]);
+  equal_battle(b,original);
+  mag.rounds=0;
+  assert(advance_arm_command(b,mag,0,ArmCommand::Burst,0).step==ArmStep::Empty);
+  equal_battle(b,original);
+}
+
+void burst_overflow_is_saturated_and_never_mutates_melee() {
+  auto b=make_demo_battle();ArmMagazine mag{2,3,65535};
+  const auto melee=b.party[0].attack;
+  const auto shot=advance_arm_command(b,mag,0,ArmCommand::Burst,1);
+  assert(shot.step==ArmStep::Applied);
+  assert(shot.battle.inflicted==17 && b.enemies[1].hp==0);
+  assert(b.party[0].attack==melee && mag.rounds==0);
+}
+
+void burst_failed_round_transition_preserves_bullet_count() {
+  auto b=make_demo_battle();ArmMagazine mag{3,3,10};
+  b.round=std::numeric_limits<std::uint32_t>::max();
+  assert(advance_field_battle(b,1,BattleMove::Guard).step==BattleStep::Applied);
+  assert(advance_field_battle(b,2,BattleMove::Guard).step==BattleStep::Applied ||
+         b.phase!=BattlePhase::Player);
+  // Fresh actor on overflow cannot apply, and rollback is atomic.
+  auto next=make_demo_battle();ArmMagazine next_mag{2,3,10};
+  next.round=std::numeric_limits<std::uint32_t>::max();
+  next.acted[1]=true;next.acted[2]=true;
+  const auto old=next;
+  const auto out=advance_arm_command(next,next_mag,0,ArmCommand::Burst,0);
+  assert(out.step==ArmStep::InvalidState);
+  assert(next_mag.rounds==2);
+  equal_battle(next,old);
+}
+
 } // namespace
 
 int main() {
@@ -149,4 +199,8 @@ int main() {
   victory_finishing_shot_never_grants_enemy_retaliation();
   corrupted_magazine_and_invalid_command_fail_atomically();
   overflow_rolls_back_last_round_without_extra_bullets();
+  burst_consumes_two_bullets_for_one_real_finishing_turn();
+  burst_rejects_one_round_without_losing_turn_or_stat();
+  burst_overflow_is_saturated_and_never_mutates_melee();
+  burst_failed_round_transition_preserves_bullet_count();
 }

@@ -12,6 +12,7 @@ namespace wa::field {
 struct ArmButtons {
   bool fire = false;
   bool reload = false;
+  bool burst = false; // Switch ZR in experimental mode only.
 };
 
 struct ArmEdgeState {
@@ -45,12 +46,21 @@ struct ArmControlFrame {
   next_state.previous=buttons;
   const bool fire_edge=buttons.fire && !state.previous.fire;
   const bool reload_edge=buttons.reload && !state.previous.reload;
-  if ((buttons.fire && buttons.reload) || fire_edge == reload_edge) {
+  const bool burst_edge=buttons.burst && !state.previous.burst;
+  // Simultaneously held ARM buttons consume all current edges; only a
+  // deliberate release and a fresh single-button edge may act.
+  const unsigned held_count=static_cast<unsigned>(buttons.fire)+
+      static_cast<unsigned>(buttons.reload)+
+      static_cast<unsigned>(buttons.burst);
+  const unsigned edge_count=static_cast<unsigned>(fire_edge)+
+      static_cast<unsigned>(reload_edge)+
+      static_cast<unsigned>(burst_edge);
+  if (held_count>1 || edge_count!=1) {
     state=next_state;
     return {};
   }
 
-  const bool fire=fire_edge;
+  const bool fire=fire_edge || burst_edge;
   // A stale target is repaired ONLY if the ARM action commits, and
   // never allows shooting a dead enemy when all enemies are dead.
   std::size_t target=cursor.target;
@@ -60,7 +70,8 @@ struct ArmControlFrame {
 
   const ArmUpdate outcome=advance_arm_command(
       battle,magazine,cursor.actor,
-      fire ? ArmCommand::Fire : ArmCommand::Reload,
+      burst_edge ? ArmCommand::Burst :
+        (fire_edge ? ArmCommand::Fire : ArmCommand::Reload),
       fire ? target : 0);
   state=next_state;
   if (outcome.step!=ArmStep::Applied)
