@@ -34,7 +34,7 @@ def fixture(root, submode=0x08, mode=2, valid_sync=True, size=4096):
     image = bytearray(24 * SECTOR_BYTES)
     payload_a = bytearray(BLOCK_BYTES)
     struct.pack_into("<III", payload_a, 0, 0x8015F624, 0, 0x8014F040)
-    payload_b = bytearray((index % 251 for index in range(BLOCK_BYTES)))
+    payload_b = bytearray(bytes((1, 2, 3, 4)) * (BLOCK_BYTES // 4))
     image[21 * SECTOR_BYTES:22 * SECTOR_BYTES] = raw_sector(
         payload_a, submode=submode, mode=mode, valid_sync=valid_sync)
     image[22 * SECTOR_BYTES:23 * SECTOR_BYTES] = raw_sector(payload_b)

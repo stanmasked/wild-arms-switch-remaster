@@ -56,7 +56,7 @@ def _word_summary(data, declared_size):
 def probe(image_path, inventory_path, paths=None, sample_bytes=4096):
     if type(sample_bytes) is not int or not 1 <= sample_bytes <= MAX_SAMPLE_BYTES:
         raise ValueError(f"sample-bytes must be between 1 and {MAX_SAMPLE_BYTES}")
-    requested = tuple(path.lstrip("/") for path in (paths or DEFAULT_PATHS))
+    requested = tuple(path.lstrip("/") for path in (DEFAULT_PATHS if paths is None else paths))
     if not requested or len(set(requested)) != len(requested):
         raise ValueError("candidate paths must be nonempty and unique")
 
