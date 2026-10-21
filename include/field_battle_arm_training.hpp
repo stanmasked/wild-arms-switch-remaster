@@ -125,12 +125,25 @@ struct ArmTrainingFrame {
       BattleRenderStatus::Rendered)
     return {ArmTrainingStatus::InvalidState};
   (void)draw_battle_arm_status(target,next.battle,next.magazine);
-  // A player-facing preview of the *future* volatile reward, only on
-  // an actual ARM Victory frame. The B close still performs the one-time
-  // credit; viewing this banner does not mutate rewards or history.
-  // Victory popup x320..960, y294..400: text at x440, y368 fits within.
-  if (next.battle.phase==BattlePhase::Victory)
-    battle_text(target,440,368,"B CLAIM EXP 8  GELLA 12",kBattleGreen);
+  // Derive the preview from the SAME saturating payout policy as the
+  // eventual B-close. Rendering alone must never claim any EXP or Gella.
+  // Fits the existing Victory popup x320..960 (text x440..~934).
+  if (next.battle.phase==BattlePhase::Victory) {
+    const auto pending=preview_battle_reward(next.rewards,
+                                              BattleResolution::Victory);
+    char line[96]{};
+    const int length=std::snprintf(line,sizeof(line),
+        "B CLAIM EXP %u  GELLA %u",
+        static_cast<unsigned>(pending.experience),
+        static_cast<unsigned>(pending.gella));
+    // 13px per glyph. At extreme balances the preview can be 40+
+    // characters, so shorten it rather than spill past the green frame.
+    if (length<0 || length>38)
+      (void)std::snprintf(line,sizeof(line),"B EXP %u  G %u",
+          static_cast<unsigned>(pending.experience),
+          static_cast<unsigned>(pending.gella));
+    battle_text(target,440,368,line,kBattleGreen);
+  }
   draw_previous_battle_history(target,next.history);
   // Only after a completed victory, display volatile ROM-free
   // placeholder rewards on the next ARM entry. No WABJ interaction.
