@@ -19,6 +19,16 @@ class StageRecordProbeTests(unittest.TestCase):
             record[8:12] = (0x80150000).to_bytes(4, "little")
             record[12:16] = (2048).to_bytes(4, "little")
             record[32:36] = (0x801FFFF0).to_bytes(4, "little")
+            entry_offset = 0x10 + index * 4
+            stub = (
+                0x3C1C8015,  # lui gp, 0x8015
+                0x279C0020 + index * 4,  # addiu gp, gp, entry+16
+                0x08000000 | ((0x80150000 >> 2) & 0x03FFFFFF),  # j load
+                0,  # delay-slot nop
+            )
+            record[64 + entry_offset:64 + entry_offset + 16] = (
+                b"".join(word.to_bytes(4, "little") for word in stub)
+            )
             if index != 2:
                 record[60:64] = b"Sony"
             blocks.append(bytes(record))
@@ -36,8 +46,27 @@ class StageRecordProbeTests(unittest.TestCase):
         self.assertEqual(report["psx_exe_minus16_header_exceptions"], [2])
         self.assertEqual(report["psx_text_bytes_min"], 2048)
         self.assertEqual(report["psx_text_bytes_max"], 2048)
+        self.assertEqual(report["mips_entry_stub_count"], 3)
+        self.assertEqual(report["mips_gp_matches_entry_plus16_count"], 3)
+        self.assertEqual(report["mips_jump_inside_text_count"], 3)
         self.assertEqual(report["records"][0]["sha256"], hashlib.sha256(blocks[0]).hexdigest())
         self.assertFalse(report["interpretation"]["copyrighted_payload_emitted"])
+
+    def test_header_without_mips_stub_is_not_executable_evidence(self):
+        record = bytearray(4096)
+        record[0:4] = (0x80150010).to_bytes(4, "little")
+        record[8:12] = (0x80150000).to_bytes(4, "little")
+        record[12:16] = (2048).to_bytes(4, "little")
+        record[32:36] = (0x801FFFF0).to_bytes(4, "little")
+        record[60:64] = b"Sony"
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "synthetic.bin"
+            path.write_bytes(record)
+            report = inspect_records(path, 4096)
+        self.assertEqual(report["psx_exe_minus16_header_like_count"], 1)
+        self.assertEqual(report["mips_entry_stub_count"], 0)
+        self.assertEqual(report["mips_gp_matches_entry_plus16_count"], 0)
+        self.assertEqual(report["mips_jump_inside_text_count"], 0)
 
     def test_rejects_invalid_stride_or_incomplete_record(self):
         with tempfile.TemporaryDirectory() as folder:
