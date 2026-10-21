@@ -27,8 +27,12 @@ def _entropy(counts, total):
     return -sum((n / total) * math.log2(n / total) for n in counts if n)
 
 
-def _window_offsets(size, sample_bytes):
+def _window_offsets(size, sample_bytes, layout="distributed"):
     """Return aligned, non-overlapping sample windows within the byte budget."""
+    if layout == "prefix":
+        return [(0, min(size, sample_bytes))]
+    if layout != "distributed":
+        raise ValueError("layout must be prefix or distributed")
     if size <= sample_bytes:
         return [(0, size)]
     if sample_bytes < 4:
@@ -53,9 +57,11 @@ def _window_offsets(size, sample_bytes):
     return [(offset, min(window_size, size - offset)) for offset in offsets]
 
 
-def probe(path, sample_bytes=DEFAULT_SAMPLE_BYTES):
+def probe(path, sample_bytes=DEFAULT_SAMPLE_BYTES, layout="distributed"):
     if type(sample_bytes) is not int or sample_bytes < 1 or sample_bytes > MAX_SAMPLE_BYTES:
         raise ValueError(f"sample_bytes must be between 1 and {MAX_SAMPLE_BYTES}")
+    if layout not in ("prefix", "distributed"):
+        raise ValueError("layout must be prefix or distributed")
     path = Path(path)
     size = path.stat().st_size
     if size <= 0:
@@ -69,7 +75,8 @@ def probe(path, sample_bytes=DEFAULT_SAMPLE_BYTES):
                 break
             digest.update(chunk)
 
-        offsets = _window_offsets(size, sample_bytes)
+        offsets = _window_offsets(size, sample_bytes, layout)
+        sample_digest = hashlib.sha256()
         counts = Counter()
         pointer_counts = Counter()
         sample_total = 0
@@ -79,6 +86,7 @@ def probe(path, sample_bytes=DEFAULT_SAMPLE_BYTES):
             sample = source.read(length)
             if len(sample) != length:
                 raise ValueError("candidate changed or truncated while sampling")
+            sample_digest.update(sample)
             counts.update(sample)
             sample_total += len(sample)
             words = len(sample) // 4
@@ -97,8 +105,10 @@ def probe(path, sample_bytes=DEFAULT_SAMPLE_BYTES):
         "file_size_bytes": size,
         "sha256": digest.hexdigest(),
         "sample": {
+            "mode": layout,
             "bytes_read": sample_total,
             "limit_bytes": sample_bytes,
+            "sha256": sample_digest.hexdigest(),
             "windows": [{"offset": offset, "bytes_read": length} for offset, length in offsets],
             "shannon_entropy_bits_per_byte": round(_entropy(counts.values(), sample_total), 6),
             "zero_byte_fraction": round(counts.get(0, 0) / sample_total, 6),
@@ -124,8 +134,11 @@ def main():
     parser.add_argument("path", type=Path, help="path to a local, user-owned container file")
     parser.add_argument("--sample-bytes", type=int, default=DEFAULT_SAMPLE_BYTES,
                         help=f"total sample budget (1..{MAX_SAMPLE_BYTES})")
+    parser.add_argument("--layout", choices=("prefix", "distributed"), default="distributed",
+                        help="prefix for direct comparison with old 256-byte header probes; "
+                             "distributed samples up to eight windows across the file")
     args = parser.parse_args()
-    print(json.dumps(probe(args.path, args.sample_bytes), indent=2, sort_keys=True))
+    print(json.dumps(probe(args.path, args.sample_bytes, args.layout), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":
