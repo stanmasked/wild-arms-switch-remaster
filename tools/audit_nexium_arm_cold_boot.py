@@ -11,13 +11,14 @@ import json
 from pathlib import Path
 
 from audit_nexium_arm_guest import (
-    ARM_BORDER, ARM_FULL_BAR, GOLD, BLUE, RED,
+    ARM_BORDER, ARM_FULL_BAR, ARM_PARTIAL_BAR, ARM_PAST_PARTIAL,
+    GOLD, BLUE, RED, DARK,
     battle_slots, same_game, same_arm_panel,
 )
 from audit_nexium_field_journal import native_pixel, read_rgb
 
-NAMES = ("08_arm_restart_field", "09_arm_restart_full",
-         "10_arm_restart_return")
+NAMES = ("08_arm_spent_before_exit", "09_arm_restart_field",
+         "10_arm_restart_full", "11_arm_restart_return")
 
 
 def valid_terminated(processes, prefix):
@@ -59,9 +60,10 @@ def audit_arm_cold_boot(original_shots, cold_shots,
     before={name:read_rgb(original_shots / (name+".png"))
             for name in original_needed}
     new={name:read_rgb(cold_shots / (name+".png")) for name in NAMES}
-    field=new[NAMES[0]]
-    full=new[NAMES[1]]
-    returned=new[NAMES[2]]
+    spent=new[NAMES[0]]
+    field=new[NAMES[1]]
+    full=new[NAMES[2]]
+    returned=new[NAMES[3]]
     first_field=before["00_baseline_field"]
     prior_full=before["03_arm_full"]
     prior_return=before["07_arm_return"]
@@ -73,6 +75,12 @@ def audit_arm_cold_boot(original_shots, cold_shots,
             and valid_terminated(cold,"armrestart"),
         "same_real_sdmc_restart_still_empty":
             rooted and not entries,
+        "previous_guest_really_exited_with_spent_2_of_3_and_foe_down":
+            native_pixel(spent,*ARM_BORDER)==GOLD
+            and native_pixel(spent,*ARM_PARTIAL_BAR)==GOLD
+            and native_pixel(spent,*ARM_PAST_PARTIAL)==DARK
+            and native_pixel(spent,*ARM_FULL_BAR)==DARK
+            and native_pixel(spent,692+100,249)==DARK,
         "arm_cold_boot_returns_to_exact_original_field":
             same_game(first_field,field)
             and same_game(prior_return,field),
