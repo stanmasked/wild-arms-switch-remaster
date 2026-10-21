@@ -114,12 +114,28 @@ def assess_rendered_candidate(first, candidate, mask, width, height,
 def _load_verified_frame(folder, basename):
     _validate_basename(basename)
     result = verify_private_frame_witness(folder, basename=basename)
+    # The operator's scene label is a consistency guard, NOT proof of map ID.
+    manifest_path = Path(folder) / (basename + ".capture.json")
+    if manifest_path.is_symlink() or manifest_path.stat().st_size > 32768:
+        raise ValueError("invalid private witness manifest")
+    def no_duplicate_keys(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate witness manifest JSON key")
+            result[key] = value
+        return result
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"),
+                          object_pairs_hook=no_duplicate_keys)
+    label = manifest.get("operator_scene_label")
+    if type(label) is not str or not 1 <= len(label) <= 160:
+        raise ValueError("invalid witness operator scene label")
     path = Path(folder) / (basename + ".screen.png")
     raw = path.read_bytes()
     if hashlib.sha256(raw).hexdigest() != result["screen_sha256"]:
         raise ValueError("screenshot changed after Stage432 witness verification")
     size, rgb = _opaque_rgb_png(raw)
-    return result, size, rgb
+    return result, size, rgb, label
 
 
 def compare_private_reference_frames(
@@ -137,8 +153,10 @@ def compare_private_reference_frames(
     if not output.is_dir():
         raise ValueError("private output directory must already exist")
 
-    meta_a, size_a, frame_a = _load_verified_frame(root, first_basename)
-    meta_b, size_b, frame_b = _load_verified_frame(root, second_basename)
+    meta_a, size_a, frame_a, label_a = _load_verified_frame(root, first_basename)
+    meta_b, size_b, frame_b, label_b = _load_verified_frame(root, second_basename)
+    if label_a != label_b:
+        raise ValueError("operator scene labels differ between reference frames")
     if size_a != size_b:
         raise ValueError("original screen dimensions differ: no resampling permitted")
     if meta_a["cd_info_sha256"] != meta_b["cd_info_sha256"]:
@@ -171,6 +189,7 @@ def compare_private_reference_frames(
         "first_vram_sha256":meta_a["vram_sha256"],
         "second_vram_sha256":meta_b["vram_sha256"],
         "same_disc_info_sha256":meta_a["cd_info_sha256"],
+        "operator_scene_labels_match_but_are_not_authenticated":True,
         "screenshots_byte_identical":
             meta_a["screen_sha256"]==meta_b["screen_sha256"],
         "screenshot_dimensions":{"width":size_a[0],"height":size_a[1]},
