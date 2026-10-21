@@ -481,7 +481,7 @@ jobs:
             --cold-shots arm-guest/coldboot \
             --burst-shots arm-guest/burst \
             --report arm-guest/arm-readiness-audit.json
-      - name: Audit real fourth NeXium guest victory and volatile EXP/Gella
+      - name: Audit real fourth NeXium guest victory and isolated EXP/Gella journal
         run: |
           /usr/bin/python3 tools/audit_nexium_arm_victory.py \
             --shots arm-guest/victory \
