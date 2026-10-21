@@ -51,9 +51,19 @@ constexpr int kArmHudHeight = 84;
   if(filled)
     fill_raster_rect(target,kArmHudX+20,kArmHudY+38,
                      static_cast<int>(filled),8,kBattleGold);
-  battle_text(target,kArmHudX+20,kArmHudY+54,
+  // Keep both rows inside the 84px panel: status at +48 draws through
+  // +61; the key hint at +65 draws through +78, before the +80 border.
+  battle_text(target,kArmHudX+20,kArmHudY+48,
               magazine.rounds ? "ARM READY" : "ARM EMPTY",
               magazine.rounds ? kBattleGreen : kBattleRed);
+  // Switch input discoverability: explicit X and MINUS help is opt-in.
+  // 20 glyph cells fit with the final 5x7 character ending at x+277,
+  // inside the panel's right border (x+282).
+  constexpr char kArmControls[]="X FIRE  MINUS RELOAD";
+  static_assert(sizeof(kArmControls)-1 == 20);
+  static_assert(20+19*13+10 <= kArmHudWidth-4);
+  battle_text(target,kArmHudX+20,kArmHudY+65,
+              kArmControls,kBattleWhite);
   return ArmHudStatus::Rendered;
 }
 
