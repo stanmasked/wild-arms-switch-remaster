@@ -100,6 +100,11 @@ class RewardPersistenceAuditTests(unittest.TestCase):
         self.assertFalse(self._audit()["checks"][
             "cold_boot_read_preserved_exact_committed_journal_bytes"])
 
+    def test_leftover_temporary_reward_slot_is_rejected(self):
+        (self.game_dir / "arm-rewards.a.tmp").write_bytes(b"partial")
+        self.assertFalse(self._audit()["checks"][
+            "arm_reward_journal_is_the_only_committed_slot"])
+
     def test_foreign_field_or_battle_save_slot_is_rejected(self):
         (self.game_dir / "field-save.a").write_bytes(b"unexpected")
         self.assertFalse(self._audit()["checks"][
