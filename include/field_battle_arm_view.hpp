@@ -37,7 +37,12 @@ constexpr int kArmHudHeight = 84;
   battle_outline(target,kArmHudX,kArmHudY,
                  kArmHudWidth,kArmHudHeight,kBattleGold);
   char label[32]{};
-  (void)std::snprintf(label,sizeof(label),"ARM AMMO %u/%u",
+  // When a custom magazine uses two/three-digit counts, shorten
+  // the label so it never collides with the gold ZR BURST help on the
+  // same row. Default 3/3 still displays the familiar ARM AMMO 3/3.
+  (void)std::snprintf(label,sizeof(label),
+                      magazine.capacity>=10 || magazine.rounds>=10
+                        ? "AMMO %u/%u" : "ARM AMMO %u/%u",
                       static_cast<unsigned>(magazine.rounds),
                       static_cast<unsigned>(magazine.capacity));
   battle_text(target,kArmHudX+20,kArmHudY+14,label,kBattleWhite);
