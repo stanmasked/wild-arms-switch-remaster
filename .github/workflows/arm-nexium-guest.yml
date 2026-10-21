@@ -7,7 +7,9 @@ on:
       - 'stage-396-*'
       - 'stage-398-*'
       - 'stage-399-*'
+      - 'stage-400-*'
       - 'stage-399-*'
+      - 'stage-400-*'
   pull_request:
     paths:
       - '.github/workflows/arm-nexium-guest.yml'
@@ -19,6 +21,8 @@ on:
       - 'tools/test_audit_nexium_arm_controls.py'
       - 'tools/audit_nexium_arm_burst.py'
       - 'tools/test_audit_nexium_arm_burst.py'
+      - 'tools/audit_nexium_arm_readiness.py'
+      - 'tools/test_audit_nexium_arm_readiness.py'
       - 'switch/source/main.cpp'
       - 'switch/Makefile'
       - 'include/field_battle_arm*.hpp'
@@ -78,6 +82,7 @@ jobs:
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_cold_boot.py' -v
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_controls.py' -v
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_burst.py' -v
+          /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_readiness.py' -v
       - name: Fetch exact SHA-256 verified official NeXium Linux binary
         run: |
           set -euo pipefail
@@ -341,6 +346,13 @@ jobs:
             --cold-shots arm-guest/coldboot \
             --burst-shots arm-guest/burst \
             --report arm-guest/arm-burst-audit.json
+      - name: Audit real dynamic Burst readiness on ordinary and 3 guest ARM frames
+        run: |
+          /usr/bin/python3 tools/audit_nexium_arm_readiness.py \
+            --original-shots arm-guest/screenshots \
+            --cold-shots arm-guest/coldboot \
+            --burst-shots arm-guest/burst \
+            --report arm-guest/arm-readiness-audit.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

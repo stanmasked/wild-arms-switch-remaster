@@ -63,11 +63,18 @@ constexpr int kArmHudHeight = 84;
   if(filled)
     fill_raster_rect(target,kArmHudX+20,kArmHudY+38,
                      static_cast<int>(filled),8,kBattleGold);
-  // Keep both rows inside the 84px panel: status at +48 draws through
-  // +61; the key hint at +65 draws through +78, before the +80 border.
+  // Tactical Burst readiness uses two rounds. A single remaining
+  // bullet may still be fired by X, but ZR must be refused without
+  // stealing the turn; tell the player WHY before pressing ZR.
+  // Status at +48 draws through +61. Key hint at +65 draws through
+  // +78, before the lower +80 border.
+  const char* readiness=magazine.rounds>=2 ? "BURST READY" :
+                        (magazine.rounds==1 ? "BURST NEED 2" : "ARM EMPTY");
+  const std::uint32_t readiness_ink=
+      magazine.rounds>=2 ? kBattleGreen :
+      (magazine.rounds==1 ? kBattleGold : kBattleRed);
   battle_text(target,kArmHudX+20,kArmHudY+48,
-              magazine.rounds ? "ARM READY" : "ARM EMPTY",
-              magazine.rounds ? kBattleGreen : kBattleRed);
+              readiness,readiness_ink);
   // Switch input discoverability: explicit X and MINUS help is opt-in.
   // 20 glyph cells fit with the final 5x7 character ending at x+277,
   // inside the panel's right border (x+282).
