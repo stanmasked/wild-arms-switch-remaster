@@ -1,6 +1,7 @@
 #pragma once
 // Stage401: optional ARM battle session shared by host and gated Switch.
-// Volatile outcomes only: never writes WABJ v1 or field save slots.
+// The session is disk-free; the Switch adapter persists only confirmed
+// history/rewards to its own journal namespace, never to regular slots.
 #include "field_battle_arm_controller.hpp"
 #include "field_battle_arm_view.hpp"
 #include "field_battle_rewards.hpp"
