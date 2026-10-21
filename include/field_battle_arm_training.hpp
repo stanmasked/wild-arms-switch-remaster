@@ -125,6 +125,12 @@ struct ArmTrainingFrame {
       BattleRenderStatus::Rendered)
     return {ArmTrainingStatus::InvalidState};
   (void)draw_battle_arm_status(target,next.battle,next.magazine);
+  // A player-facing preview of the *future* volatile reward, only on
+  // an actual ARM Victory frame. The B close still performs the one-time
+  // credit; viewing this banner does not mutate rewards or history.
+  // Victory popup x320..960, y294..400: text at x440, y368 fits within.
+  if (next.battle.phase==BattlePhase::Victory)
+    battle_text(target,440,368,"B CLAIM EXP 8  GELLA 12",kBattleGreen);
   draw_previous_battle_history(target,next.history);
   // Only after a completed victory, display volatile ROM-free
   // placeholder rewards on the next ARM entry. No WABJ interaction.
