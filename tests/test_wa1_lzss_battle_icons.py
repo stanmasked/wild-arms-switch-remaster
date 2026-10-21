@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
 from wa1_lzss import LZSSDecodeError, decode_wa1_lzss  # noqa: E402
 from audit_cdflr_verified_lzss import audit_cdflr_lzss  # noqa: E402
+from export_wa1_battle_icons import ps1_clut_rgb, unpack_indices_4bpp  # noqa: E402
 
 STRIDE=0x10000
 
@@ -77,6 +78,20 @@ class WA1LZSSTests(unittest.TestCase):
         self.assertEqual(len(decoded),0x8000)
         self.assertEqual(set(decoded),{0})
         self.assertEqual(used,len(data))
+
+    def test_4bit_indices_unpack_low_nibble_first(self):
+        self.assertEqual(unpack_indices_4bpp(bytes([0x21,0xF0,0xAB])),
+                         bytes([1,2,0,15,11,10]))
+
+    def test_ps1_bgr555_clut_and_magenta_zero_placeholder(self):
+        palette=bytes.fromhex("0000ff7f0080007c") + bytes(24)
+        colors=ps1_clut_rgb(palette)
+        self.assertEqual(colors[:3],[255,0,255])
+        self.assertEqual(colors[3:6],[255,255,255])
+        self.assertEqual(colors[6:9],[0,0,0])
+        self.assertEqual(colors[9:12],[0,0,255])
+        with self.assertRaises(ValueError):
+            ps1_clut_rgb(bytes(31))
 
     def test_malformed_bounds_or_output_length_fail_closed(self):
         for blob in [b"", b"\x01\x00\x00",struct.pack("<I",0),
