@@ -9,9 +9,11 @@ on:
       - 'stage-399-*'
       - 'stage-400-*'
       - 'stage-401-*'
+      - 'stage-402-*'
       - 'stage-399-*'
       - 'stage-400-*'
       - 'stage-401-*'
+      - 'stage-402-*'
   pull_request:
     paths:
       - '.github/workflows/arm-nexium-guest.yml'
@@ -27,6 +29,8 @@ on:
       - 'tools/test_audit_nexium_arm_readiness.py'
       - 'tools/audit_nexium_arm_victory.py'
       - 'tools/test_audit_nexium_arm_victory.py'
+      - 'tools/audit_nexium_arm_claim.py'
+      - 'tools/test_audit_nexium_arm_claim.py'
       - 'switch/source/main.cpp'
       - 'switch/Makefile'
       - 'include/field_battle_arm*.hpp'
@@ -88,6 +92,7 @@ jobs:
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_burst.py' -v
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_readiness.py' -v
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_victory.py' -v
+          /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_claim.py' -v
       - name: Fetch exact SHA-256 verified official NeXium Linux binary
         run: |
           set -euo pipefail
@@ -427,6 +432,12 @@ jobs:
             --victory-process arm-guest/victory-process.json \
             --victory-root "$RUNNER_TEMP/wa-arm-victory" \
             --report arm-guest/victory-audit.json
+      - name: Audit real Victory B claim and pending EXP/Gella glyph pixels
+        run: |
+          /usr/bin/python3 tools/audit_nexium_arm_claim.py \
+            --ordinary-shots arm-guest/screenshots \
+            --victory-shots arm-guest/victory \
+            --report arm-guest/victory-claim-audit.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
