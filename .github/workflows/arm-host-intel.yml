@@ -10,6 +10,7 @@ on:
       - 'stage-399-*'
       - 'stage-400-*'
       - 'stage-401-*'
+      - 'stage-402-*'
   pull_request:
     branches:
       - 'stage-386-*'
