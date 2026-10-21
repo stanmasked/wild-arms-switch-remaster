@@ -444,23 +444,6 @@ void real_two_bursts_victory_credit_once_and_visible_after_reentry() {
 }
 
 // Exercise alternative rewards without any PlayStation/SDMC input.
-void assert_claim_glyphs(const Frame& frame,const char* message) {
-  const std::size_t length=std::strlen(message);
-  assert(length>0 && length<=40);
-  const int ink_width=static_cast<int>((length-1)*13+10);
-  const int start=440+ink_width>955 ? 955-ink_width : 440;
-  assert(start>=324 && start+ink_width<=955);
-  for(std::size_t i=0;i<length;++i) {
-    const auto& glyph=battle_font(message[i]);
-    for(int y=0;y<7;++y) for(int x=0;x<5;++x) {
-      const auto bit=(glyph[static_cast<std::size_t>(y)]>>(4-x))&1u;
-      const auto pixel=frame.at(start+static_cast<int>(i)*13+x*2,368+y*2);
-      assert(pixel==(bit?kBattleGreen:kBattleBackground));
-    }
-  }
-  frame.padding_unchanged();
-}
-
 void finish_dynamic_victory(ArmTrainingSession& s,Frame& pixels) {
   launch(s,pixels);
   s.battle.enemies[0].hp=1;
