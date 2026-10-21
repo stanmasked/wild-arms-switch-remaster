@@ -20,6 +20,8 @@ struct ArmTrainingSession {
   BattleRewardAccount rewards{};
   // ROM-free in-memory balancing, never part of WABJ or SDMC.
   BattleRewardPayout victory_offer{kPrototypeVictoryExp,kPrototypeVictoryGella};
+  // Visible RAM-only warning if the separate WAER journal is unavailable.
+  bool reward_storage_warning=false;
   bool active=false;
 };
 
@@ -158,13 +160,15 @@ struct ArmTrainingFrame {
   // placeholder rewards on the next ARM entry. No WABJ interaction.
   // This is between the ordinary input hint and previous result line,
   // completely outside the ARM ammunition panel.
-  if (next.history.victories > 0) {
+  if (next.rewards.experience > 0 || next.rewards.gella > 0) {
     char balance[64]{};
     (void)std::snprintf(balance,sizeof(balance),"EXP %u  GELLA %u",
         static_cast<unsigned>(next.rewards.experience),
         static_cast<unsigned>(next.rewards.gella));
     battle_text(target,70,667,balance,kBattleGreen);
   }
+  if (next.reward_storage_warning)
+    battle_text(target,70,694,"REWARDS RAM ONLY",kBattleRed);
 
   next.active=true;
   current=next;
