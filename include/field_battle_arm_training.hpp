@@ -50,6 +50,23 @@ struct ArmTrainingFrame {
          target.stride_pixels<=8192;
 }
 
+// The B-claim UI is strictly a read-only projection of the next payout.
+// Large future reward values use compact text within the existing popup.
+inline void draw_arm_victory_reward_preview(
+    const PixelTarget& target, BattleRewardPayout pending) noexcept {
+  char line[96]{};
+  const int length=std::snprintf(line,sizeof(line),
+      "B CLAIM EXP %u  GELLA %u",
+      static_cast<unsigned>(pending.experience),
+      static_cast<unsigned>(pending.gella));
+  // Native font is 13 px per cell. Reserve room before the x960 border.
+  if (length<0 || length>38)
+    (void)std::snprintf(line,sizeof(line),"B EXP %u  G %u",
+        static_cast<unsigned>(pending.experience),
+        static_cast<unsigned>(pending.gella));
+  battle_text(target,440,368,line,kBattleGreen);
+}
+
 // A complete, independent training screen connecting ARM rules, input,
 // pixel HUD, and VOLATILE battle outcomes. No disk I/O, no libnx mapping.
 // Frame errors never commit state or draw partial pixels. Closing renders
@@ -131,18 +148,7 @@ struct ArmTrainingFrame {
   if (next.battle.phase==BattlePhase::Victory) {
     const auto pending=preview_battle_reward(next.rewards,
                                               BattleResolution::Victory);
-    char line[96]{};
-    const int length=std::snprintf(line,sizeof(line),
-        "B CLAIM EXP %u  GELLA %u",
-        static_cast<unsigned>(pending.experience),
-        static_cast<unsigned>(pending.gella));
-    // 13px per glyph. At extreme balances the preview can be 40+
-    // characters, so shorten it rather than spill past the green frame.
-    if (length<0 || length>38)
-      (void)std::snprintf(line,sizeof(line),"B EXP %u  G %u",
-          static_cast<unsigned>(pending.experience),
-          static_cast<unsigned>(pending.gella));
-    battle_text(target,440,368,line,kBattleGreen);
+    draw_arm_victory_reward_preview(target,pending);
   }
   draw_previous_battle_history(target,next.history);
   // Only after a completed victory, display volatile ROM-free
