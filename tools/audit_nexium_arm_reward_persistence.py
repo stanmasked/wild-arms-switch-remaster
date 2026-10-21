@@ -81,6 +81,8 @@ def audit_reward_persistence(screenshots, first_journal, after_restart_journal,
         process["second_wait_status"] in (0, 137, 143)
     )
     roots_valid = (
+        isinstance(process["first_root"], str) and
+        isinstance(process["second_root"], str) and
         Path(process["first_root"]).resolve() == Path(root) and
         Path(process["second_root"]).resolve() == Path(root)
     )
@@ -108,8 +110,7 @@ def audit_reward_persistence(screenshots, first_journal, after_restart_journal,
             for _, (x, y, lit) in BALANCE_PIXELS.items()
         ),
         "arm_reward_journal_is_the_only_committed_slot":
-            "arm-rewards.a" in names and "arm-rewards.b" not in names and
-            "arm-rewards.tmp" not in names,
+            names == {"arm-rewards.a"},
         "field_and_regular_battle_save_slots_are_untouched":
             not any(name in names for name in (
                 "field-save.a", "field-save.b", "field-save.tmp",
