@@ -1,0 +1,96 @@
+"""Synthetic-only tests for bounded local container metadata probing."""
+import hashlib
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+from probe_container import MAX_SAMPLE_BYTES, _window_offsets, probe  # noqa: E402
+
+
+class ProbeContainerTests(unittest.TestCase):
+    def test_reports_hash_and_bounded_sample_without_payload(self):
+        data = bytearray(8192)
+        # Repeated in-range little-endian values are hypotheses, not decoded offsets.
+        data[0:4] = (0x100).to_bytes(4, "little")
+        data[-8:-4] = (0x100).to_bytes(4, "little")
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "synthetic.bin"
+            path.write_bytes(data)
+            result = probe(path, sample_bytes=64)
+        self.assertEqual(result["file_size_bytes"], len(data))
+        self.assertEqual(result["sample"]["bytes_read"], 64)
+        self.assertEqual(result["sample"]["limit_bytes"], 64)
+        self.assertEqual(result["sample"]["windows"][0]["offset"], 0)
+        self.assertEqual(result["sample"]["windows"][-1]["offset"], len(data) - 8)
+        sampled = b"".join(data[offset:offset + length] for offset, length in ((w["offset"], w["bytes_read"]) for w in result["sample"]["windows"]))
+        self.assertEqual(result["sample"]["sha256"], hashlib.sha256(sampled).hexdigest())
+        self.assertLessEqual(result["sample"]["bytes_read"], 64)
+        self.assertEqual(result["pointer_like_words"][0], {"value": 0x100, "count": 2})
+        self.assertTrue(result["interpretation"]["payload_bytes_emitted"] is False)
+        self.assertFalse(result["interpretation"]["complete_file_loaded_into_memory"])
+        self.assertNotIn("raw_bytes", result)
+        self.assertNotIn("sample_data", result)
+        self.assertEqual(result["sha256"], hashlib.sha256(data).hexdigest())
+
+
+    def test_distributed_windows_obey_budget_alignment_and_bounds(self):
+        for size in range(1, 130):
+            for budget in range(1, 65):
+                windows = _window_offsets(size, budget)
+                self.assertLessEqual(sum(length for _, length in windows), budget)
+                for index, (offset, length) in enumerate(windows):
+                    self.assertGreaterEqual(offset, 0)
+                    self.assertGreater(length, 0)
+                    self.assertLessEqual(offset + length, size)
+                    if size > budget and budget >= 4:
+                        self.assertEqual(offset % 4, 0)
+                    if index:
+                        previous_offset, previous_length = windows[index - 1]
+                        self.assertGreaterEqual(offset, previous_offset + previous_length)
+
+
+    def test_prefix_mode_reproduces_legacy_header_sample_hash(self):
+        data = bytes(range(256)) * 2
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "synthetic.bin"
+            path.write_bytes(data)
+            result = probe(path, sample_bytes=256, layout="prefix")
+        self.assertEqual(result["sample"]["mode"], "prefix")
+        self.assertEqual(result["sample"]["bytes_read"], 256)
+        self.assertEqual(result["sample"]["sha256"], hashlib.sha256(data[:256]).hexdigest())
+        self.assertEqual(result["sample"]["windows"], [{"offset": 0, "bytes_read": 256}])
+
+    def test_rejects_unknown_sample_layout(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "candidate.bin"
+            path.write_bytes(b"x")
+            with self.assertRaisesRegex(ValueError, "layout"):
+                probe(path, layout="random")
+
+    def test_rejects_empty_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "empty.bin"
+            path.write_bytes(b"")
+            with self.assertRaisesRegex(ValueError, "empty"):
+                probe(path)
+
+    def test_rejects_unbounded_sample_request(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "candidate.bin"
+            path.write_bytes(b"x")
+            with self.assertRaisesRegex(ValueError, "sample_bytes"):
+                probe(path, MAX_SAMPLE_BYTES + 1)
+
+    def test_zero_heavy_sample_statistics(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "zero.bin"
+            path.write_bytes(b"\x00" * 128 + b"\xff" * 128)
+            result = probe(path, sample_bytes=256)
+        self.assertEqual(result["sample"]["zero_byte_fraction"], 0.5)
+        self.assertEqual(result["sample"]["shannon_entropy_bits_per_byte"], 1.0)
+
+
+if __name__ == "__main__":
+    unittest.main()
