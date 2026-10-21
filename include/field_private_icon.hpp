@@ -120,6 +120,11 @@ struct PrivateIcon {
       left > target.width - kPrivateIconSide ||
       top > target.height - kPrivateIconSide)
     return false;
+  // Validate *all* source indexes before the first framebuffer write.
+  // This preserves the no-partial-draw contract even for a manually
+  // constructed invalid PrivateIcon, not just file-validated instances.
+  for (std::size_t i = 0; i < kPrivateIconPixels; ++i)
+    if (icon.indices[i] >= 16) return false;
   for (int y = 0; y < kPrivateIconSide; ++y) {
     auto* line = target.pixels +
         static_cast<std::size_t>(top + y) *
@@ -128,7 +133,6 @@ struct PrivateIcon {
     for (int x = 0; x < kPrivateIconSide; ++x) {
       const auto idx = icon.indices[static_cast<std::size_t>(y) *
           kPrivateIconSide + static_cast<std::size_t>(x)];
-      if (idx >= 16) return false; // normally guaranteed by decoder
       line[x] = icon.palette[idx];
     }
   }
