@@ -2,6 +2,8 @@
 """Synthetic negative tests for Stage401, NEVER third-party emulator proof."""
 import json
 import shutil
+import struct
+import zlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -25,6 +27,12 @@ def fixture_victory(root):
     victory.mkdir()
     sd=root/"victory-sdmc"/"sdmc/switch/wild_arms_field"
     sd.mkdir(parents=True)
+    reward=bytearray(32)
+    reward[:4]=b"WAER"
+    reward[4]=1
+    struct.pack_into("<QII",reward,8,1,8,12)
+    struct.pack_into("<I",reward,28,zlib.crc32(reward[:28]))
+    (sd/"arm-rewards.a").write_bytes(reward)
     third=root/"victory-process.json"
     third.write_text(json.dumps({
         "victory_pid":1004,"victory_wait_status":143,
@@ -143,7 +151,14 @@ class ArmVictoryGuestContractTests(unittest.TestCase):
             a=fixture_victory(tmp)
             (a[5]/"sdmc/switch/wild_arms_field"/"battle-progress.a").write_bytes(b"x")
             self.assertFalse(audit_victory(*a)["checks"][
-                "fourth_guest_sdmc_never_creates_any_save_or_temp"])
+                "fourth_guest_sdmc_contains_only_valid_arm_reward_journal"])
+
+    def test_invalid_arm_reward_journal_fails_fourth_guest_audit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            a=fixture_victory(tmp)
+            (a[5]/"sdmc/switch/wild_arms_field"/"arm-rewards.a").write_bytes(b"bad")
+            self.assertFalse(audit_victory(*a)["checks"][
+                "fourth_guest_sdmc_contains_only_valid_arm_reward_journal"])
 
     def test_duplicate_process_id_fails_independence(self):
         with tempfile.TemporaryDirectory() as tmp:
