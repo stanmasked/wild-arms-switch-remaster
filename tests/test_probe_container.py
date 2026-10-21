@@ -1,6 +1,5 @@
 """Synthetic-only tests for bounded local container metadata probing."""
 import json
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -15,7 +14,7 @@ class ProbeContainerTests(unittest.TestCase):
         data = bytearray(8192)
         # Repeated in-range little-endian values are hypotheses, not decoded offsets.
         data[0:4] = (0x100).to_bytes(4, "little")
-        data[8:12] = (0x100).to_bytes(4, "little")
+        data[-8:-4] = (0x100).to_bytes(4, "little")
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "synthetic.bin"
             path.write_bytes(data)
@@ -23,6 +22,9 @@ class ProbeContainerTests(unittest.TestCase):
         self.assertEqual(result["file_size_bytes"], len(data))
         self.assertEqual(result["sample"]["bytes_read"], 64)
         self.assertEqual(result["sample"]["limit_bytes"], 64)
+        self.assertEqual(result["sample"]["windows"][0]["offset"], 0)
+        self.assertEqual(result["sample"]["windows"][-1]["offset"], len(data) - 8)
+        self.assertLessEqual(result["sample"]["bytes_read"], 64)
         self.assertEqual(result["pointer_like_words"][0], {"value": 0x100, "count": 2})
         self.assertTrue(result["interpretation"]["payload_bytes_emitted"] is False)
         self.assertFalse(result["interpretation"]["complete_file_loaded_into_memory"])
