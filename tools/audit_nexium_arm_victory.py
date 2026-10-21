@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Stage401: validate a fourth REAL NeXium process awarding Burst victory once.
+"""Stage405: validate a fourth REAL NeXium process awarding Burst victory once.
 
 Host-created PNG test fixtures are only unit tests; passing them is NOT
 proof of running NeXium. The live guest workflow captures these exact files.
+The confirmed result is saved to a separate ARM-progress journal, not the
+regular battle-progress or WAFS field-save namespace.
 """
 import argparse
 import hashlib
