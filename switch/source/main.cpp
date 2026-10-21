@@ -312,7 +312,7 @@ int main() {
 
     // Only a fully validated first B-close writes battle progress.
     // Never write to field-save.a/.b or the 40-byte exploration record.
-    // File errors are nonfatal: gameplay and volatile counters continue.
+    // File errors are nonfatal: in-memory gameplay and counters continue.
     if (battle_frame.exited && storage_ready) {
       const BattleProgress record{battle_scene.history,battle_scene.rewards};
       const auto saved=store_battle_progress_file(record,kBattleSaveBase);
