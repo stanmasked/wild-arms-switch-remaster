@@ -269,8 +269,8 @@ int main() {
 #if defined(WA_ARM_EXPERIMENTAL)
     // Dedicated opt-in scene: X=Fire, Minus=Reload, ZR=charged Burst.
     // Ordinary A/Y and D-pad still have their usual in-battle semantics.
-    // Unlike B-close of an ordinary fight, ARM B-close MUST NOT persist
-    // volatile training awards, ammo, or overwrite the WABJ v1 slots.
+    // ARM rewards use only the separate WAER v1 journal; ammo and battle
+    // history remain volatile. Never overwrite the ordinary WABJ v1 slots.
     const ArmTrainingInput arm_input{
         open_arm,
         arm_scene.active && (pressed & HidNpadButton_B) != 0,
