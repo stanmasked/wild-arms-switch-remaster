@@ -1,6 +1,6 @@
 #pragma once
-// Stage 357: deterministic ROM-free rewards. No original-game economy data.
-// Rewards are volatile until a separate versioned save feature is approved.
+// Stage 357/404: deterministic ROM-free prototype rewards, not original-game economy data.
+// Persistence is owned by separate versioned journals, never by this account type.
 #include "field_battle_results.hpp"
 
 #include <algorithm>
