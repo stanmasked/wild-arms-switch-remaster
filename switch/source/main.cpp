@@ -117,7 +117,8 @@ int main() {
   FieldBattleSession battle_scene{};
 #if defined(WA_ARM_EXPERIMENTAL)
   // Experimental ARM mode is compiled ONLY with WA_ARM_EXPERIMENTAL=1.
-  // It is volatile and never uses the game's on-disk WABJ v1 journal.
+  // Combat state and ammunition are volatile; confirmed history/rewards use
+  // a dedicated journal namespace separate from regular battle-progress.
   ArmTrainingSession arm_scene{};
 #endif
   bool battle_journal_corrupt = false;
@@ -268,8 +269,9 @@ int main() {
 #if defined(WA_ARM_EXPERIMENTAL)
     // Dedicated opt-in scene: X=Fire, Minus=Reload, ZR=charged Burst.
     // Ordinary A/Y and D-pad still have their usual in-battle semantics.
-    // Unlike B-close of an ordinary fight, ARM B-close MUST NOT persist
-    // volatile training awards, ammo, or overwrite the WABJ v1 slots.
+    // ARM B-close persists the confirmed result to the dedicated
+    // arm-training-progress journal only; ammunition stays volatile and
+    // regular battle-progress / WAFS slots remain untouched.
     const ArmTrainingInput arm_input{
         open_arm,
         arm_scene.active && (pressed & HidNpadButton_B) != 0,
