@@ -338,9 +338,9 @@ jobs:
                           "armrestart_wait_completed":True},
                          sort_keys=True)+"\n")
           '
-          # FOURTH independent asset-free NeXium guest. Actually win
-          # with two charged Bursts, take the B payout once, reopen and
-          # show volatile EXP/Gella without touching any WABJ slots.
+          # FOURTH independent asset-free NeXium guest. Win with two charged
+          # Bursts, claim once, and verify the in-session reward display.
+          # Only the separate WAER journal persists this prototype balance.
           launch victory
           import -display :99 -window root \
             arm-guest/victory/14_victory_field.png
@@ -366,7 +366,7 @@ jobs:
           press t  # Hero 0 ZR Burst: 13 HP remaining foe down.
           import -display :99 -window root \
             arm-guest/victory/19_victory_banner.png
-          press x  # B closes a real Victory: +8 EXP +12 Gella in RAM.
+          press x  # B claims +8 EXP +12 Gella into the separate WAER journal.
           import -display :99 -window root \
             arm-guest/victory/20_victory_return.png
           xdotool keydown --clearmodifiers r
@@ -471,7 +471,7 @@ jobs:
             --cold-shots arm-guest/coldboot \
             --burst-shots arm-guest/burst \
             --report arm-guest/arm-readiness-audit.json
-      - name: Audit real fourth NeXium guest victory and volatile EXP/Gella
+      - name: Audit real fourth NeXium guest victory and WAER EXP/Gella
         run: |
           /usr/bin/python3 tools/audit_nexium_arm_victory.py \
             --shots arm-guest/victory \
