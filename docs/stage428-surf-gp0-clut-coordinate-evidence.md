@@ -42,7 +42,7 @@ shows a **synthetic**, not original-game, 4bpp textured triangle packet
 with CLUT=(32,19), texture-page value zero:
 
 ```json
-{"frame":1200,"words":[603979776,100,797065228,200,0,300,0]}
+{"frame":1200,"words":[603979776,100,79829772,200,0,300,0]}
 ```
 
 (Decimal words are required; `0x...` strings are deliberately rejected.
