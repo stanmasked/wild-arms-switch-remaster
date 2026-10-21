@@ -123,7 +123,7 @@ int main() {
   // a dedicated journal namespace separate from regular battle-progress.
   ArmTrainingSession arm_scene{};
 #endif
-  bool battle_journal_corrupt = false;
+  bool progress_journal_corrupt = false;
   // Recover only a fully validated independent battle-progress journal.
   // Missing/corrupt records cannot change the default volatile counters.
   if (storage_ready) {
@@ -135,7 +135,7 @@ int main() {
     } else {
       // Preserve both bad copies for external recovery. Show the problem
       // only on an explicitly requested ZL panel, never on normal field.
-      battle_journal_corrupt=battle_journal_needs_warning(loaded.status);
+      battle_journal_corrupt=progress_journal_needs_warning(loaded.status);
     }
 #if defined(WA_ARM_EXPERIMENTAL)
     // ARM progress reuses the validated WABJ v1 codec in its own path;
@@ -403,7 +403,7 @@ int main() {
       if (!runtime.autoplay && (held & HidNpadButton_ZL)) {
         if (draw_field_battle_history(output, battle_scene.history)) {
           draw_battle_reward_balance(output, battle_scene.rewards);
-          (void)draw_battle_journal_warning(output, battle_journal_corrupt);
+          (void)draw_progress_journal_warning(output, battle_journal_corrupt);
         }
       }
     }
