@@ -10,7 +10,7 @@ from PIL import Image
 
 from audit_nexium_arm_cold_boot import NAMES, audit_arm_cold_boot
 from test_audit_nexium_arm_guest import fixture, put
-from audit_nexium_arm_guest import ARM_FULL_BAR, DARK, RED
+from audit_nexium_arm_guest import ARM_FULL_BAR, DARK, RED, GOLD
 
 
 def cold_fixture(root):
@@ -18,17 +18,25 @@ def cold_fixture(root):
     shots,baseline,arm,processes,_=fixture(root)
     cold=root/"coldboot"
     cold.mkdir()
-    for new,old in zip(NAMES,("00_baseline_field",
+    for new,old in zip(NAMES,("04_arm_fired","00_baseline_field",
                                "03_arm_full","00_baseline_field")):
         shutil.copyfile(shots/(old+".png"),cold/(new+".png"))
     # The old synthetic HUD-only fixture does not paint the untouched
     # foe HP bar. Both genuine guest opening screens MUST expose it,
     # so add that exact invariant to both reference and third images.
-    for name in (shots/"03_arm_full.png",cold/"09_arm_restart_full.png"):
+    for name in (shots/"03_arm_full.png",cold/"10_arm_restart_full.png"):
         with Image.open(name) as original:
             unspent=original.convert("RGB")
         put(unspent,(692+230,249),RED)
         unspent.save(name)
+    # Genuine second guest finishes with 2/3 and foe 1 defeated. The
+    # older synthetic 04 frame had foe 1 still alive; turn it into the
+    # independently required post-second-shot pre-exit evidence.
+    spent_path=cold/"08_arm_spent_before_exit.png"
+    with Image.open(spent_path) as original:
+        spent=original.convert("RGB")
+    put(spent,(692+100,249),DARK)
+    spent.save(spent_path)
     third=root/"third-process.json"
     third.write_text(json.dumps({
         "armrestart_pid":1003,"armrestart_wait_status":143,
@@ -42,13 +50,13 @@ class ArmColdBootOracleTests(unittest.TestCase):
             args=cold_fixture(tmp)
             r=audit_arm_cold_boot(*args)
             self.assertTrue(r["all_checks_passed"],r["checks"])
-            self.assertEqual(len(r["checks"]),7)
-            self.assertEqual(len(r["sha256"]),3)
+            self.assertEqual(len(r["checks"]),8)
+            self.assertEqual(len(r["sha256"]),4)
 
     def test_reboot_does_not_keep_spent_ammo(self):
         with tempfile.TemporaryDirectory() as tmp:
             args=cold_fixture(tmp)
-            path=args[1]/"09_arm_restart_full.png"
+            path=args[1]/"10_arm_restart_full.png"
             with Image.open(path) as original:
                 frame=original.convert("RGB")
             put(frame,ARM_FULL_BAR,DARK)
@@ -64,6 +72,30 @@ class ArmColdBootOracleTests(unittest.TestCase):
             result=audit_arm_cold_boot(*args)
             self.assertFalse(result["checks"]["same_real_sdmc_restart_still_empty"])
             self.assertFalse(result["checks"]["cold_boot_never_creates_battle_or_field_save"])
+
+    def test_previous_guest_must_exit_with_spent_ammo(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args=cold_fixture(tmp)
+            path=args[1]/"08_arm_spent_before_exit.png"
+            with Image.open(path) as original:
+                frame=original.convert("RGB")
+            put(frame,ARM_FULL_BAR,GOLD)
+            frame.save(path)
+            r=audit_arm_cold_boot(*args)
+            self.assertFalse(r["checks"][
+                "previous_guest_really_exited_with_spent_2_of_3_and_foe_down"])
+
+    def test_previous_guest_must_have_defeated_enemy_before_reboot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args=cold_fixture(tmp)
+            path=args[1]/"08_arm_spent_before_exit.png"
+            with Image.open(path) as original:
+                frame=original.convert("RGB")
+            put(frame,(692+100,249),RED)
+            frame.save(path)
+            r=audit_arm_cold_boot(*args)
+            self.assertFalse(r["checks"][
+                "previous_guest_really_exited_with_spent_2_of_3_and_foe_down"])
 
     def test_process_reuse_is_not_independent_cold_restart(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -90,19 +122,19 @@ class ArmColdBootOracleTests(unittest.TestCase):
     def test_missing_or_invalid_cold_screen_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             args=cold_fixture(tmp)
-            (args[1]/"09_arm_restart_full.png").unlink()
+            (args[1]/"10_arm_restart_full.png").unlink()
             with self.assertRaises(ValueError):
                 audit_arm_cold_boot(*args)
         with tempfile.TemporaryDirectory() as tmp:
             args=cold_fixture(tmp)
-            (args[1]/"10_arm_restart_return.png").write_bytes(b"not a PNG")
+            (args[1]/"11_arm_restart_return.png").write_bytes(b"not a PNG")
             with self.assertRaises((OSError,ValueError)):
                 audit_arm_cold_boot(*args)
 
     def test_guest_cold_return_must_match_original_field(self):
         with tempfile.TemporaryDirectory() as tmp:
             args=cold_fixture(tmp)
-            p=args[1]/"10_arm_restart_return.png"
+            p=args[1]/"11_arm_restart_return.png"
             with Image.open(p) as original:
                 frame=original.convert("RGB")
             put(frame,(600,410),(255,70,20))
