@@ -16,6 +16,25 @@ The source is the **private, user-provided Wild Arms USA PlayStation image**. `C
 
 These observations are internally coherent with a RAM-relocated pointer table into an early section of the file. The chosen base is **hypothetical**: it is inferred from the 256-byte boundary and is not yet proven by the original loader. These values do **not** prove that any entries represent field maps, textures, sprites, events, or playable content.
 
+## Internal span rule for candidate type `0x41` entries
+
+The **39 consecutive targets at indices 2–40** begin with five little-endian
+32-bit words. In each case, the first three equal `0x41, 0, 1`, and the
+difference between this pointer and the next table pointer satisfies:
+
+```text
+next_pointer - current_pointer = word_3 + 8 * word_4 + 12
+```
+
+Observed on the private source: **39/39 exact matches**, **0 exceptions**.
+The fourth word varies from **56 to 2,044**, always a multiple of four, and
+the fifth ranges from **3 to 38**. The tool reports only match counts,
+exceptions, and numeric ranges; it does not emit original bytes.
+
+This is much stronger evidence for a common **variable-size record structure**,
+but does not prove what the payload represents. Even the apparent length/count
+field roles remain a structural hypothesis until independently interpreted.
+
 ## Independent executable-literal cross-check
 
 From the actual PlayStation disc, `EXE/WILDARMS.EXE;1` (794,624 bytes)
