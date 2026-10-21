@@ -18,7 +18,7 @@ void test_error_classification() {
                       BattleJournalStatus::IoError,
                       BattleJournalStatus::InvalidProgress,
                       BattleJournalStatus::SequenceExhausted}) {
-    require(!battle_journal_needs_warning(status));
+    require(!progress_journal_needs_warning(status));
   }
   require(kBattleSaveWarningY+kBattleSaveWarningH < 612);
   require(kBattleSaveWarningX+kBattleSaveWarningW <= kRasterWidth);
@@ -37,7 +37,7 @@ void test_banner_only_on_request_and_bounds() {
   require(std::all_of(buffer.begin(),buffer.end(),[](auto x) {
     return x==kGuard;
   }));
-  require(draw_battle_journal_warning(target,true));
+  require(draw_progress_journal_warning(target,true));
   require(at(kBattleSaveWarningX,kBattleSaveWarningY)==kBattleRed);
   require(at(kBattleSaveWarningX+5,kBattleSaveWarningY+5)==kBattlePanel);
   require(at(kBattleSaveWarningX+21,kBattleSaveWarningY+11)==kBattleWhite);
@@ -56,10 +56,10 @@ void test_banner_only_on_request_and_bounds() {
   for (std::size_t i=static_cast<std::size_t>(stride)*kRasterHeight;
        i<buffer.size();++i) require(buffer[i]==kGuard);
   const PixelTarget invalid{nullptr,kRasterWidth,kRasterHeight,stride};
-  require(!draw_battle_journal_warning(invalid,true));
-  require(!draw_battle_journal_warning(
+  require(!draw_progress_journal_warning(invalid,true));
+  require(!draw_progress_journal_warning(
       PixelTarget{buffer.data(),kRasterWidth-1,kRasterHeight,stride},true));
-  require(!draw_battle_journal_warning(
+  require(!draw_progress_journal_warning(
       PixelTarget{buffer.data(),kRasterWidth,kRasterHeight,kRasterWidth-1},
       true));
 }
