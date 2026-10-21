@@ -40,10 +40,12 @@ constexpr const char* kSaveBase =
 // Distinct journal namespace; never share a slot with field exploration.
 constexpr const char* kBattleSaveBase =
     "sdmc:/switch/wild_arms_field/battle-progress";
+#if defined(WA_ARM_EXPERIMENTAL)
 // Separate experimental ARM history/reward journal. Never shares regular
 // battle-progress slots or the WAFS exploration quicksave namespace.
 constexpr const char* kArmSaveBase =
     "sdmc:/switch/wild_arms_field/arm-training-progress";
+#endif
 
 [[nodiscard]] bool ensure_directory(const char* path) noexcept {
   if (::mkdir(path, 0777) == 0) return true;
