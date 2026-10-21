@@ -52,12 +52,15 @@ bytes. The result on the original source was:
 | Heuristic result | Regions |
 | --- | ---: |
 | Truncated before 32KiB hypothetical output | **131** |
-| Reaches 32KiB with too much trailing encoded data | **338** |
+| Exceeds the proposed 32KiB output (token overshoot) | **256** |
+| Reaches exactly 32KiB but leaves too much encoded data | **82** |
 | Reaches 32KiB at allowed boundary | **0** |
 | Total next-pointer-bounded regions | **469** |
 
 The result rejects **this exact simplistic flag-token grammar and
-boundary requirement** as a universal decoder. It does NOT rule out other
+boundary requirement** as a universal decoder. The checker also rejects
+overshooting the proposed output size, so it cannot mistakenly certify
+a stream whose last reference token expands past 32KiB. It does NOT rule out other
 LZSS variants, RLE, multiple chunks, transformed bytes, or different
 output lengths. The last #57 regions are excluded from this boundary test,
 since their real encoded endpoints are unknown.
