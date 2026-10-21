@@ -70,8 +70,21 @@ class ArmColdBootOracleTests(unittest.TestCase):
             args=cold_fixture(tmp)
             (args[4]/"sdmc/switch/wild_arms_field"/"field-save.tmp").write_bytes(b"BAD")
             result=audit_arm_cold_boot(*args)
-            self.assertFalse(result["checks"]["same_real_sdmc_restart_still_empty"])
-            self.assertFalse(result["checks"]["cold_boot_never_creates_battle_or_field_save"])
+            self.assertFalse(result["checks"]["same_real_sdmc_restart_preserves_two_retreat_progress_generations"])
+            self.assertFalse(result["checks"]["cold_boot_never_creates_regular_battle_or_field_save"])
+
+    def test_corrupt_arm_progress_journal_rejects_cold_boot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args = cold_fixture(tmp)
+            path = args[4]/"sdmc/switch/wild_arms_field/arm-training-progress.b"
+            damaged = bytearray(path.read_bytes())
+            damaged[48] ^= 0xFF
+            path.write_bytes(damaged)
+            result = audit_arm_cold_boot(*args)
+            self.assertFalse(result["checks"][
+                "same_real_sdmc_restart_preserves_two_retreat_progress_generations"])
+            self.assertFalse(result["checks"][
+                "cold_boot_never_creates_regular_battle_or_field_save"])
 
     def test_previous_guest_must_exit_with_spent_ammo(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -11,6 +11,7 @@ on:
       - 'stage-401-*'
       - 'stage-402-*'
       - 'stage-403-*'
+      - 'stage-405-*'
       - 'stage-399-*'
       - 'stage-400-*'
       - 'stage-401-*'
@@ -32,6 +33,8 @@ on:
       - 'tools/test_audit_nexium_arm_victory.py'
       - 'tools/audit_nexium_arm_claim.py'
       - 'tools/test_audit_nexium_arm_claim.py'
+      - 'tools/audit_nexium_arm_persistence.py'
+      - 'tools/test_audit_nexium_arm_persistence.py'
       - 'switch/source/main.cpp'
       - 'switch/Makefile'
       - 'include/field_battle_arm*.hpp'
@@ -94,10 +97,12 @@ jobs:
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_readiness.py' -v
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_victory.py' -v
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_claim.py' -v
+          /usr/bin/python3 -m py_compile tools/audit_nexium_arm_persistence.py
+          /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_persistence.py' -v
       - name: Fetch exact SHA-256 verified official NeXium Linux binary
         run: |
           set -euo pipefail
-          mkdir -p nexium-dist arm-guest/screenshots arm-guest/coldboot arm-guest/burst arm-guest/victory
+          mkdir -p nexium-dist arm-guest/screenshots arm-guest/coldboot arm-guest/burst arm-guest/victory arm-guest/persistence
           curl -fL --retry 3 --connect-timeout 20 --max-time 240 \
             "$NEXIUM_URL" -o nexium-dist/nexium.tar.gz
           echo "$NEXIUM_ARCHIVE_SHA256  nexium-dist/nexium.tar.gz" | sha256sum -c -
@@ -160,6 +165,64 @@ jobs:
             test -n "$wid"
             xdotool windowfocus "$wid"
             # Host X => Switch B, disables old 23-step autoplay.
+            press x
+            sleep 0.75
+          }
+          launch_existing() {
+            label="$1"
+            root_key="$2"
+            export NEXIUM_DATA_ROOT="$RUNNER_TEMP/wa-arm-$root_key"
+            directory="$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field"
+            test -d "$directory"
+            test -s "$directory/arm-training-progress.a"
+            test -s "$directory/arm-training-progress.b"
+            # Reuse the exact committed ARM journal in a new OS process;
+            # unlike launch(), this path must NOT require an empty SDMC.
+            ./nexium-dist/NeXium/nexium \
+              "$PWD/arm-guest/arm_loader_probe_only.nro" \
+              > "arm-guest/$label-process.log" 2>&1 &
+            guest_pid=$!
+            eval "${label}_pid=$guest_pid"
+            sleep 15
+            kill -0 "$guest_pid"
+            executable=$(readlink "/proc/$guest_pid/exe")
+            case "$executable" in
+              */NeXium/nexium) ;;
+              *) echo "Not a live NeXium PID: $guest_pid ($executable)" >&2; return 1 ;;
+            esac
+            wid=$(xdotool search --onlyvisible --class nexium 2>/dev/null | tail -n 1) || true
+            test -n "$wid"
+            xdotool windowfocus "$wid"
+            press x
+            sleep 0.75
+          }
+          # The second guest deliberately closes ARM after a retreat. Stage405
+          # now commits that confirmed history to exactly one dedicated slot.
+          # Restart the same SDMC without pretending it is still empty.
+          launch_retreat_restart() {
+            label="$1"
+            root_key="$2"
+            export NEXIUM_DATA_ROOT="$RUNNER_TEMP/wa-arm-$root_key"
+            directory="$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field"
+            test -d "$directory"
+            test -s "$directory/arm-training-progress.a"
+            test ! -e "$directory/arm-training-progress.b"
+            test -z "$(find "$directory" -mindepth 1 ! -name arm-training-progress.a -print -quit)"
+            ./nexium-dist/NeXium/nexium \
+              "$PWD/arm-guest/arm_loader_probe_only.nro" \
+              > "arm-guest/$label-process.log" 2>&1 &
+            guest_pid=$!
+            eval "${label}_pid=$guest_pid"
+            sleep 15
+            kill -0 "$guest_pid"
+            executable=$(readlink "/proc/$guest_pid/exe")
+            case "$executable" in
+              */NeXium/nexium) ;;
+              *) echo "Not a live NeXium PID: $guest_pid ($executable)" >&2; return 1 ;;
+            esac
+            wid=$(xdotool search --onlyvisible --class nexium 2>/dev/null | tail -n 1) || true
+            test -n "$wid"
+            xdotool windowfocus "$wid"
             press x
             sleep 0.75
           }
@@ -263,7 +326,7 @@ jobs:
           press v  # 3/3 -> 2/3; foe 1 now down with a real shot.
           import -display :99 -window root \
             arm-guest/coldboot/08_arm_spent_before_exit.png
-          press x  # B exits ARM with 2/3 still volatile; NO WABJ.
+          press x  # B records this retreat only in the dedicated ARM WABJ; ammo stays volatile.
           capture 07_arm_return
           stop_guest
 
@@ -286,9 +349,10 @@ jobs:
                          sort_keys=True)+"\n")
           '
           # THIRD genuinely new NeXium guest process, but the exact same
-          # ARM SDMC root used by the second guest. Transient ammo must
-          # begin from 3/3 again with zero persisted game files.
-          launch armrestart arm
+          # ARM SDMC root used by the second guest. The retreat history is
+          # persistent, but transient ammo must reset to 3/3 and regular
+          # battle/field save slots must remain absent.
+          launch_retreat_restart armrestart arm
           import -display :99 -window root \
             arm-guest/coldboot/09_arm_restart_field.png
           xdotool keydown --clearmodifiers r
@@ -328,8 +392,9 @@ jobs:
                          sort_keys=True)+"\n")
           '
           # FOURTH independent asset-free NeXium guest. Actually win
-          # with two charged Bursts, take the B payout once, reopen and
-          # show volatile EXP/Gella without touching any WABJ slots.
+          # with two charged Bursts, claim once, then close a retreat.
+          # Confirmed results go to a separate ARM-progress journal; regular
+          # battle-progress and WAFS field-save namespaces stay untouched.
           launch victory
           import -display :99 -window root \
             arm-guest/victory/14_victory_field.png
@@ -386,6 +451,30 @@ jobs:
                           "victory_wait_completed":True},
                          sort_keys=True)+"\n")
           '
+          # FIFTH process: reuse the exact SDMC that contains the ARM
+          # journal written by the fourth process. The reward and history
+          # must be visible immediately after ZL+R cold re-entry.
+          launch_existing victoryrestart victory
+          xdotool keydown --clearmodifiers r
+          sleep 0.16
+          press e
+          xdotool keyup r
+          sleep 0.4
+          import -display :99 -window root \
+            arm-guest/persistence/23_victory_coldboot_reopen.png
+          stop_guest
+          VICTORYRESTART_PID="$victoryrestart_pid" \
+          VICTORYRESTART_WAIT_STATUS="$victoryrestart_wait_status" \
+          VICTORYRESTART_FORCE_KILLED="$victoryrestart_force_killed" python3 -c '
+          import json,os
+          from pathlib import Path
+          Path("arm-guest/persistence-process.json").write_text(
+              json.dumps({"victoryrestart_pid":int(os.environ["VICTORYRESTART_PID"]),
+                          "victoryrestart_wait_status":int(os.environ["VICTORYRESTART_WAIT_STATUS"]),
+                          "victoryrestart_force_killed":os.environ["VICTORYRESTART_FORCE_KILLED"]=="true",
+                          "victoryrestart_wait_completed":True},
+                         sort_keys=True)+"\n")
+          '
       - name: Strict pixel, guest process and isolated save-file audit
         run: |
           /usr/bin/python3 tools/audit_nexium_arm_guest.py \
@@ -423,7 +512,7 @@ jobs:
             --cold-shots arm-guest/coldboot \
             --burst-shots arm-guest/burst \
             --report arm-guest/arm-readiness-audit.json
-      - name: Audit real fourth NeXium guest victory and volatile EXP/Gella
+      - name: Audit real fourth NeXium guest victory and isolated EXP/Gella journal
         run: |
           /usr/bin/python3 tools/audit_nexium_arm_victory.py \
             --shots arm-guest/victory \
@@ -439,6 +528,14 @@ jobs:
             --ordinary-shots arm-guest/screenshots \
             --victory-shots arm-guest/victory \
             --report arm-guest/victory-claim-audit.json
+      - name: Audit real fifth guest cold boot restores ARM rewards
+        run: |
+          /usr/bin/python3 tools/audit_nexium_arm_persistence.py \
+            --shot arm-guest/persistence/23_victory_coldboot_reopen.png \
+            --processes arm-guest/persistence-process.json \
+            --victory-process arm-guest/victory-process.json \
+            --arm-root "$RUNNER_TEMP/wa-arm-victory" \
+            --report arm-guest/persistence-audit.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

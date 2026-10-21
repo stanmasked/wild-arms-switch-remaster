@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Stage401: validate a fourth REAL NeXium process awarding Burst victory once.
+"""Stage405: validate a fourth REAL NeXium process awarding Burst victory once.
 
 Host-created PNG test fixtures are only unit tests; passing them is NOT
 proof of running NeXium. The live guest workflow captures these exact files.
+The confirmed result is saved to a separate ARM-progress journal, not the
+regular battle-progress or WAFS field-save namespace.
 """
 import argparse
 import hashlib
@@ -84,6 +86,12 @@ def audit_victory(shots,original_shots,processes_path,
     directory=battle_slots(victory_root)[0].parent
     mounted=directory.is_dir() and not directory.is_symlink()
     files=list(directory.iterdir()) if mounted else []
+    expected_arm_files={"arm-training-progress.a","arm-training-progress.b"}
+    actual_names={path.name for path in files}
+    arm_slots_are_regular = all(
+        (directory/name).is_file() and not (directory/name).is_symlink()
+        for name in expected_arm_files
+    )
     checks={
         "four_independent_real_nexium_guest_processes":
             all(type(pid) is int and pid>0 for pid in pids)
@@ -126,8 +134,12 @@ def audit_victory(shots,original_shots,processes_path,
             balance_pixels(reenter_again)
             and native_pixel(reenter_again,*ARM_FULL_BAR)==GOLD
             and native_pixel(reenter_again,*FOE_0)==RED,
-        "fourth_guest_sdmc_never_creates_any_save_or_temp":
-            mounted and not files,
+        "confirmed_results_use_only_separate_arm_progress_slots":
+            mounted and actual_names==expected_arm_files and arm_slots_are_regular
+            and not any(slot.exists() for slot in battle_slots(victory_root))
+            and not any((directory/name).exists() for name in (
+                "field-save.a","field-save.b","field-save.tmp",
+            )),
     }
     result={
         "kind":"stage401_real_fourth_nexium_guest_burst_victory_rewards",
@@ -147,7 +159,7 @@ def audit_victory(shots,original_shots,processes_path,
             "expected_dark":list(DARK),
             "expected_green":list(GREEN),
         },
-        "scope":"synthetic_rom_free_volatile_arm_rewards_no_user_files",
+        "scope":"synthetic_rom_free_arm_rewards_in_separate_journal_no_field_or_regular_battle_save",
     }
     report=Path(report)
     report.parent.mkdir(parents=True,exist_ok=True)

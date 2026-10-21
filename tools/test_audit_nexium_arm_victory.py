@@ -16,6 +16,7 @@ from audit_nexium_arm_victory import (
 from audit_nexium_arm_guest import ARM_FULL_BAR,GOLD,DARK,RED
 from test_audit_nexium_arm_cold_boot import cold_fixture
 from test_audit_nexium_arm_guest import put
+from test_audit_nexium_battle_two_victories import journal
 
 
 def fixture_victory(root):
@@ -25,6 +26,8 @@ def fixture_victory(root):
     victory.mkdir()
     sd=root/"victory-sdmc"/"sdmc/switch/wild_arms_field"
     sd.mkdir(parents=True)
+    journal(sd/"arm-training-progress.a",1,1,1,0,8,12)
+    journal(sd/"arm-training-progress.b",2,3,1,1,8,12)
     third=root/"victory-process.json"
     third.write_text(json.dumps({
         "victory_pid":1004,"victory_wait_status":143,
@@ -138,12 +141,12 @@ class ArmVictoryGuestContractTests(unittest.TestCase):
             self.assertFalse(audit_victory(*a)["checks"][
                 "second_reentry_after_unwon_b_retreat_never_double_awards"])
 
-    def test_write_leak_into_fourth_sdmc_fails(self):
+    def test_write_leak_into_regular_battle_namespace_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             a=fixture_victory(tmp)
             (a[5]/"sdmc/switch/wild_arms_field"/"battle-progress.a").write_bytes(b"x")
             self.assertFalse(audit_victory(*a)["checks"][
-                "fourth_guest_sdmc_never_creates_any_save_or_temp"])
+                "confirmed_results_use_only_separate_arm_progress_slots"])
 
     def test_duplicate_process_id_fails_independence(self):
         with tempfile.TemporaryDirectory() as tmp:

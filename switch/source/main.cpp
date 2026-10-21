@@ -40,6 +40,12 @@ constexpr const char* kSaveBase =
 // Distinct journal namespace; never share a slot with field exploration.
 constexpr const char* kBattleSaveBase =
     "sdmc:/switch/wild_arms_field/battle-progress";
+#if defined(WA_ARM_EXPERIMENTAL)
+// Separate experimental ARM history/reward journal. Never shares regular
+// battle-progress slots or the WAFS exploration quicksave namespace.
+constexpr const char* kArmSaveBase =
+    "sdmc:/switch/wild_arms_field/arm-training-progress";
+#endif
 
 [[nodiscard]] bool ensure_directory(const char* path) noexcept {
   if (::mkdir(path, 0777) == 0) return true;
@@ -108,15 +114,16 @@ int main() {
   }
 
   StorageFeedback feedback{};
-  // Separate nonpersistent demonstration fight, explicitly opened with R
-  // in manual mode; the original exploration runtime stays intact.
+  // Separate synthetic demonstration fight, explicitly opened with R
+  // in manual mode; battle state never mutates the exploration runtime.
   FieldBattleSession battle_scene{};
 #if defined(WA_ARM_EXPERIMENTAL)
   // Experimental ARM mode is compiled ONLY with WA_ARM_EXPERIMENTAL=1.
-  // It is volatile and never uses the game's on-disk WABJ v1 journal.
+  // Combat state and ammunition are volatile; confirmed history/rewards use
+  // a dedicated journal namespace separate from regular battle-progress.
   ArmTrainingSession arm_scene{};
 #endif
-  bool battle_journal_corrupt = false;
+  bool progress_journal_corrupt = false;
   // Recover only a fully validated independent battle-progress journal.
   // Missing/corrupt records cannot change the default volatile counters.
   if (storage_ready) {
@@ -128,8 +135,21 @@ int main() {
     } else {
       // Preserve both bad copies for external recovery. Show the problem
       // only on an explicitly requested ZL panel, never on normal field.
-      battle_journal_corrupt=battle_journal_needs_warning(loaded.status);
+      progress_journal_corrupt=progress_journal_needs_warning(loaded.status);
     }
+#if defined(WA_ARM_EXPERIMENTAL)
+    // ARM progress reuses the validated WABJ v1 codec in its own path;
+    // it never aliases the ordinary battle journal. Restore validated data only.
+    BattleProgress arm_restored{};
+    const auto arm_loaded=load_battle_progress_file(kArmSaveBase,arm_restored);
+    if (arm_loaded.status==BattleJournalStatus::Loaded) {
+      arm_scene.history=arm_restored.history;
+      arm_scene.rewards=arm_restored.rewards;
+    } else {
+      progress_journal_corrupt = progress_journal_corrupt ||
+          progress_journal_needs_warning(arm_loaded.status);
+    }
+#endif
   }
   // ZR explicitly toggles optional step encounters. Default is off so
   // previous NeXium autoplay, saves and field captures stay unchanged.
@@ -251,8 +271,9 @@ int main() {
 #if defined(WA_ARM_EXPERIMENTAL)
     // Dedicated opt-in scene: X=Fire, Minus=Reload, ZR=charged Burst.
     // Ordinary A/Y and D-pad still have their usual in-battle semantics.
-    // Unlike B-close of an ordinary fight, ARM B-close MUST NOT persist
-    // volatile training awards, ammo, or overwrite the WABJ v1 slots.
+    // ARM B-close persists the confirmed result to the dedicated
+    // arm-training-progress journal only; ammunition stays volatile and
+    // regular battle-progress / WAFS slots remain untouched.
     const ArmTrainingInput arm_input{
         open_arm,
         arm_scene.active && (pressed & HidNpadButton_B) != 0,
@@ -274,11 +295,24 @@ int main() {
       framebufferEnd(&fb);
       break;
     }
+    // A confirmed ARM exit persists only to its own two-slot journal.
+    // Failed storage is nonfatal; the field save and regular battle journal
+    // are never touched by this path.
+    if (arm_frame.exited && storage_ready) {
+      const BattleProgress record{arm_scene.history,arm_scene.rewards};
+      const auto saved=store_battle_progress_file(record,kArmSaveBase);
+      char trace[96]{};
+      const int length=std::snprintf(trace,sizeof(trace),
+          "WA_ARM_PROGRESS v1 result=%d",
+          static_cast<int>(saved));
+      if (length>0 && length<static_cast<int>(sizeof(trace)))
+        (void)svcOutputDebugString(trace,static_cast<std::size_t>(length));
+    }
 #endif
 
     // Only a fully validated first B-close writes battle progress.
     // Never write to field-save.a/.b or the 40-byte exploration record.
-    // File errors are nonfatal: gameplay and volatile counters continue.
+    // File errors are nonfatal: in-memory gameplay and counters continue.
     if (battle_frame.exited && storage_ready) {
       const BattleProgress record{battle_scene.history,battle_scene.rewards};
       const auto saved=store_battle_progress_file(record,kBattleSaveBase);
@@ -369,7 +403,7 @@ int main() {
       if (!runtime.autoplay && (held & HidNpadButton_ZL)) {
         if (draw_field_battle_history(output, battle_scene.history)) {
           draw_battle_reward_balance(output, battle_scene.rewards);
-          (void)draw_battle_journal_warning(output, battle_journal_corrupt);
+          (void)draw_progress_journal_warning(output, progress_journal_corrupt);
         }
       }
     }

@@ -1,10 +1,15 @@
 #include "field_battle_arm_training.hpp"
+#include "field_battle_file.hpp"
 
 #include <cassert>
 #include <cstring>
 #include <limits>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
+#include <unistd.h>
 #include <vector>
 
 using namespace wa::field;
@@ -516,6 +521,87 @@ void near_limit_preview_matches_actual_saturated_credit() {
   assert(s.rewards.experience==limit && s.rewards.gella==limit);
 }
 
+void confirmed_arm_victory_persists_only_after_b_and_restores_in_fresh_session() {
+  char dir[]="/tmp/wa-arm-rewards-XXXXXX";
+  assert(::mkdtemp(dir)!=nullptr);
+  const std::string base=std::string(dir)+"/arm-training-progress";
+  const std::string regular_base=std::string(dir)+"/battle-progress";
+
+  // Seed the ordinary battle journal first. ARM commits must not merely
+  // avoid creating regular slots; they must preserve an existing save byte
+  // for byte across both victory and retreat generations.
+  BattleProgress regular{};
+  regular.history.victories=1;
+  regular.history.last=BattleResolution::Victory;
+  regular.rewards={5,7};
+  assert(store_battle_progress_file(regular,regular_base)==
+         BattleJournalStatus::Stored);
+  const auto regular_slot_before=read_battle_journal_slot(regular_base+".a");
+  assert(regular_slot_before.status==BattleJournalStatus::Loaded);
+  assert(regular_slot_before.generation==1);
+  assert(read_battle_journal_slot(regular_base+".b").status==
+         BattleJournalStatus::Missing);
+
+  ArmTrainingSession first{};Frame picture;
+  enter_and_finish_custom_arm_victory(first,picture);
+  assert(first.battle.phase==BattlePhase::Victory);
+  assert(first.rewards.experience==0 && first.rewards.gella==0);
+  BattleProgress loaded{};
+  assert(load_battle_progress_file(base,loaded).status==
+         BattleJournalStatus::Missing);
+  assert(loaded.history.victories==0 && loaded.rewards.experience==0);
+
+  ArmTrainingInput close{};close.close=true;
+  const auto paid=advance_arm_training_session(first,close,picture.target);
+  assert(paid.exited && paid.payout.experience==8 && paid.payout.gella==12);
+  assert(first.history.victories==1 && first.rewards.experience==8);
+  const BattleProgress committed{first.history,first.rewards};
+  assert(store_battle_progress_file(committed,base)==BattleJournalStatus::Stored);
+  const auto regular_after_victory=read_battle_journal_slot(regular_base+".a");
+  assert(regular_after_victory.status==BattleJournalStatus::Loaded);
+  assert(regular_after_victory.generation==1);
+  assert(regular_after_victory.raw==regular_slot_before.raw);
+  assert(read_battle_journal_slot(regular_base+".b").status==
+         BattleJournalStatus::Missing);
+
+  // Model a new process: only the durable BattleProgress is copied into a
+  // default session. Combat state, including spent ammunition, is not saved.
+  ArmTrainingSession cold{};
+  const auto disk=load_battle_progress_file(base,loaded);
+  assert(disk.status==BattleJournalStatus::Loaded && disk.generation==1);
+  cold.history=loaded.history;
+  cold.rewards=loaded.rewards;
+  ArmTrainingInput reopen{};reopen.open=true;reopen.manual=true;
+  assert(advance_arm_training_session(cold,reopen,picture.target).entered);
+  assert(cold.magazine.rounds==3 && cold.battle.enemies[0].hp==14);
+  assert(cold.history.victories==1 && cold.rewards.experience==8);
+  assert(picture.at(70,667)==kBattleGreen);
+  assert(picture.at(70,687)==kBattleGold);
+
+  // A later retreat commits a second generation without erasing the reward.
+  const auto retreat=advance_arm_training_session(cold,close,picture.target);
+  assert(retreat.exited && retreat.resolution==BattleResolution::Retreat);
+  assert(retreat.payout.experience==0 && retreat.payout.gella==0);
+  assert(store_battle_progress_file(
+      BattleProgress{cold.history,cold.rewards},base)==BattleJournalStatus::Stored);
+  const auto after=load_battle_progress_file(base,loaded);
+  assert(after.status==BattleJournalStatus::Loaded && after.generation==2);
+  assert(loaded.history.victories==1 && loaded.history.retreats==1);
+  assert(loaded.history.last==BattleResolution::Retreat);
+  assert(loaded.rewards.experience==8 && loaded.rewards.gella==12);
+  const auto regular_after_retreat=read_battle_journal_slot(regular_base+".a");
+  assert(regular_after_retreat.status==BattleJournalStatus::Loaded);
+  assert(regular_after_retreat.generation==1);
+  assert(regular_after_retreat.raw==regular_slot_before.raw);
+  assert(read_battle_journal_slot(regular_base+".b").status==
+         BattleJournalStatus::Missing);
+
+  for(const std::string& journal_base:{base,regular_base})
+    for(const char* suffix:{".a",".b",".a.tmp",".b.tmp"})
+      (void)std::remove((journal_base+suffix).c_str());
+  (void)::rmdir(dir);
+}
+
 void maximum_decimal_reward_preview_is_inside_victory_frame() {
   ArmTrainingSession s{};Frame pixels;
   constexpr auto limit=std::numeric_limits<std::uint32_t>::max();
@@ -542,6 +628,7 @@ int main() {
   victory_cannot_be_claimed_before_preview_was_rendered();
   victory_preview_is_actual_saturated_credit_and_text_never_overflows();
   custom_volatile_reward_offer_is_previewed_and_credited_once();
+  confirmed_arm_victory_persists_only_after_b_and_restores_in_fresh_session();
   near_limit_preview_matches_actual_saturated_credit();
   maximum_decimal_reward_preview_is_inside_victory_frame();
 }

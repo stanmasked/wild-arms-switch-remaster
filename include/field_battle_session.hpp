@@ -11,8 +11,8 @@ struct FieldBattleSession {
   FieldBattle battle = make_demo_battle();
   BattleCursor cursor{};
   bool active = false;
-  BattleHistory history{};  // Session-local only, never in field quicksaves.
-  BattleRewardAccount rewards{}; // Volatile EXP/Gella from confirmed wins only.
+  BattleHistory history{};  // Battle journal only, never in field quicksaves.
+  BattleRewardAccount rewards{}; // Confirmed-win EXP/Gella; persisted separately.
 };
 
 struct FieldBattleSessionInput {

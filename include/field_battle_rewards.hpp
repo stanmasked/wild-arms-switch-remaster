@@ -1,6 +1,6 @@
 #pragma once
 // Stage 357: deterministic ROM-free rewards. No original-game economy data.
-// Rewards are volatile until a separate versioned save feature is approved.
+// Pure reward rules only; session owners decide how confirmed results persist.
 #include "field_battle_results.hpp"
 
 #include <algorithm>

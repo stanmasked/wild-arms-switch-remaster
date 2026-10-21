@@ -7,6 +7,8 @@ corresponding actual emulator launches. Synthetic fixtures are for test-only.
 import argparse
 import hashlib
 import json
+import struct
+import zlib
 from pathlib import Path
 
 from PIL import ImageChops
@@ -57,6 +59,54 @@ def battle_slots(data_root):
     return [directory / "battle-progress.a", directory / "battle-progress.b"]
 
 
+def read_arm_progress_slot(path):
+    """Validate one 52-byte WABJ v1 slot from the isolated ARM progress namespace."""
+    raw = Path(path).read_bytes()
+    if len(raw) != 52:
+        raise ValueError(f"unexpected WABJ slot length: {path}")
+    if raw[:4] != b"WABJ":
+        raise ValueError(f"bad WABJ magic: {path}")
+    generation = struct.unpack_from("<Q", raw, 4)[0]
+    if generation == 0 or zlib.crc32(raw[:48]) != struct.unpack_from("<I", raw, 48)[0]:
+        raise ValueError(f"invalid outer WABJ generation/CRC: {path}")
+    payload = raw[12:48]
+    if payload[:4] != b"WABR" or payload[4] != 1:
+        raise ValueError(f"unsupported WABR payload: {path}")
+    if payload[6:8] != b"\0\0" or payload[28:32] != b"\0\0\0\0":
+        raise ValueError(f"nonzero WABR reserved bytes: {path}")
+    if zlib.crc32(payload[:32]) != struct.unpack_from("<I", payload, 32)[0]:
+        raise ValueError(f"invalid inner WABR CRC: {path}")
+    wins, losses, retreats, exp, gella = struct.unpack_from("<IIIII", payload, 8)
+    return {
+        "generation": generation,
+        "last": payload[5],
+        "wins": wins,
+        "losses": losses,
+        "retreats": retreats,
+        "experience": exp,
+        "gella": gella,
+        "sha256": hashlib.sha256(raw).hexdigest(),
+    }
+
+
+def valid_two_retreat_progress_generations(records):
+    """Require the expected first retreat and the next cold-boot retreat."""
+    first = records.get("arm-training-progress.a")
+    latest = records.get("arm-training-progress.b")
+    return (
+        set(records) == {"arm-training-progress.a", "arm-training-progress.b"}
+        and first is not None and latest is not None
+        and first["generation"] == 1 and first["last"] == 3
+        and first["wins"] == 0 and first["losses"] == 0
+        and first["retreats"] == 1
+        and first["experience"] == 0 and first["gella"] == 0
+        and latest["generation"] == 2 and latest["last"] == 3
+        and latest["wins"] == 0 and latest["losses"] == 0
+        and latest["retreats"] == 2
+        and latest["experience"] == 0 and latest["gella"] == 0
+    )
+
+
 def audit_arm_guests(screenshots, baseline_root, arm_root, processes, report):
     screenshots = Path(screenshots)
     actual = {p.name for p in screenshots.glob("*.png")}
@@ -95,11 +145,19 @@ def audit_arm_guests(screenshots, baseline_root, arm_root, processes, report):
     )
     arm_entries = list(arm_dir.iterdir()) if arm_dir_valid else []
     arm_names = {p.name for p in arm_entries}
+    progress_records = {}
+    for name in ("arm-training-progress.a", "arm-training-progress.b"):
+        slot = arm_dir / name
+        if slot.is_file() and not slot.is_symlink():
+            try:
+                progress_records[name] = read_arm_progress_slot(slot)
+            except (OSError, ValueError):
+                pass
     field_names = {
         "field-save.a", "field-save.b", "field-save.tmp",
     }
-    # The ordinary R control must produce a real valid journal, not a
-    # placeholder file or empty directory. ARM must create no slot at all.
+    # Stage405 persists a confirmed ARM exit to its own journal. The two
+    # guest retreats must be present there; regular battle/field slots stay absent.
     baseline_records = []
     for slot in baseline_slots:
         if slot.is_file() and not slot.is_symlink():
@@ -167,16 +225,18 @@ def audit_arm_guests(screenshots, baseline_root, arm_root, processes, report):
             any(record["retreats"] == 1 and record["wins"] == 0
                     and record["experience"] == 0 and record["gella"] == 0
                     for record in baseline_records),
-        "arm_training_never_created_wabj_slots":
+        "arm_training_never_created_regular_battle_slots":
             arm_dir_valid and
             not any(path.exists() or path.is_symlink() for path in arm_slots),
         "arm_reload_never_touched_field_save_slots":
             arm_dir_valid and not bool(field_names & arm_names),
-        "isolated_arm_sdmc_is_mounted_and_completely_unwritten":
-            separate_game_directories and not arm_entries,
+        "isolated_arm_sdmc_contains_only_two_valid_retreat_progress_slots":
+            separate_game_directories
+            and arm_names == {"arm-training-progress.a", "arm-training-progress.b"}
+            and valid_two_retreat_progress_generations(progress_records),
     }
     result = {
-        "kind": "stage390_real_nexium_arm_training_guest_audit",
+        "kind": "stage405_real_nexium_arm_training_guest_audit",
         "guest_capture_source": "actual_nexium_xvfb_screenshots_not_host_raster",
         "scope": "research_asset_free_nro_not_hardware",
         "checks": checks,
