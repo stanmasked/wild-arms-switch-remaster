@@ -18,6 +18,9 @@
 #include "field_battle_file.hpp"
 #include "field_battle_storage_warning.hpp"
 #include "field_save_feedback.hpp"
+#if defined(WA_PRIVATE_ICON_PREVIEW)
+#include "field_private_icon.hpp"
+#endif
 
 #include <algorithm>
 #include <cerrno>
@@ -35,6 +38,12 @@ constexpr int kHeight = 720;
 constexpr int kTileSize = 64;
 constexpr Viewport kViewport{11, 7};
 constexpr const char* kSaveRoot = "sdmc:/switch/wild_arms_field";
+#if defined(WA_PRIVATE_ICON_PREVIEW)
+constexpr const char* kPrivateIconsA =
+    "sdmc:/switch/wild_arms_field/assets/private/battle_icons.waic";
+constexpr const char* kPrivateIconsB =
+    "sdmc:/switch/wild_arms_field/assets/private/battle_icons2.waic";
+#endif
 constexpr const char* kSaveBase =
     "sdmc:/switch/wild_arms_field/field-save";
 // Distinct journal namespace; never share a slot with field exploration.
@@ -100,6 +109,17 @@ int main() {
       fsdevGetDeviceFileSystem("sdmc") != nullptr &&
       ensure_directory("sdmc:/switch") &&
       ensure_directory(kSaveRoot);
+
+#if defined(WA_PRIVATE_ICON_PREVIEW)
+  // Local SD-only, opt-in preview of owner-provided original icon sheets.
+  // Failure to load does not affect gameplay and never touches save files.
+  static PrivateIcon private_icon_a{};
+  static PrivateIcon private_icon_b{};
+  if (storage_ready) {
+    (void)load_private_icon_file(kPrivateIconsA, private_icon_a);
+    (void)load_private_icon_file(kPrivateIconsB, private_icon_b);
+  }
+#endif
 
   padConfigureInput(1, HidNpadStyleSet_NpadStandard);
   PadState pad{};
@@ -407,6 +427,21 @@ int main() {
         }
       }
     }
+#if defined(WA_PRIVATE_ICON_PREVIEW)
+    // Manual diagnostic only: hold Right Stick click for the first private
+    // sheet, plus Left Stick click for the second. Never affects normal NROs,
+    // autoplay, battle/ARM input, save state, or the default pixel capture.
+    if (!runtime.autoplay && !battle_scene.active
+#if defined(WA_ARM_EXPERIMENTAL)
+        && !arm_scene.active
+#endif
+        && (held & HidNpadButton_StickR)) {
+      const PrivateIcon& preview =
+          (held & HidNpadButton_StickL) ? private_icon_b : private_icon_a;
+      (void)draw_private_icon(preview, output, (kWidth - 256) / 2,
+                              (kHeight - 256) / 2);
+    }
+#endif
     framebufferEnd(&fb);
   }
 

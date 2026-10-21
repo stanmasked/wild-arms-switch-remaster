@@ -11,3 +11,7 @@ switch/*.elf
 switch/*.nro
 switch/*.nacp
 switch/*.map
+
+# Stage421 privately exported original-game icon assets
+*.waic
+*.WAIC

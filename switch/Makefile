@@ -26,6 +26,11 @@ endif
 ifeq ($(WA_ARM_EXPERIMENTAL),1)
 CXXFLAGS += -DWA_ARM_EXPERIMENTAL=1
 endif
+# Opt-in manual preview of user's separately installed, private WAIC icon
+# sheets. Never bundle art or change normal field/NeXium capture behavior.
+ifeq ($(WA_PRIVATE_ICON_PREVIEW),1)
+CXXFLAGS += -DWA_PRIVATE_ICON_PREVIEW=1
+endif
 ASFLAGS  := -g $(ARCH)
 LDFLAGS  := -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 LIBS     := -lnx
