@@ -527,6 +527,21 @@ void confirmed_arm_victory_persists_only_after_b_and_restores_in_fresh_session()
   const std::string base=std::string(dir)+"/arm-training-progress";
   const std::string regular_base=std::string(dir)+"/battle-progress";
 
+  // Seed the ordinary battle journal first. ARM commits must not merely
+  // avoid creating regular slots; they must preserve an existing save byte
+  // for byte across both victory and retreat generations.
+  BattleProgress regular{};
+  regular.history.victories=1;
+  regular.history.last=BattleResolution::Victory;
+  regular.rewards={5,7};
+  assert(store_battle_progress_file(regular,regular_base)==
+         BattleJournalStatus::Stored);
+  const auto regular_slot_before=read_battle_journal_slot(regular_base+".a");
+  assert(regular_slot_before.status==BattleJournalStatus::Loaded);
+  assert(regular_slot_before.generation==1);
+  assert(read_battle_journal_slot(regular_base+".b").status==
+         BattleJournalStatus::Missing);
+
   ArmTrainingSession first{};Frame picture;
   enter_and_finish_custom_arm_victory(first,picture);
   assert(first.battle.phase==BattlePhase::Victory);
@@ -542,7 +557,11 @@ void confirmed_arm_victory_persists_only_after_b_and_restores_in_fresh_session()
   assert(first.history.victories==1 && first.rewards.experience==8);
   const BattleProgress committed{first.history,first.rewards};
   assert(store_battle_progress_file(committed,base)==BattleJournalStatus::Stored);
-  assert(load_battle_progress_file(regular_base,loaded).status==
+  const auto regular_after_victory=read_battle_journal_slot(regular_base+".a");
+  assert(regular_after_victory.status==BattleJournalStatus::Loaded);
+  assert(regular_after_victory.generation==1);
+  assert(regular_after_victory.raw==regular_slot_before.raw);
+  assert(read_battle_journal_slot(regular_base+".b").status==
          BattleJournalStatus::Missing);
 
   // Model a new process: only the durable BattleProgress is copied into a
@@ -570,9 +589,16 @@ void confirmed_arm_victory_persists_only_after_b_and_restores_in_fresh_session()
   assert(loaded.history.victories==1 && loaded.history.retreats==1);
   assert(loaded.history.last==BattleResolution::Retreat);
   assert(loaded.rewards.experience==8 && loaded.rewards.gella==12);
+  const auto regular_after_retreat=read_battle_journal_slot(regular_base+".a");
+  assert(regular_after_retreat.status==BattleJournalStatus::Loaded);
+  assert(regular_after_retreat.generation==1);
+  assert(regular_after_retreat.raw==regular_slot_before.raw);
+  assert(read_battle_journal_slot(regular_base+".b").status==
+         BattleJournalStatus::Missing);
 
-  for(const char* suffix:{".a",".b",".a.tmp",".b.tmp"})
-    (void)std::remove((base+suffix).c_str());
+  for(const std::string& journal_base:{base,regular_base})
+    for(const char* suffix:{".a",".b",".a.tmp",".b.tmp"})
+      (void)std::remove((journal_base+suffix).c_str());
   (void)::rmdir(dir);
 }
 
