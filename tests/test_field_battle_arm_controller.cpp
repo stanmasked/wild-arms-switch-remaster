@@ -120,6 +120,47 @@ void corrupt_state_does_not_consume_fire_edge_or_ammo() {
   assert(mag.rounds==2);
 }
 
+void burst_new_zr_edge_costs_two_ammo_and_never_repeats_held() {
+  auto b=make_demo_battle();ArmMagazine mag{};BattleCursor cursor{};
+  ArmEdgeState edges{};
+  const auto first=advance_arm_controller(b,mag,cursor,edges,{false,false,true});
+  assert(first.status==ArmControlStatus::Applied);
+  assert(first.update.battle.inflicted==14);
+  assert(b.enemies[0].hp==0 && mag.rounds==1);
+  assert(cursor.actor==1 && cursor.target==1);
+  for(int i=0;i<5;++i)
+    assert(advance_arm_controller(b,mag,cursor,edges,
+                                 {false,false,true}).status==ArmControlStatus::Idle);
+  assert(mag.rounds==1 && b.enemies[1].hp==17);
+}
+
+void simultaneous_burst_and_fire_consumes_both_physical_edges() {
+  auto b=make_demo_battle();ArmMagazine mag{};BattleCursor cursor{};
+  ArmEdgeState edges{};
+  auto r=advance_arm_controller(b,mag,cursor,edges,{true,false,true});
+  assert(r.status==ArmControlStatus::Idle && mag.rounds==3);
+  assert(advance_arm_controller(b,mag,cursor,edges,
+                                {false,false,true}).status==ArmControlStatus::Idle);
+  assert(b.enemies[0].hp==14);
+  release(b,mag,cursor,edges);
+  r=advance_arm_controller(b,mag,cursor,edges,{false,false,true});
+  assert(r.status==ArmControlStatus::Applied && mag.rounds==1);
+}
+
+void insufficient_ammo_burst_refused_without_consuming_actor_turn() {
+  auto b=make_demo_battle();ArmMagazine mag{1,3,10};
+  BattleCursor cursor{};ArmEdgeState edges{};
+  const auto r=advance_arm_controller(b,mag,cursor,edges,{false,false,true});
+  assert(r.status==ArmControlStatus::Refused);
+  assert(r.update.step==ArmStep::InsufficientAmmo);
+  assert(b.enemies[0].hp==14 && mag.rounds==1);
+  assert(!b.acted[0] && cursor.actor==0 && edges.previous.burst);
+  release(b,mag,cursor,edges);
+  assert(advance_arm_controller(b,mag,cursor,edges,{true,false,false}).status==
+         ArmControlStatus::Applied);
+  assert(mag.rounds==0 && b.enemies[0].hp==5);
+}
+
 } // namespace
 
 int main() {
@@ -129,4 +170,7 @@ int main() {
   stale_dead_target_is_repaired_only_on_successful_fire();
   rejected_empty_magazine_leaves_cursor_battle_and_melee_untouched();
   corrupt_state_does_not_consume_fire_edge_or_ammo();
+  burst_new_zr_edge_costs_two_ammo_and_never_repeats_held();
+  simultaneous_burst_and_fire_consumes_both_physical_edges();
+  insufficient_ammo_burst_refused_without_consuming_actor_turn();
 }
