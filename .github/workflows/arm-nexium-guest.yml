@@ -107,13 +107,20 @@ jobs:
           launch() {
             label="$1"
             export NEXIUM_DATA_ROOT="$RUNNER_TEMP/wa-arm-$label"
-            timeout --signal=TERM --kill-after=8 125s \
-              ./nexium-dist/NeXium/nexium \
+            # Direct PID: no timeout wrapper may masquerade as a guest.
+            # GitHub's timeout-minutes bounds this entire capture step.
+            ./nexium-dist/NeXium/nexium \
               "$PWD/arm-guest/arm_loader_probe_only.nro" \
               > "arm-guest/$label-process.log" 2>&1 &
             guest_pid=$!
             eval "${label}_pid=$guest_pid"
             sleep 15
+            kill -0 "$guest_pid"
+            executable=$(readlink "/proc/$guest_pid/exe")
+            case "$executable" in
+              */NeXium/nexium) ;;
+              *) echo "Not a live NeXium PID: $guest_pid ($executable)" >&2; return 1 ;;
+            esac
             wid=$(xdotool search --onlyvisible --class nexium 2>/dev/null | tail -n 1) || true
             test -n "$wid"
             xdotool windowfocus "$wid"
