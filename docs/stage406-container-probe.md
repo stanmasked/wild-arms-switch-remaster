@@ -32,6 +32,26 @@ python tools/probe_container.py /private/path/CDFLR.BIN --layout distributed --s
 
 The default budget is 1 MiB; the hard maximum is 8 MiB. Distributed mode samples up to eight 4-byte-aligned windows spread across the file. SHA-256 of the full file is computed in streaming chunks, so the entire file is never loaded into memory.
 
+
+## Extract the two catalogued files from the Google Drive image
+
+The connected Drive folder contains `Wild Arms (USA).bin` (637,163,856 bytes) and `Wild Arms (USA).cue`. The cue identifies the track as `MODE2/2352`. The connector's raw-file download limit is 268,435,456 bytes, so it cannot materialize the full BIN directly into this runtime. Do not publish the disc image to GitHub.
+
+If you can download the BIN from Drive to a trusted local machine, this helper extracts only the two previously catalogued ISO9660 extents:
+
+```sh
+python tools/extract_wild_arms_iso_files.py "/private/path/Wild Arms (USA).bin" \
+  --output-dir "/private/path/wildarms-extracted"
+```
+
+The current catalog expects the exact image size of 637,163,856 bytes and refuses a different size rather than silently applying stale extents. Each raw sector is validated for sync bytes, Mode 2, matching duplicated subheaders and Form 1 (not Form 2) before its 2048-byte user-data payload is written. Output files are written atomically; existing outputs are not overwritten.
+
+Expected outputs:
+- `CDSTG.BIN` — 76,021,760 bytes, LBA 1383, 37,120 sectors.
+- `CDFLR.BIN` — 15,917,056 bytes, LBA 38503, 7,772 sectors.
+
+The two extents are adjacent in the catalog (the first ends at LBA 38503, where the second begins). The tool emits only sizes, sector counts and SHA-256 hashes to stdout; it does not print asset bytes. Keep the output directory and report private. Upload just the two extracted files to the same private Drive folder (or attach them to this conversation) so they can be inspected here; both are below the connector's raw-file size limit. Successful extraction validates sector/container handling, not the proprietary formats inside the files.
+
 ## Reading the report
 
 - `file_size_bytes` and the whole-file `sha256` identify the exact input copy.
