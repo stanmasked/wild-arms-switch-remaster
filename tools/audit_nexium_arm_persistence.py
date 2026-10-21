@@ -34,7 +34,7 @@ def read_progress_slot(path):
     payload = raw[12:48]
     if payload[:4] != b"WABR" or payload[4] != 1:
         raise ValueError(f"unsupported WABR payload: {path}")
-    if payload[6:8] != b"\\0\\0" or payload[28:32] != b"\\0\\0\\0\\0":
+    if payload[6:8] != b"\0\0" or payload[28:32] != b"\0\0\0\0":
         raise ValueError(f"nonzero WABR reserved bytes: {path}")
     if zlib.crc32(payload[:32]) != struct.unpack_from("<I", payload, 32)[0]:
         raise ValueError(f"invalid inner WABR CRC: {path}")
@@ -123,7 +123,7 @@ def audit_persistence(shot, processes_path, victory_process_path, arm_root, repo
     }
     target = Path(report)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(payload, sort_keys=True, indent=2) + "\\n",
+    target.write_text(json.dumps(payload, sort_keys=True, indent=2) + "\n",
                       encoding="utf-8")
     return payload
 
@@ -140,7 +140,7 @@ if __name__ == "__main__":
         result = audit_persistence(args.shot, args.processes,
             args.victory_process, args.arm_root, args.report)
     except (OSError, ValueError, TypeError, KeyError) as err:
-        p.exit(2, f"NeXium ARM persistence auditor rejected: {err}\\n")
+        p.exit(2, f"NeXium ARM persistence auditor rejected: {err}\n")
     print(json.dumps(result["checks"], sort_keys=True))
     if not result["all_checks_passed"]:
-        p.exit(1, "Actual NeXium ARM reward cold-boot proof failed\\n")
+        p.exit(1, "Actual NeXium ARM reward cold-boot proof failed\n")
