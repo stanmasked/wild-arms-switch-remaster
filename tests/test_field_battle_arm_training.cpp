@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 using namespace wa::field;
@@ -347,6 +348,83 @@ void real_two_bursts_victory_credit_once_and_visible_after_reentry() {
   assert(session.rewards.experience==8 && session.rewards.gella==12);
 }
 
+void dynamic_victory_preview_equals_saturating_actual_b_claim() {
+  constexpr auto limit=std::numeric_limits<std::uint32_t>::max();
+  ArmTrainingSession session{};Frame actual,expected;
+  launch(session,actual);
+  // Inject a valid won battle and near-saturated existing rewards; the
+  // preview must be the *actual* 2 EXP / 5 Gella that B will credit.
+  session.battle.enemies[0].hp=0;
+  session.battle.enemies[1].hp=0;
+  session.battle.phase=BattlePhase::Victory;
+  session.rewards={limit-2u,limit-5u};
+  const auto snapshot=session.rewards;
+  const auto expected_payout=preview_battle_reward(
+      session.rewards,BattleResolution::Victory);
+  assert(expected_payout.experience==2 && expected_payout.gella==5);
+  assert(preview_battle_reward(session.rewards,
+                             BattleResolution::Retreat).experience==0);
+  assert(session.rewards.experience==snapshot.experience &&
+         session.rewards.gella==snapshot.gella);
+  assert(advance_arm_training_session(session,{},actual.target).status==
+         ArmTrainingStatus::Rendered);
+  // Independent pixel oracle: render expected numeric content using
+  // ordinary native raster glyphs, NOT the new preview renderer.
+  assert(draw_field_battle(expected.target,session.battle,session.cursor)==
+         BattleRenderStatus::Rendered);
+  assert(draw_battle_arm_status(expected.target,session.battle,
+                                session.magazine)==ArmHudStatus::Rendered);
+  battle_text(expected.target,440,368,"B CLAIM EXP 2  GELLA 5",
+              kBattleGreen);
+  assert(actual.data==expected.data);
+  assert(session.rewards.experience==snapshot.experience &&
+         session.rewards.gella==snapshot.gella);
+  ArmTrainingInput leave{};leave.close=true;
+  const auto paid=advance_arm_training_session(session,leave,actual.target);
+  assert(paid.exited && paid.resolution==BattleResolution::Victory);
+  assert(paid.payout.experience==2 && paid.payout.gella==5);
+  assert(session.rewards.experience==limit && session.rewards.gella==limit);
+  assert(session.history.victories==1);
+  const auto repeated=advance_arm_training_session(session,leave,actual.target);
+  assert(!repeated.exited && repeated.payout.experience==0);
+  actual.padding_unchanged();
+  expected.padding_unchanged();
+}
+
+void dynamic_preview_handles_zero_reward_and_compact_long_amounts() {
+  constexpr auto limit=std::numeric_limits<std::uint32_t>::max();
+  const BattleRewardAccount full{limit,limit};
+  const auto zero=preview_battle_reward(full,BattleResolution::Victory);
+  assert(zero.experience==0 && zero.gella==0);
+  Frame zero_frame,reference;
+  draw_arm_victory_reward_preview(zero_frame.target,zero);
+  battle_text(reference.target,440,368,"B CLAIM EXP 0  GELLA 0",
+              kBattleGreen);
+  assert(zero_frame.data==reference.data);
+  // Future reward-rate changes must be derived, not hard-coded as 8/12.
+  const BattleRewardAccount blank{};
+  const auto alternative=preview_battle_reward(
+      blank,BattleResolution::Victory,{24,36});
+  assert(alternative.experience==24 && alternative.gella==36);
+  assert(blank.experience==0 && blank.gella==0);
+  Frame custom,custom_expected;
+  draw_arm_victory_reward_preview(custom.target,alternative);
+  battle_text(custom_expected.target,440,368,
+              "B CLAIM EXP 24  GELLA 36",kBattleGreen);
+  assert(custom.data==custom_expected.data);
+  // Rendering the maximum unsigned amounts must never spill over the
+  // Victory popup (x<960) or the framebuffer/canary.
+  Frame huge,huge_expected;
+  draw_arm_victory_reward_preview(huge.target,{limit,limit});
+  battle_text(huge_expected.target,440,368,
+              "B EXP 4294967295  G 4294967295",kBattleGreen);
+  assert(huge.data==huge_expected.data);
+  for (int y=368;y<383;++y)
+    for(int x=960;x<kRasterWidth;++x)
+      assert(huge.at(x,y)==kCanary);
+  huge.padding_unchanged();
+}
+
 } // namespace
 
 int main() {
@@ -359,4 +437,6 @@ int main() {
   zr_burst_real_session_turn_then_insufficient_ammo_refusal();
   zr_conflicts_require_full_release_before_attacking();
   real_two_bursts_victory_credit_once_and_visible_after_reentry();
+  dynamic_victory_preview_equals_saturating_actual_b_claim();
+  dynamic_preview_handles_zero_reward_and_compact_long_amounts();
 }
