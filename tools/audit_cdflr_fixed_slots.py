@@ -48,9 +48,10 @@ def audit_fixed_slots(path, slot_bytes=DEFAULT_SLOT_BYTES):
             if any(p < LOW_RAM or p >= HIGH_RAM or p % 4
                    for p in pointers[:POINTER_COUNT]):
                 raise ValueError(f"slot {index}: pointer outside PS1 KSEG0 RAM range")
-            if (pointers[POINTER_COUNT] != 0 or
-                    any(payload[(POINTER_COUNT + 1) * 4:POINTER_PREFIX_BYTES])):
-                raise ValueError(f"slot {index}: missing terminator/zero padding")
+            # The 58 pointers consume 232 bytes. The remaining 24 bytes
+            # before first target at 0x100 are opaque: in the genuine disc
+            # only slot 0 has an all-zero trailer; slots 1..66 are nonzero.
+            trailer = payload[POINTER_COUNT * 4:POINTER_PREFIX_BYTES]
             offsets = [p - base for p in pointers[:POINTER_COUNT]]
             if offsets[0] != POINTER_PREFIX_BYTES:
                 raise ValueError(f"slot {index}: first pointer not after table")
@@ -84,6 +85,10 @@ def audit_fixed_slots(path, slot_bytes=DEFAULT_SLOT_BYTES):
                 "sha256": digest,
                 "candidate_ram_base": f"0x{base:08X}",
                 "pointer_count": POINTER_COUNT,
+                "opaque_header_trailer_bytes": len(trailer),
+                "opaque_header_trailer_nonzero_bytes": sum(byte != 0 for byte in trailer),
+                "opaque_header_trailer_is_zero": not any(trailer),
+                "opaque_header_trailer_sha256": hashlib.sha256(trailer).hexdigest(),
                 "type_0x41_entries_at_indices_2_to_40": tag_41_count,
                 "type_0x41_span_rule_matches": rule_matches,
                 "palette_sized_512_count": sum(palette_sized),
@@ -109,6 +114,8 @@ def audit_fixed_slots(path, slot_bytes=DEFAULT_SLOT_BYTES):
         "duplicate_groups": duplicate_groups,
         "distinct_candidate_ram_bases": sorted(f"0x{b:08X}" for b in all_base_candidates),
         "slots_with_58_pointers": count,
+        "slots_with_zero_opaque_header_trailer": sum(s["opaque_header_trailer_is_zero"] for s in slots),
+        "zero_opaque_header_trailer_slot_indices": [s["index"] for s in slots if s["opaque_header_trailer_is_zero"]],
         "slots_with_39_type_0x41_headers": sum(
             s["type_0x41_entries_at_indices_2_to_40"] == 39 for s in slots
         ),
@@ -131,6 +138,7 @@ def audit_fixed_slots(path, slot_bytes=DEFAULT_SLOT_BYTES):
             "palette_shapes_are_candidates_not_decoded_images": True,
             "last_entry_size_is_upper_bound_only": True,
             "original_payload_bytes_emitted": False,
+            "header_trailer_is_opaque_not_a_zero_terminator": True,
         },
     }
 
