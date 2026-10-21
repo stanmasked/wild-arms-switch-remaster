@@ -249,7 +249,7 @@ int main() {
     }
 
 #if defined(WA_ARM_EXPERIMENTAL)
-    // Dedicated opt-in training scene: Switch X = ARM Fire; Minus = Reload.
+    // Dedicated opt-in scene: X=Fire, Minus=Reload, ZR=charged Burst.
     // Ordinary A/Y and D-pad still have their usual in-battle semantics.
     // Unlike B-close of an ordinary fight, ARM B-close MUST NOT persist
     // volatile training awards, ammo, or overwrite the WABJ v1 slots.
@@ -264,7 +264,8 @@ int main() {
          (held & HidNpadButton_A) != 0,
          (held & HidNpadButton_Y) != 0},
         {(held & HidNpadButton_X) != 0,
-         (held & HidNpadButton_Minus) != 0}};
+         (held & HidNpadButton_Minus) != 0,
+         (held & HidNpadButton_ZR) != 0}};
     const ArmTrainingFrame arm_frame =
         advance_arm_training_session(arm_scene,arm_input,output);
     if (arm_frame.status == ArmTrainingStatus::InvalidTarget ||
