@@ -9,7 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from audit_nexium_arm_guest import GREEN
+from audit_nexium_arm_guest import MAP_STATUS as GREEN
 from audit_nexium_field_journal import native_pixel, read_rgb
 
 # "B CLAIM EXP 8  GELLA 12" with the native 5x7 bitmap font,
