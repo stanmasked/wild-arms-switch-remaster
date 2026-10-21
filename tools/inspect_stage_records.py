@@ -39,6 +39,8 @@ def inspect_records(path, record_bytes=DEFAULT_RECORD_BYTES,
     marker_matches = 0
     ram_word0 = 0
     ram_word8 = 0
+    psx_header_like_count = 0
+    psx_text_sizes = []
     digests = set()
     with path.open("rb") as source:
         for index in range(count):
@@ -56,6 +58,19 @@ def inspect_records(path, record_bytes=DEFAULT_RECORD_BYTES,
             word0 = struct.unpack_from("<I", header, 0)[0]
             word8 = struct.unpack_from("<I", header, 8)[0]
             marker_match = header[marker_offset:marker_offset + len(marker)] == marker
+            gp = struct.unpack_from("<I", header, 4)[0]
+            text_bytes = struct.unpack_from("<I", header, 12)[0]
+            initial_stack = struct.unpack_from("<I", header, 32)[0]
+            # PS-X EXE fields normally begin at 0x10/0x18/0x1C/0x30/0x4C;
+            # candidate records show these fields at offsets 16 bytes earlier.
+            psx_header_like = (marker_match and gp == 0 and
+                0x80000000 <= word8 < 0x80200000 and
+                0 < text_bytes <= record_bytes and text_bytes % 2048 == 0 and
+                word8 <= word0 < word8 + text_bytes and word0 % 4 == 0 and
+                initial_stack == 0x801FFFF0)
+            psx_header_like_count += int(psx_header_like)
+            if psx_header_like:
+                psx_text_sizes.append(text_bytes)
             kseg0_0 = 0x80000000 <= word0 < 0x80200000
             kseg0_8 = 0x80000000 <= word8 < 0x80200000
             marker_matches += int(marker_match)
@@ -68,6 +83,7 @@ def inspect_records(path, record_bytes=DEFAULT_RECORD_BYTES,
                 "start_offset": index * record_bytes,
                 "sha256": digest,
                 "marker_match": marker_match,
+                "psx_exe_minus16_header_like": psx_header_like,
                 "word0_ps1_kseg0_2mb_like": kseg0_0,
                 "word8_ps1_kseg0_2mb_like": kseg0_8,
             })
@@ -84,12 +100,18 @@ def inspect_records(path, record_bytes=DEFAULT_RECORD_BYTES,
         "marker_exceptions": [r["index"] for r in records if not r["marker_match"]],
         "word0_ram_like_count": ram_word0,
         "word8_ram_like_count": ram_word8,
+        "psx_exe_minus16_header_like_count": psx_header_like_count,
+        "psx_exe_minus16_header_exceptions": [r["index"] for r in records if not r["psx_exe_minus16_header_like"]],
+        "psx_text_bytes_min": min(psx_text_sizes) if psx_text_sizes else None,
+        "psx_text_bytes_max": max(psx_text_sizes) if psx_text_sizes else None,
+        "psx_text_bytes_distinct": len(set(psx_text_sizes)),
         "unique_record_hash_count": len(digests),
         "records": records,
         "interpretation": {
             "status": "STRIDE_AND_MARKER_METADATA_ONLY",
             "gameplay_role_is_not_verified": True,
             "ram_like_words_are_not_proven_pointers": True,
+            "psx_header_pattern_is_not_a_verified_executable": True,
             "copyrighted_payload_emitted": False,
         },
     }
