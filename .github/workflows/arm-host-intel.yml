@@ -12,6 +12,7 @@ on:
       - 'stage-401-*'
       - 'stage-402-*'
       - 'stage-403-*'
+      - 'stage-404-*'
   pull_request:
     branches:
       - 'stage-386-*'
@@ -20,6 +21,7 @@ on:
       - 'stage-396-*'
       - 'stage-399-*'
       - 'stage-400-*'
+      - 'stage-403-*'
     paths:
       - 'include/field_battle.hpp'
       - 'include/field_battle_arm.hpp'
@@ -32,6 +34,8 @@ on:
       - 'tests/test_field_battle_arm_view.cpp'
       - 'tests/test_field_battle_arm_training.cpp'
       - 'tests/test_field_battle_arm_entry.cpp'
+      - 'include/field_arm_reward_file.hpp'
+      - 'tests/test_field_arm_reward_file.cpp'
       - 'CMakeLists.txt'
       - '.github/workflows/arm-host-intel.yml'
   workflow_dispatch:
@@ -52,36 +56,38 @@ jobs:
           cmake --version
       - name: Configure normal ARM C++ build
         run: cmake -S . -B build-arm -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++
-      - name: Build all five independent ARM test executables
+      - name: Build all six independent ARM test executables
         run: |
           cmake --build build-arm --parallel 3 --target \
             wa_field_battle_arm_tests \
             wa_field_battle_arm_controller_tests \
             wa_field_battle_arm_view_tests \
             wa_field_battle_arm_training_tests \
-            wa_field_battle_arm_entry_tests
+            wa_field_battle_arm_entry_tests \
+            wa_field_arm_reward_file_tests
       - name: Run real native ARM combat/control/HUD CTests
-        run: ctest --test-dir build-arm -R '^wa_field_battle_arm(_controller|_view|_training|_entry)?_tests$' --output-on-failure -V
+        run: ctest --test-dir build-arm -R '^(wa_field_battle_arm(_controller|_view|_training|_entry)?_tests|wa_field_arm_reward_file_tests)$' --output-on-failure -V
       - name: Configure address and undefined-behavior instrumentation
         run: |
           cmake -S . -B build-arm-sanitized \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_CXX_COMPILER=clang++ \
             '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer'
-      - name: Compile sanitizers for all five ARM test executables
+      - name: Compile sanitizers for all six ARM test executables
         run: |
           cmake --build build-arm-sanitized --parallel 3 --target \
             wa_field_battle_arm_tests \
             wa_field_battle_arm_controller_tests \
             wa_field_battle_arm_view_tests \
             wa_field_battle_arm_training_tests \
-            wa_field_battle_arm_entry_tests
+            wa_field_battle_arm_entry_tests \
+            wa_field_arm_reward_file_tests
       - name: Run ARM CTests under ASan and UBSan
         env:
           ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
-        run: ctest --test-dir build-arm-sanitized -R '^wa_field_battle_arm(_controller|_view|_training|_entry)?_tests$' --output-on-failure -V
+        run: ctest --test-dir build-arm-sanitized -R '^(wa_field_battle_arm(_controller|_view|_training|_entry)?_tests|wa_field_arm_reward_file_tests)$' --output-on-failure -V
       - name: Report scope
         run: |
-          echo 'Intel Mac: 5 native ARM CTests (normal + ASan/UBSan).' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Intel Mac: 6 native ARM/reward CTests (normal + ASan/UBSan).' >> "$GITHUB_STEP_SUMMARY"
           echo 'Experimental ROM-free host code only; does not exercise NeXium or Switch SDMC.' >> "$GITHUB_STEP_SUMMARY"

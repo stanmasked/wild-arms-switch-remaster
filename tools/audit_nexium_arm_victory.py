@@ -15,6 +15,7 @@ from audit_nexium_arm_guest import (
 )
 from audit_nexium_arm_cold_boot import valid_terminated
 from audit_nexium_field_journal import native_pixel, read_rgb
+from audit_nexium_arm_reward_persistence import decode_reward_journal
 
 GREEN=MAP_STATUS
 
@@ -84,6 +85,16 @@ def audit_victory(shots,original_shots,processes_path,
     directory=battle_slots(victory_root)[0].parent
     mounted=directory.is_dir() and not directory.is_symlink()
     files=list(directory.iterdir()) if mounted else []
+    names={path.name for path in files}
+    try:
+        reward_record=decode_reward_journal(directory/"arm-rewards.a")
+        valid_reward_journal=(
+            reward_record["generation"]==1 and
+            reward_record["experience"]==8 and
+            reward_record["gella"]==12
+        )
+    except (OSError,ValueError):
+        valid_reward_journal=False
     checks={
         "four_independent_real_nexium_guest_processes":
             all(type(pid) is int and pid>0 for pid in pids)
@@ -126,11 +137,11 @@ def audit_victory(shots,original_shots,processes_path,
             balance_pixels(reenter_again)
             and native_pixel(reenter_again,*ARM_FULL_BAR)==GOLD
             and native_pixel(reenter_again,*FOE_0)==RED,
-        "fourth_guest_sdmc_never_creates_any_save_or_temp":
-            mounted and not files,
+        "fourth_guest_sdmc_contains_only_valid_arm_reward_journal":
+            mounted and names=={"arm-rewards.a"} and valid_reward_journal,
     }
     result={
-        "kind":"stage401_real_fourth_nexium_guest_burst_victory_rewards",
+        "kind":"stage404_real_fourth_nexium_guest_burst_victory_rewards",
         "checks":checks,
         "all_checks_passed":all(checks.values()),
         "sha256":{name:hashlib.sha256((shots/(name+".png")).read_bytes()).hexdigest()
@@ -147,7 +158,7 @@ def audit_victory(shots,original_shots,processes_path,
             "expected_dark":list(DARK),
             "expected_green":list(GREEN),
         },
-        "scope":"synthetic_rom_free_volatile_arm_rewards_no_user_files",
+        "scope":"synthetic_rom_free_separate_arm_reward_journal_no_wafs_or_wabj",
     }
     report=Path(report)
     report.parent.mkdir(parents=True,exist_ok=True)

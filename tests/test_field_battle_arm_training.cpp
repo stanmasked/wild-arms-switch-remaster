@@ -152,6 +152,27 @@ void victory_award_once_on_close_without_persistence_or_pixels() {
   assert(session.history.victories==1 && session.rewards.gella==12);
 }
 
+void cold_boot_rewards_render_without_volatile_battle_history() {
+  ArmTrainingSession session{};
+  session.rewards={8,12}; // Loaded from the separate WAER journal at boot.
+  Frame f;
+  launch(session,f);
+  assert(session.history.victories==0); // Process-local history starts empty.
+  // Verify distinctive top-row pixels in EXP 8  GELLA 12.
+  assert(f.at(72,667)==kBattleGreen);   // E
+  assert(f.at(124,667)==kBattleGreen);  // 8, not 1
+  assert(f.at(163,667)==kBattleGreen);  // G
+  assert(f.at(241,667)!=kBattleGreen);  // first digit is 1, not 2
+  assert(f.at(254,667)==kBattleGreen);  // second digit is 2, not 4
+  session.reward_storage_warning=true;
+  session.history.victories=1;
+  session.history.last=BattleResolution::Victory;
+  neutral(session,f);
+  assert(f.at(72,623)==kBattleRed);     // visible storage warning
+  assert(f.at(70,687)==kBattleGold);    // previous-result line remains intact
+  f.padding_unchanged();
+}
+
 void retreat_has_no_payout_and_does_not_change_backing_frame() {
   ArmTrainingSession session{};Frame f;launch(session,f);
   const auto before=f.data;
@@ -506,6 +527,7 @@ int main() {
   held_open_fire_and_consecutive_turn_actions();
   mixed_arm_and_normal_input_never_produces_late_attack();
   victory_award_once_on_close_without_persistence_or_pixels();
+  cold_boot_rewards_render_without_volatile_battle_history();
   retreat_has_no_payout_and_does_not_change_backing_frame();
   damaged_target_and_magazine_never_consume_input_or_write();
   zr_burst_real_session_turn_then_insufficient_ammo_refusal();

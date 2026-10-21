@@ -12,6 +12,7 @@
 #include "field_battle_arm_entry.hpp"
 #if defined(WA_ARM_EXPERIMENTAL)
 #include "field_battle_arm_training.hpp"
+#include "field_arm_reward_file.hpp"
 #endif
 #include "field_encounters.hpp"
 #include "field_save_file.hpp"
@@ -40,6 +41,10 @@ constexpr const char* kSaveBase =
 // Distinct journal namespace; never share a slot with field exploration.
 constexpr const char* kBattleSaveBase =
     "sdmc:/switch/wild_arms_field/battle-progress";
+#if defined(WA_ARM_EXPERIMENTAL)
+constexpr const char* kArmRewardSaveBase =
+    "sdmc:/switch/wild_arms_field/arm-rewards";
+#endif
 
 [[nodiscard]] bool ensure_directory(const char* path) noexcept {
   if (::mkdir(path, 0777) == 0) return true;
@@ -113,8 +118,21 @@ int main() {
   FieldBattleSession battle_scene{};
 #if defined(WA_ARM_EXPERIMENTAL)
   // Experimental ARM mode is compiled ONLY with WA_ARM_EXPERIMENTAL=1.
-  // It is volatile and never uses the game's on-disk WABJ v1 journal.
+  // Battle state is session-local; rewards use a separate WAER v1 journal, never WABJ.
   ArmTrainingSession arm_scene{};
+  arm_scene.reward_storage_warning = !storage_ready;
+  if (storage_ready) {
+    BattleRewardAccount restored_rewards{};
+    const auto loaded_rewards =
+        load_arm_reward_file(kArmRewardSaveBase,restored_rewards);
+    if (loaded_rewards.status==ArmRewardJournalStatus::Loaded) {
+      arm_scene.rewards=restored_rewards;
+      arm_scene.reward_storage_warning=loaded_rewards.degraded;
+    } else if (loaded_rewards.status!=ArmRewardJournalStatus::Missing) {
+      // Never replace two invalid reward slots with a silent zero balance.
+      arm_scene.reward_storage_warning=true;
+    }
+  }
 #endif
   bool battle_journal_corrupt = false;
   // Recover only a fully validated independent battle-progress journal.
@@ -251,8 +269,8 @@ int main() {
 #if defined(WA_ARM_EXPERIMENTAL)
     // Dedicated opt-in scene: X=Fire, Minus=Reload, ZR=charged Burst.
     // Ordinary A/Y and D-pad still have their usual in-battle semantics.
-    // Unlike B-close of an ordinary fight, ARM B-close MUST NOT persist
-    // volatile training awards, ammo, or overwrite the WABJ v1 slots.
+    // ARM rewards use only the separate WAER v1 journal; ammo and battle
+    // history remain volatile. Never overwrite the ordinary WABJ v1 slots.
     const ArmTrainingInput arm_input{
         open_arm,
         arm_scene.active && (pressed & HidNpadButton_B) != 0,
@@ -273,6 +291,31 @@ int main() {
         arm_frame.status == ArmTrainingStatus::InvalidController) {
       framebufferEnd(&fb);
       break;
+    }
+#endif
+
+#if defined(WA_ARM_EXPERIMENTAL)
+    // The ARM prototype owns a distinct WAER journal. It never writes the
+    // ordinary WABJ battle-progress or WAFS exploration save slots.
+    if (arm_frame.exited &&
+        arm_frame.resolution==BattleResolution::Victory) {
+      if (storage_ready) {
+        const auto saved=store_arm_reward_file(
+            arm_scene.rewards,kArmRewardSaveBase);
+        arm_scene.reward_storage_warning =
+            saved!=ArmRewardJournalStatus::Stored;
+        char trace[128]{};
+        const int length=std::snprintf(
+            trace,sizeof(trace),
+            "WA_ARM_REWARDS v1 result=%d exp=%u gella=%u",
+            static_cast<int>(saved),
+            static_cast<unsigned>(arm_scene.rewards.experience),
+            static_cast<unsigned>(arm_scene.rewards.gella));
+        if (length>0 && length<static_cast<int>(sizeof(trace)))
+          (void)svcOutputDebugString(trace,static_cast<std::size_t>(length));
+      } else {
+        arm_scene.reward_storage_warning=true;
+      }
     }
 #endif
 

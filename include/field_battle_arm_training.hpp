@@ -1,6 +1,6 @@
 #pragma once
-// Stage401: optional ARM battle session shared by host and gated Switch.
-// Volatile outcomes only: never writes WABJ v1 or field save slots.
+// Stage401/404: opt-in ARM battle session shared by host and gated Switch.
+// Battle history/ammo stay volatile; the reward account uses a separate WAER journal.
 #include "field_battle_arm_controller.hpp"
 #include "field_battle_arm_view.hpp"
 #include "field_battle_rewards.hpp"
@@ -18,8 +18,10 @@ struct ArmTrainingSession {
   ArmEdgeState arm_edges{};
   BattleHistory history{};
   BattleRewardAccount rewards{};
-  // ROM-free in-memory balancing, never part of WABJ or SDMC.
+  // ROM-free balancing offer. The updated account is serialized separately.
   BattleRewardPayout victory_offer{kPrototypeVictoryExp,kPrototypeVictoryGella};
+  // Visible warning if the separate WAER journal is unavailable or degraded.
+  bool reward_storage_warning=false;
   bool active=false;
 };
 
@@ -54,7 +56,7 @@ struct ArmTrainingFrame {
 }
 
 // A complete, independent training screen connecting ARM rules, input,
-// pixel HUD, and VOLATILE battle outcomes. No disk I/O, no libnx mapping.
+// pixel HUD, and session-local battle outcomes. Storage stays in main.cpp; no libnx mapping.
 // Frame errors never commit state or draw partial pixels. Closing renders
 // nothing and awards synthetic EXP/Gella once, only after a real victory.
 [[nodiscard]] inline ArmTrainingFrame advance_arm_training_session(
@@ -158,13 +160,15 @@ struct ArmTrainingFrame {
   // placeholder rewards on the next ARM entry. No WABJ interaction.
   // This is between the ordinary input hint and previous result line,
   // completely outside the ARM ammunition panel.
-  if (next.history.victories > 0) {
+  if (next.rewards.experience > 0 || next.rewards.gella > 0) {
     char balance[64]{};
     (void)std::snprintf(balance,sizeof(balance),"EXP %u  GELLA %u",
         static_cast<unsigned>(next.rewards.experience),
         static_cast<unsigned>(next.rewards.gella));
     battle_text(target,70,667,balance,kBattleGreen);
   }
+  if (next.reward_storage_warning)
+    battle_text(target,70,623,"REWARD SAVE WARNING",kBattleRed);
 
   next.active=true;
   current=next;

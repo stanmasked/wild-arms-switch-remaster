@@ -15,6 +15,7 @@ on:
       - 'stage-400-*'
       - 'stage-401-*'
       - 'stage-402-*'
+      - 'stage-404-*'
   pull_request:
     paths:
       - '.github/workflows/arm-nexium-guest.yml'
@@ -32,6 +33,9 @@ on:
       - 'tools/test_audit_nexium_arm_victory.py'
       - 'tools/audit_nexium_arm_claim.py'
       - 'tools/test_audit_nexium_arm_claim.py'
+      - 'tools/audit_nexium_arm_reward_persistence.py'
+      - 'tools/test_audit_nexium_arm_reward_persistence.py'
+      - 'include/field_arm_reward_file.hpp'
       - 'switch/source/main.cpp'
       - 'switch/Makefile'
       - 'include/field_battle_arm*.hpp'
@@ -94,10 +98,12 @@ jobs:
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_readiness.py' -v
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_victory.py' -v
           /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_claim.py' -v
+          /usr/bin/python3 -m py_compile tools/audit_nexium_arm_reward_persistence.py
+          /usr/bin/python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_reward_persistence.py' -v
       - name: Fetch exact SHA-256 verified official NeXium Linux binary
         run: |
           set -euo pipefail
-          mkdir -p nexium-dist arm-guest/screenshots arm-guest/coldboot arm-guest/burst arm-guest/victory
+          mkdir -p nexium-dist arm-guest/screenshots arm-guest/coldboot arm-guest/burst arm-guest/victory arm-guest/reward-persistence
           curl -fL --retry 3 --connect-timeout 20 --max-time 240 \
             "$NEXIUM_URL" -o nexium-dist/nexium.tar.gz
           echo "$NEXIUM_ARCHIVE_SHA256  nexium-dist/nexium.tar.gz" | sha256sum -c -
@@ -137,11 +143,15 @@ jobs:
             label="$1"
             root_key="${2:-$label}"
             export NEXIUM_DATA_ROOT="$RUNNER_TEMP/wa-arm-$root_key"
-            # Prepare only the otherwise absent empty game directory.
-            # A mounted/empty ARM directory is a required guest-audit
-            # invariant, not an accidental false-negative on first boot.
+            # Fresh roots must be empty; explicit reuse is reserved for
+            # Stage404's cold-boot test with an existing reward journal.
             mkdir -p "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field"
-            test -z "$(find "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field" -mindepth 1 -print -quit)"
+            if test "${3:-fresh}" = fresh; then
+              test -z "$(find "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field" -mindepth 1 -print -quit)"
+            else
+              test "${3:-fresh}" = reuse
+              test -d "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field"
+            fi
             # Direct PID: no timeout wrapper may masquerade as a guest.
             # GitHub's timeout-minutes bounds this entire capture step.
             ./nexium-dist/NeXium/nexium \
@@ -327,9 +337,9 @@ jobs:
                           "armrestart_wait_completed":True},
                          sort_keys=True)+"\n")
           '
-          # FOURTH independent asset-free NeXium guest. Actually win
-          # with two charged Bursts, take the B payout once, reopen and
-          # show volatile EXP/Gella without touching any WABJ slots.
+          # FOURTH independent asset-free NeXium guest. Win with two charged
+          # Bursts, claim once, and verify the in-session reward display.
+          # Only the separate WAER journal persists this prototype balance.
           launch victory
           import -display :99 -window root \
             arm-guest/victory/14_victory_field.png
@@ -355,7 +365,7 @@ jobs:
           press t  # Hero 0 ZR Burst: 13 HP remaining foe down.
           import -display :99 -window root \
             arm-guest/victory/19_victory_banner.png
-          press x  # B closes a real Victory: +8 EXP +12 Gella in RAM.
+          press x  # B claims +8 EXP +12 Gella into the separate WAER journal.
           import -display :99 -window root \
             arm-guest/victory/20_victory_return.png
           xdotool keydown --clearmodifiers r
@@ -385,6 +395,43 @@ jobs:
                           "victory_force_killed":os.environ["VICTORY_FORCE_KILLED"]=="true",
                           "victory_wait_completed":True},
                          sort_keys=True)+"\n")
+          '
+          # Stage404: a fresh fifth guest must read the first guest's reward.
+          REWARD_ROOT="$RUNNER_TEMP/wa-arm-victory/sdmc/switch/wild_arms_field"
+          test -f "$REWARD_ROOT/arm-rewards.a"
+          test ! -e "$REWARD_ROOT/arm-rewards.b"
+          cp "$REWARD_ROOT/arm-rewards.a" arm-guest/reward-persistence/first-arm-rewards.a
+          launch victoryrestart victory reuse
+          import -display :99 -window root arm-guest/reward-persistence/00_coldboot_field.png
+          xdotool keydown --clearmodifiers r
+          sleep 0.16
+          press e
+          xdotool keyup r
+          sleep 0.38
+          import -display :99 -window root arm-guest/reward-persistence/01_coldboot_reward_balance.png
+          stop_guest
+          cp "$REWARD_ROOT/arm-rewards.a" arm-guest/reward-persistence/after-restart-arm-rewards.a
+          test ! -e "$REWARD_ROOT/arm-rewards.b"
+          test ! -e "$REWARD_ROOT/field-save.a"
+          test ! -e "$REWARD_ROOT/field-save.b"
+          test ! -e "$REWARD_ROOT/battle-progress.a"
+          test ! -e "$REWARD_ROOT/battle-progress.b"
+          FIRST_PID="$victory_pid" SECOND_PID="$victoryrestart_pid" \
+          FIRST_WAIT="$victory_wait_status" SECOND_WAIT="$victoryrestart_wait_status" \
+          FIRST_ROOT="$RUNNER_TEMP/wa-arm-victory" SECOND_ROOT="$RUNNER_TEMP/wa-arm-victory" \
+          python3 -c '
+          import json,os
+          from pathlib import Path
+          Path("arm-guest/reward-persistence/processes.json").write_text(
+              json.dumps({
+                  "first_pid":int(os.environ["FIRST_PID"]),
+                  "second_pid":int(os.environ["SECOND_PID"]),
+                  "first_wait_completed":True,"second_wait_completed":True,
+                  "first_wait_status":int(os.environ["FIRST_WAIT"]),
+                  "second_wait_status":int(os.environ["SECOND_WAIT"]),
+                  "first_root":os.environ["FIRST_ROOT"],
+                  "second_root":os.environ["SECOND_ROOT"]},
+                  sort_keys=True)+"\n",encoding="utf-8")
           '
       - name: Strict pixel, guest process and isolated save-file audit
         run: |
@@ -423,7 +470,7 @@ jobs:
             --cold-shots arm-guest/coldboot \
             --burst-shots arm-guest/burst \
             --report arm-guest/arm-readiness-audit.json
-      - name: Audit real fourth NeXium guest victory and volatile EXP/Gella
+      - name: Audit real fourth NeXium guest victory and WAER EXP/Gella
         run: |
           /usr/bin/python3 tools/audit_nexium_arm_victory.py \
             --shots arm-guest/victory \
@@ -439,6 +486,15 @@ jobs:
             --ordinary-shots arm-guest/screenshots \
             --victory-shots arm-guest/victory \
             --report arm-guest/victory-claim-audit.json
+      - name: Audit ARM reward journal across a distinct NeXium cold boot
+        run: |
+          /usr/bin/python3 tools/audit_nexium_arm_reward_persistence.py \
+            --screenshots arm-guest/reward-persistence \
+            --first-journal arm-guest/reward-persistence/first-arm-rewards.a \
+            --after-restart-journal arm-guest/reward-persistence/after-restart-arm-rewards.a \
+            --processes arm-guest/reward-persistence/processes.json \
+            --data-root "$RUNNER_TEMP/wa-arm-victory" \
+            --report arm-guest/reward-persistence/audit.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
