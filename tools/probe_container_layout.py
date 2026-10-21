@@ -133,7 +133,8 @@ def probe(image_path, inventory_path, paths=None, sample_bytes=4096):
                 continue
 
             sample = b"".join(chunks)[:wanted]
-            nonzero = [offset for offset, value in enumerate(sample) if value]
+            first_nonzero = next(
+                (offset for offset, value in enumerate(sample) if value), None)
             output.append({
                 "path": "/" + path,
                 "extent_lba": lba,
@@ -145,7 +146,7 @@ def probe(image_path, inventory_path, paths=None, sample_bytes=4096):
                 "sample_sha256": hashlib.sha256(sample).hexdigest(),
                 "entropy_bits_per_byte": round(_entropy(sample), 6),
                 "zero_byte_fraction": round(sample.count(0) / len(sample), 6),
-                "first_nonzero_offset": nonzero[0] if nonzero else None,
+                "first_nonzero_offset": first_nonzero,
                 "word_summary": _word_summary(sample, size),
             })
 
