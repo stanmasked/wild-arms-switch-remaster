@@ -93,6 +93,45 @@ record, synthetic script pointers and a tiny synthetic PS-X-EXE name
 table. No PlayStation ROM, executable, art, dialogue, save or music is
 contained in the repository or CI.
 
+## Major additional verification: genuine LZSS in map graphics
+
+The already reference-verified WA1 LZSS codec from Stage420 is also usable
+on **bounded candidate map-graphics subregions**, whose first four bytes
+declare either `0x8000` (32 KiB) or `0x10000` (64 KiB) of uncompressed
+content. Every candidate is required to terminate before its *next*
+map-graphics pointer, with only 0–3 alignment bytes left.
+
+The user-owned original 127 ordinary map blocks yielded:
+
+| Independent original-file audit | Count |
+| --- | ---: |
+| Candidate next-pointer-bounded regions with these two length headers | **1,068** |
+| Valid, full 32 KiB decompress + exact bounded endpoint | **556** |
+| Valid, full 64 KiB decompress + exact bounded endpoint | **503** |
+| Total valid compressed bounded sections | **1,059 / 1,068** |
+| Header-like but unverified candidates | **9** |
+| Real map blocks with at least one valid compressed section | **127 / 127** |
+| Valid bounded sections in first target Surf Village (map #2) | **7** |
+
+All nine rejected candidates are at **graphics region #0**, with a
+coincidentally matching 64 KiB-looking u32 prefix. They run out of
+encoded bytes early. This does **not** prove that an actual original
+graphics stream is damaged. It is a reminder that a *matching length
+prefix alone is insufficient to classify an arbitrary data region*.
+
+The scanner deliberately excludes the final graphics subregion in every
+map, because without a following pointer we do not know its actual end.
+It also excludes special map #25.
+
+`tools/audit_cdstg_map_lzss.py` performs that strict check using the
+Stage420 LZSS code and prints only hashes, bounds and classified
+exceptions. No decompressed data or copied game assets appear in output.
+All public decoder tests use **synthetic 32/64 KiB LZSS test fixtures**.
+
+This independently proves that Surf Village includes authentic
+decompressible original graphics, **but it does NOT establish pixel
+packing, palette layout, 2D tile placement or a rendered screen.**
+
 ## Why Surf Village is the first practical target
 
 Map #2 is **Surf Village** (from the actual original map name table).
