@@ -40,9 +40,11 @@ def fixtures(directory):
 
 
 def audit(cue_path, extracted_path, **options):
-    return audit_private_cdstg_disc_source(
-        cue_path, extracted_path, expected_extracted_bytes=len(BYTES),
-        expected_banks=1, expected_streams=1, **options)
+    # Allow negative tests to override defaults without duplicate kwargs.
+    kwargs = {"expected_extracted_bytes": len(BYTES),
+              "expected_banks": 1, "expected_streams": 1}
+    kwargs.update(options)
+    return audit_private_cdstg_disc_source(cue_path, extracted_path, **kwargs)
 
 
 class Stage436CrossSourceTests(unittest.TestCase):
