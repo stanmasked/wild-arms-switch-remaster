@@ -1,6 +1,6 @@
 #pragma once
-// Stage370: explicit, read-only warning for two invalid battle journal slots.
-// Only rendered while the player chooses the ZL battle-history overlay.
+// Stage370: explicit, read-only warning for two invalid progress-journal slots.
+// Only rendered while the player chooses the ZL history overlay.
 #include "field_battle_file.hpp"
 #include "field_battle_view.hpp"
 
@@ -8,7 +8,7 @@ namespace wa::field {
 
 // Do not confuse a genuinely missing first-run journal, a single valid
 // fallback, or inaccessible SD storage with two CRC-invalid committed slots.
-[[nodiscard]] constexpr bool battle_journal_needs_warning(
+[[nodiscard]] constexpr bool progress_journal_needs_warning(
     BattleJournalStatus status) noexcept {
   return status == BattleJournalStatus::Corrupt;
 }
@@ -21,7 +21,7 @@ constexpr int kBattleSaveWarningH = 55;
 // No acknowledgment action, state mutation or SD write. The warning is
 // deliberately above the preexisting result/reward panel (starts y=612).
 // The normal exploration framebuffer remains pixel-exact when ZL is idle.
-[[nodiscard]] inline bool draw_battle_journal_warning(
+[[nodiscard]] inline bool draw_progress_journal_warning(
     const PixelTarget& target, bool invalid_both_slots) noexcept {
   if (!invalid_both_slots) return false;
   if (target.pixels == nullptr || target.width != kRasterWidth ||
@@ -33,7 +33,7 @@ constexpr int kBattleSaveWarningH = 55;
   battle_outline(target, kBattleSaveWarningX, kBattleSaveWarningY,
                  kBattleSaveWarningW, kBattleSaveWarningH, kBattleRed);
   battle_text(target, kBattleSaveWarningX + 21, kBattleSaveWarningY + 11,
-              "BATTLE SD INVALID", kBattleWhite);
+              "SAVE JOURNAL INVALID", kBattleWhite);
   battle_text(target, kBattleSaveWarningX + 21, kBattleSaveWarningY + 31,
               "NO AUTOSAVE - KEEP FILES", kBattleRed);
   return true;
