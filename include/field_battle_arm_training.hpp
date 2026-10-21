@@ -168,7 +168,7 @@ struct ArmTrainingFrame {
     battle_text(target,70,667,balance,kBattleGreen);
   }
   if (next.reward_storage_warning)
-    battle_text(target,70,694,"REWARD SAVE WARNING",kBattleRed);
+    battle_text(target,70,623,"REWARD SAVE WARNING",kBattleRed);
 
   next.active=true;
   current=next;
