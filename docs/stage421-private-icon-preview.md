@@ -114,6 +114,14 @@ embedded map-graphics region beginning at **offset 0x15000** within
 those map blocks. The map-related PS1 memory address is
 `0x8014F000`, distinct from CDFLR's tentative buffer `0x80183000`.
 
+A separate private metadata-only check against the user's original
+`CDSTG.BIN` confirms **76,021,760 bytes = 128 × 593,920**, with **no
+trailing remainder**. The fixed slices at `0x15000..0x91000` each
+have a distinct full-slice SHA-256 digest (**128 of 128 unique**);
+this is byte-level variation, not proof of 128 unique visual locations.
+In the authentic original, block #25 has an atypical header and stays
+explicitly unclassified/dummied-out, consistent with WA1Tools.
+
 Thus the path to an authentic *field scene* is to investigate the actual
 **CDSTG map graphics + layout** from this separately documented format,
 rather than incorrectly calling the CDFLR battle-icon sheets a map.
