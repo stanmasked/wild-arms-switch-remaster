@@ -165,8 +165,11 @@ void cold_boot_rewards_render_without_volatile_battle_history() {
   assert(f.at(241,667)!=kBattleGreen);  // first digit is 1, not 2
   assert(f.at(254,667)==kBattleGreen);  // second digit is 2, not 4
   session.reward_storage_warning=true;
+  session.history.victories=1;
+  session.history.last=BattleResolution::Victory;
   neutral(session,f);
-  assert(f.at(72,694)==kBattleRed);     // visible storage warning
+  assert(f.at(72,623)==kBattleRed);     // visible storage warning
+  assert(f.at(70,687)==kBattleGold);    // previous-result line remains intact
   f.padding_unchanged();
 }
 
