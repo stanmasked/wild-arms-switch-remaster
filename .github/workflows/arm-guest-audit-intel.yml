@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'stage-390-*'
+      - 'stage-392-*'
   pull_request:
     paths:
       - '.github/workflows/arm-guest-audit-intel.yml'
@@ -35,7 +36,7 @@ jobs:
         run: |
           python3 -m py_compile tools/audit_nexium_arm_guest.py
           python3 -m py_compile tools/test_audit_nexium_arm_guest.py
-      - name: Run nine synthetic positive/negative auditor regressions
+      - name: Run thirteen synthetic positive/negative auditor regressions
         run: |
           python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_guest.py' -v
       - name: Record explicitly synthetic boundary

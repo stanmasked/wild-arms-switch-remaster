@@ -33,7 +33,8 @@ def fixture(root):
     process.write_text(json.dumps({
         "baseline_pid":1001,"arm_pid":1002,
         "baseline_wait_completed":True,"arm_wait_completed":True,
-        "baseline_wait_status":143,"arm_wait_status":143}))
+        "baseline_wait_status":143,"arm_wait_status":143,
+        "baseline_force_killed":False,"arm_force_killed":False}))
 
     field=Image.new("RGB",SCREEN_SIZE,DARK)
     put(field,(0,5),MAP_STATUS)
@@ -67,7 +68,7 @@ class StrictArmGuestAuditorTests(unittest.TestCase):
             a=fixture(temp)
             result=audit_arm_guests(*a)
             self.assertTrue(result["all_checks_passed"],result["checks"])
-            self.assertEqual(len(result["checks"]),10)
+            self.assertEqual(len(result["checks"]),12)
             self.assertEqual(len(result["sha256"]),8)
 
     def test_fake_repeat_shot_is_rejected_by_pixel_parity(self):
@@ -114,6 +115,43 @@ class StrictArmGuestAuditorTests(unittest.TestCase):
             result=audit_arm_guests(*a)
             self.assertFalse(result["checks"]["arm_training_never_created_wabj_slots"])
 
+    def test_arm_minus_reload_never_creates_field_save_or_temp(self):
+        # Fail on both completed exploration journals and their temporary
+        # files. Minus has a different purpose outside the ARM screen.
+        for filename in ("field-save.a", "field-save.b", "field-save.tmp"):
+            with self.subTest(filename=filename):
+                with tempfile.TemporaryDirectory() as temp:
+                    args = fixture(temp)
+                    leaking = (args[2] / "sdmc/switch/wild_arms_field"
+                               / filename)
+                    leaking.write_bytes(b"unexpected experimental write")
+                    result = audit_arm_guests(*args)
+                    self.assertFalse(result["all_checks_passed"])
+                    self.assertFalse(result["checks"][
+                        "arm_reload_never_touched_field_save_slots"])
+                    self.assertFalse(result["checks"][
+                        "isolated_arm_sdmc_is_mounted_and_completely_unwritten"])
+
+    def test_missing_or_otherwise_dirty_arm_sdmc_is_not_clean_proof(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args = fixture(temp)
+            arm_dir = args[2] / "sdmc/switch/wild_arms_field"
+            arm_dir.rmdir()
+            result = audit_arm_guests(*args)
+            self.assertFalse(result["checks"][
+                "isolated_arm_sdmc_is_mounted_and_completely_unwritten"])
+            self.assertFalse(result["checks"][
+                "arm_training_never_created_wabj_slots"])
+        with tempfile.TemporaryDirectory() as temp:
+            args = fixture(temp)
+            (args[2] / "sdmc/switch/wild_arms_field" /
+             "unrecognized-recovery.tmp").write_bytes(b"dirty namespace")
+            result = audit_arm_guests(*args)
+            self.assertFalse(result["checks"][
+                "isolated_arm_sdmc_is_mounted_and_completely_unwritten"])
+            self.assertTrue(result["checks"][
+                "arm_reload_never_touched_field_save_slots"])
+
     def test_corrupted_baseline_wabj_is_not_valid_positive_control(self):
         with tempfile.TemporaryDirectory() as temp:
             a=fixture(temp)
@@ -143,12 +181,43 @@ class StrictArmGuestAuditorTests(unittest.TestCase):
             result = audit_arm_guests(*args)
             self.assertFalse(result["checks"]["two_independent_guest_processes"])
 
+    def test_supervised_sigkill_exit_137_needs_explicit_evidence(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args = fixture(temp)
+            evidence = json.loads(args[3].read_text())
+            evidence["baseline_wait_status"] = 137
+            args[3].write_text(json.dumps(evidence))
+            result = audit_arm_guests(*args)
+            self.assertFalse(result["checks"]["two_independent_guest_processes"])
+            evidence["baseline_force_killed"] = True
+            args[3].write_text(json.dumps(evidence))
+            result = audit_arm_guests(*args)
+            self.assertTrue(result["checks"]["two_independent_guest_processes"])
+            evidence["baseline_wait_status"] = 143
+            args[3].write_text(json.dumps(evidence))
+            result = audit_arm_guests(*args)
+            self.assertFalse(result["checks"]["two_independent_guest_processes"])
+
+    def test_supervised_arm_sigkill_needs_matching_exit(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args = fixture(temp)
+            evidence = json.loads(args[3].read_text())
+            evidence["arm_force_killed"] = True
+            args[3].write_text(json.dumps(evidence))
+            self.assertFalse(audit_arm_guests(*args)["checks"][
+                "two_independent_guest_processes"])
+            evidence["arm_wait_status"] = 137
+            args[3].write_text(json.dumps(evidence))
+            self.assertTrue(audit_arm_guests(*args)["checks"][
+                "two_independent_guest_processes"])
+
     def test_process_identity_is_checked(self):
         with tempfile.TemporaryDirectory() as temp:
             a=fixture(temp)
             same={"baseline_pid":1001,"arm_pid":1001,
                   "baseline_wait_completed":True,"arm_wait_completed":True,
-                  "baseline_wait_status":143,"arm_wait_status":143}
+                  "baseline_wait_status":143,"arm_wait_status":143,
+                  "baseline_force_killed":False,"arm_force_killed":False}
             a[3].write_text(json.dumps(same))
             result=audit_arm_guests(*a)
             self.assertFalse(result["checks"]["two_independent_guest_processes"])

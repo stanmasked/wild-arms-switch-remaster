@@ -9,6 +9,7 @@
 #include "field_frame_ticks.hpp"
 #include "field_runtime.hpp"
 #include "field_battle_session.hpp"
+#include "field_battle_arm_entry.hpp"
 #if defined(WA_ARM_EXPERIMENTAL)
 #include "field_battle_arm_training.hpp"
 #endif
@@ -138,32 +139,28 @@ int main() {
     const u64 pressed = padGetButtonsDown(&pad);
     const u64 held = padGetButtons(&pad);
     if (pressed & HidNpadButton_Plus) break;
-    // Regular R opens the previously validated battle, unchanged.
-    // The experiment is gated TWICE: build flag plus held ZL + fresh R.
-    // No experimental mode can open during autoplay or another battle.
+    // Pure, unit-tested route: plain R always enters the old battle;
+    // opt-in ZL+R is possible only with the explicit build flag.
+    const ArmEntryChoice arm_route=select_arm_battle_entry(
 #if defined(WA_ARM_EXPERIMENTAL)
-    const bool open_arm =
-        (pressed & HidNpadButton_R) != 0 &&
-        (held & HidNpadButton_ZL) != 0 && !runtime.autoplay &&
-        !battle_scene.active && !arm_scene.active;
+        true,
 #else
-    const bool open_arm = false;
+        false,
 #endif
-    const bool open_battle =
-        (pressed & HidNpadButton_R) != 0 && !runtime.autoplay &&
-        !open_arm
+        (pressed & HidNpadButton_R) != 0,
+        (held & HidNpadButton_ZL) != 0,
+        runtime.autoplay,
+        battle_scene.active,
 #if defined(WA_ARM_EXPERIMENTAL)
-        && !arm_scene.active
+        arm_scene.active
+#else
+        false
 #endif
-        ;
-    // Both overlays own input: field quicksaves, triggers and walking
-    // receive the same neutral sample as an ordinary active battle.
-    const bool battle_owns_input =
-        battle_scene.active || open_battle || open_arm
-#if defined(WA_ARM_EXPERIMENTAL)
-        || arm_scene.active
-#endif
-        ;
+        );
+    const bool open_arm=arm_route.open_arm;
+    const bool open_battle=arm_route.open_regular;
+    // Neither training UI can leak presses into the field save runtime.
+    const bool battle_owns_input=arm_route.battle_owns_input;
 
     u32 stride_bytes = 0;
     u32* pixels = static_cast<u32*>(framebufferBegin(&fb, &stride_bytes));
