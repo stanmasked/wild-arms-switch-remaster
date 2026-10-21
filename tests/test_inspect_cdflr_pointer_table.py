@@ -41,6 +41,33 @@ class CDFLRPointerTableTests(unittest.TestCase):
         self.assertEqual(report["source_sha256"], hashlib.sha256(data).hexdigest())
         self.assertFalse(report["interpretation"]["payload_bytes_emitted"])
 
+    def test_optional_native_exe_literal_correspondence(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            resource = folder / "CDFLR.BIN"
+            resource.write_bytes(image())
+            exe = bytearray(0x900)
+            exe[:8] = b"PS-X EXE"
+            struct.pack_into("<I", exe, 0x1C, 0x100)
+            struct.pack_into("<I", exe, 0x810, 0x80183000)
+            exe_path = folder / "WILDARMS.EXE"
+            exe_path.write_bytes(exe)
+            report = inspect_pointer_table(resource, exe_path)
+        check = report["independent_executable_literal_check"]
+        self.assertEqual(check["aligned_literal_match_count"], 1)
+        self.assertEqual(check["aligned_literal_file_offsets"], [0x810])
+        self.assertTrue(check["loader_relationship_not_proven"])
+
+    def test_rejects_non_psx_executable(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            resource = folder / "CDFLR.BIN"
+            resource.write_bytes(image())
+            exe = folder / "fake.exe"
+            exe.write_bytes(bytes(0x900))
+            with self.assertRaisesRegex(ValueError, "PS-X EXE"):
+                inspect_pointer_table(resource, exe)
+
     def test_rejects_nonzero_bytes_after_sentinel(self):
         data = image()
         struct.pack_into("<I", data, 12, 1)
