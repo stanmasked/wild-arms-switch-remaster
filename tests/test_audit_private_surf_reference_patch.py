@@ -232,6 +232,22 @@ class Stage433PrivatePngTests(unittest.TestCase):
                     folder,"frame",output,"tampered",x=0,y=0,width=2,height=1)
             self.assertEqual(list(output.iterdir()),[])
 
+    def test_detects_changed_screenshot_between_verification_and_decode(self):
+        with tempfile.TemporaryDirectory() as root:
+            folder=Path(root); output=folder/"out"; output.mkdir()
+            self.make_witness(folder)
+            from capture_private_pcsx_frame_witness import verify_private_frame_witness
+            def verify_then_change(*args, **kwargs):
+                result=verify_private_frame_witness(*args,**kwargs)
+                Image.new("RGB",(2,1),(0,255,0)).save(folder/"frame.screen.png")
+                return result
+            with patch("audit_private_surf_reference_patch.verify_private_frame_witness",
+                       side_effect=verify_then_change):
+                with self.assertRaisesRegex(ValueError,"changed after witness verification"):
+                    create_private_surf_reference_patch(
+                        folder,"frame",output,"toctou",x=0,y=0,width=2,height=1)
+            self.assertEqual(list(output.iterdir()),[])
+
     def test_no_clobber_existing_patch_outputs(self):
         with tempfile.TemporaryDirectory() as root:
             folder=Path(root); output=folder/"out"; output.mkdir()
