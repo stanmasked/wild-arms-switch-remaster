@@ -196,6 +196,36 @@ jobs:
             press x
             sleep 0.75
           }
+          # The second guest deliberately closes ARM after a retreat. Stage405
+          # now commits that confirmed history to exactly one dedicated slot.
+          # Restart the same SDMC without pretending it is still empty.
+          launch_retreat_restart() {
+            label="$1"
+            root_key="$2"
+            export NEXIUM_DATA_ROOT="$RUNNER_TEMP/wa-arm-$root_key"
+            directory="$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field"
+            test -d "$directory"
+            test -s "$directory/arm-training-progress.a"
+            test ! -e "$directory/arm-training-progress.b"
+            test -z "$(find "$directory" -mindepth 1 ! -name arm-training-progress.a -print -quit)"
+            ./nexium-dist/NeXium/nexium \
+              "$PWD/arm-guest/arm_loader_probe_only.nro" \
+              > "arm-guest/$label-process.log" 2>&1 &
+            guest_pid=$!
+            eval "${label}_pid=$guest_pid"
+            sleep 15
+            kill -0 "$guest_pid"
+            executable=$(readlink "/proc/$guest_pid/exe")
+            case "$executable" in
+              */NeXium/nexium) ;;
+              *) echo "Not a live NeXium PID: $guest_pid ($executable)" >&2; return 1 ;;
+            esac
+            wid=$(xdotool search --onlyvisible --class nexium 2>/dev/null | tail -n 1) || true
+            test -n "$wid"
+            xdotool windowfocus "$wid"
+            press x
+            sleep 0.75
+          }
           stop_guest() {
             # An actual NeXium first guest on #39519963779 rendered
             # three valid images, but the CI script hung at bare wait(2)
@@ -321,7 +351,7 @@ jobs:
           # THIRD genuinely new NeXium guest process, but the exact same
           # ARM SDMC root used by the second guest. Transient ammo must
           # begin from 3/3 again with zero persisted game files.
-          launch armrestart arm
+          launch_retreat_restart armrestart arm
           import -display :99 -window root \
             arm-guest/coldboot/09_arm_restart_field.png
           xdotool keydown --clearmodifiers r

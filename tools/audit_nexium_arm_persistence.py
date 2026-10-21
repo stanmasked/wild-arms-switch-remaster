@@ -8,47 +8,16 @@ oracle; they are never evidence that NeXium ran.
 import argparse
 import hashlib
 import json
-import struct
-import zlib
 from pathlib import Path
 
 from audit_nexium_arm_cold_boot import valid_terminated
-from audit_nexium_arm_guest import battle_slots, GOLD
+from audit_nexium_arm_guest import battle_slots, GOLD, read_arm_progress_slot
 from audit_nexium_arm_victory import (
     balance_pixels, EXP_START, EXP_8_MIDDLE, GELLA_1, GELLA_2,
 )
 from audit_nexium_field_journal import native_pixel, read_rgb
 
 RETREATS_ONE = (70 + 12 * 13 + 4, 687)
-
-
-def read_progress_slot(path):
-    raw = Path(path).read_bytes()
-    if len(raw) != 52:
-        raise ValueError(f"unexpected WABJ slot length: {path}")
-    if raw[:4] != b"WABJ":
-        raise ValueError(f"bad WABJ magic: {path}")
-    generation = struct.unpack_from("<Q", raw, 4)[0]
-    if generation == 0 or zlib.crc32(raw[:48]) != struct.unpack_from("<I", raw, 48)[0]:
-        raise ValueError(f"invalid outer WABJ generation/CRC: {path}")
-    payload = raw[12:48]
-    if payload[:4] != b"WABR" or payload[4] != 1:
-        raise ValueError(f"unsupported WABR payload: {path}")
-    if payload[6:8] != b"\0\0" or payload[28:32] != b"\0\0\0\0":
-        raise ValueError(f"nonzero WABR reserved bytes: {path}")
-    if zlib.crc32(payload[:32]) != struct.unpack_from("<I", payload, 32)[0]:
-        raise ValueError(f"invalid inner WABR CRC: {path}")
-    wins, losses, retreats, exp, gella = struct.unpack_from("<IIIII", payload, 8)
-    return {
-        "generation": generation,
-        "last": payload[5],
-        "wins": wins,
-        "losses": losses,
-        "retreats": retreats,
-        "experience": exp,
-        "gella": gella,
-        "sha256": hashlib.sha256(raw).hexdigest(),
-    }
 
 
 def audit_persistence(shot, processes_path, victory_process_path, arm_root, report):
@@ -77,8 +46,8 @@ def audit_persistence(shot, processes_path, victory_process_path, arm_root, repo
     arm_b = directory / "arm-training-progress.b"
     if not rooted or not arm_a.is_file() or arm_a.is_symlink() or not arm_b.is_file() or arm_b.is_symlink():
         raise ValueError("both committed ARM progress slots must exist")
-    older = read_progress_slot(arm_a)
-    latest = read_progress_slot(arm_b)
+    older = read_arm_progress_slot(arm_a)
+    latest = read_arm_progress_slot(arm_b)
 
     pids = (victory.get("victory_pid"), processes.get("victoryrestart_pid"))
     checks = {

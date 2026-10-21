@@ -2,8 +2,9 @@
 """Stage396: independent THIRD real NeXium process / ARM cold restart audit.
 
 Requires genuine Xvfb screenshots captured in a NEW NeXium guest process,
-using the EXACT SAME isolated SDMC as the previous guest's transient ARM
-training. Synthetic inputs are used ONLY by separate auditor unit tests.
+using the EXACT SAME isolated SDMC as the previous guest's ARM training.
+Confirmed retreats persist in the dedicated journal; magazine ammunition must
+still reset on the new process. Synthetic inputs are unit-test-only.
 """
 import argparse
 import hashlib
@@ -13,7 +14,8 @@ from pathlib import Path
 from audit_nexium_arm_guest import (
     ARM_BORDER, ARM_FULL_BAR, ARM_PARTIAL_BAR, ARM_PAST_PARTIAL,
     GOLD, BLUE, RED, DARK,
-    battle_slots, same_game, same_arm_panel,
+    battle_slots, same_game, same_arm_panel, read_arm_progress_slot,
+    valid_two_retreat_progress_generations,
 )
 from audit_nexium_field_journal import native_pixel, read_rgb
 
@@ -57,6 +59,15 @@ def audit_arm_cold_boot(original_shots, cold_shots,
     arm_dir=battle_slots(arm_root)[0].parent
     rooted=arm_dir.is_dir() and not arm_dir.is_symlink()
     entries=list(arm_dir.iterdir()) if rooted else []
+    arm_names = {p.name for p in entries}
+    progress_records = {}
+    for name in ("arm-training-progress.a", "arm-training-progress.b"):
+        slot = arm_dir / name
+        if slot.is_file() and not slot.is_symlink():
+            try:
+                progress_records[name] = read_arm_progress_slot(slot)
+            except (OSError, ValueError):
+                pass
     before={name:read_rgb(original_shots / (name+".png"))
             for name in original_needed}
     new={name:read_rgb(cold_shots / (name+".png")) for name in NAMES}
@@ -73,8 +84,10 @@ def audit_arm_cold_boot(original_shots, cold_shots,
                  cold["armrestart_pid"]}) == 3
             and cold["armrestart_wait_completed"] is True
             and valid_terminated(cold,"armrestart"),
-        "same_real_sdmc_restart_still_empty":
-            rooted and not entries,
+        "same_real_sdmc_restart_preserves_two_retreat_progress_generations":
+            rooted
+            and arm_names == {"arm-training-progress.a", "arm-training-progress.b"}
+            and valid_two_retreat_progress_generations(progress_records),
         "previous_guest_really_exited_with_spent_2_of_3_and_foe_down":
             native_pixel(spent,*ARM_BORDER)==GOLD
             and native_pixel(spent,*ARM_PARTIAL_BAR)==GOLD
@@ -95,10 +108,13 @@ def audit_arm_cold_boot(original_shots, cold_shots,
         "third_guest_b_returns_without_side_effect":
             same_game(field,returned)
             and same_game(first_field,returned),
-        "cold_boot_never_creates_battle_or_field_save":
-            rooted and not entries
+        "cold_boot_never_creates_regular_battle_or_field_save":
+            rooted
+            and arm_names == {"arm-training-progress.a", "arm-training-progress.b"}
+            and valid_two_retreat_progress_generations(progress_records)
             and not any(p.exists() or p.is_symlink()
-                        for p in battle_slots(arm_root)),
+                        for p in battle_slots(arm_root))
+            and not bool({"field-save.a", "field-save.b", "field-save.tmp"} & arm_names),
     }
     result={
         "kind":"stage396_real_nexium_third_process_cold_restart",

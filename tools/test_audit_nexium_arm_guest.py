@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Synthetic, explicitly non-guest negative fixtures for Stage390's auditor."""
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -29,6 +30,9 @@ def fixture(root):
     (arm/"sdmc/switch/wild_arms_field").mkdir(parents=True)
     journal(baseline/"sdmc/switch/wild_arms_field/battle-progress.a",
             1,3,0,1,0,0)
+    arm_directory = arm/"sdmc/switch/wild_arms_field"
+    journal(arm_directory/"arm-training-progress.a", 1, 3, 0, 1, 0, 0)
+    journal(arm_directory/"arm-training-progress.b", 2, 3, 0, 2, 0, 0)
     process=root/"processes.json"
     process.write_text(json.dumps({
         "baseline_pid":1001,"arm_pid":1002,
@@ -107,13 +111,13 @@ class StrictArmGuestAuditorTests(unittest.TestCase):
             result = audit_arm_guests(*args)
             self.assertFalse(result["checks"]["held_x_did_not_double_fire"])
 
-    def test_any_arm_journal_created_is_rejected(self):
+    def test_regular_battle_journal_created_by_arm_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
             a=fixture(temp)
             journal(a[2]/"sdmc/switch/wild_arms_field/battle-progress.a",
                     1,3,0,1,0,0)
             result=audit_arm_guests(*a)
-            self.assertFalse(result["checks"]["arm_training_never_created_wabj_slots"])
+            self.assertFalse(result["checks"]["arm_training_never_created_regular_battle_slots"])
 
     def test_arm_minus_reload_never_creates_field_save_or_temp(self):
         # Fail on both completed exploration journals and their temporary
@@ -130,25 +134,25 @@ class StrictArmGuestAuditorTests(unittest.TestCase):
                     self.assertFalse(result["checks"][
                         "arm_reload_never_touched_field_save_slots"])
                     self.assertFalse(result["checks"][
-                        "isolated_arm_sdmc_is_mounted_and_completely_unwritten"])
+                        "isolated_arm_sdmc_contains_only_two_valid_retreat_progress_slots"])
 
     def test_missing_or_otherwise_dirty_arm_sdmc_is_not_clean_proof(self):
         with tempfile.TemporaryDirectory() as temp:
             args = fixture(temp)
             arm_dir = args[2] / "sdmc/switch/wild_arms_field"
-            arm_dir.rmdir()
+            shutil.rmtree(arm_dir)
             result = audit_arm_guests(*args)
             self.assertFalse(result["checks"][
-                "isolated_arm_sdmc_is_mounted_and_completely_unwritten"])
+                "isolated_arm_sdmc_contains_only_two_valid_retreat_progress_slots"])
             self.assertFalse(result["checks"][
-                "arm_training_never_created_wabj_slots"])
+                "arm_training_never_created_regular_battle_slots"])
         with tempfile.TemporaryDirectory() as temp:
             args = fixture(temp)
             (args[2] / "sdmc/switch/wild_arms_field" /
              "unrecognized-recovery.tmp").write_bytes(b"dirty namespace")
             result = audit_arm_guests(*args)
             self.assertFalse(result["checks"][
-                "isolated_arm_sdmc_is_mounted_and_completely_unwritten"])
+                "isolated_arm_sdmc_contains_only_two_valid_retreat_progress_slots"])
             self.assertTrue(result["checks"][
                 "arm_reload_never_touched_field_save_slots"])
 
@@ -162,6 +166,17 @@ class StrictArmGuestAuditorTests(unittest.TestCase):
             result=audit_arm_guests(*a)
             self.assertFalse(
                 result["checks"]["normal_b_close_wrote_valid_single_retreat_journal"])
+
+    def test_corrupt_arm_progress_journal_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args = fixture(temp)
+            path = args[2]/"sdmc/switch/wild_arms_field/arm-training-progress.b"
+            damaged = bytearray(path.read_bytes())
+            damaged[48] ^= 0xFF
+            path.write_bytes(damaged)
+            result = audit_arm_guests(*args)
+            self.assertFalse(result["checks"][
+                "isolated_arm_sdmc_contains_only_two_valid_retreat_progress_slots"])
 
     def test_identical_roots_and_missing_screen_fail_strict_preflight(self):
         with tempfile.TemporaryDirectory() as temp:
