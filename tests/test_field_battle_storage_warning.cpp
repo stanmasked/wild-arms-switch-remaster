@@ -11,7 +11,7 @@ using namespace wa::field;
 void require(bool yes) { if (!yes) std::abort(); }
 
 void test_error_classification() {
-  require(battle_journal_needs_warning(BattleJournalStatus::Corrupt));
+  require(progress_journal_needs_warning(BattleJournalStatus::Corrupt));
   for (auto status : {BattleJournalStatus::Missing,
                       BattleJournalStatus::Loaded,
                       BattleJournalStatus::Stored,
@@ -33,7 +33,7 @@ void test_banner_only_on_request_and_bounds() {
   const auto at=[&](int x,int y) {
     return buffer[static_cast<std::size_t>(y)*stride+x];
   };
-  require(!draw_battle_journal_warning(target,false));
+  require(!draw_progress_journal_warning(target,false));
   require(std::all_of(buffer.begin(),buffer.end(),[](auto x) {
     return x==kGuard;
   }));
