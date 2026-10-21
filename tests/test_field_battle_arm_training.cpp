@@ -312,6 +312,10 @@ void victory_preview_and_paid_amount_use_same_variable_offer() {
   neutral(session,picture);
   assert_claim_glyphs(picture,"B CLAIM EXP 19  GELLA 23");
   assert(session.rewards.experience==0 && session.rewards.gella==0);
+
+  // The last visible frame still promises 19/23. A balancing change that
+  // happens after that render must not silently alter the B-confirmed payout.
+  session.victory_offer={27,31};
   ArmTrainingInput close{};close.close=true;
   const auto result=advance_arm_training_session(session,close,picture.target);
   assert(result.exited && result.resolution==BattleResolution::Victory);
@@ -320,6 +324,29 @@ void victory_preview_and_paid_amount_use_same_variable_offer() {
   assert(session.history.victories==1);
   assert(!advance_arm_training_session(session,close,picture.target).exited);
   assert(session.rewards.experience==19 && session.rewards.gella==23);
+  picture.padding_unchanged();
+}
+
+void victory_cannot_be_claimed_before_preview_was_rendered() {
+  ArmTrainingSession session{};Frame picture;launch(session,picture);
+  session.battle.enemies[0].hp=0;
+  session.battle.enemies[1].hp=0;
+  session.battle.phase=BattlePhase::Victory;
+  const auto unchanged=picture.data;
+  ArmTrainingInput close{};close.close=true;
+  const auto blocked=advance_arm_training_session(session,close,picture.target);
+  assert(blocked.status==ArmTrainingStatus::InvalidState);
+  assert(session.active && session.history.victories==0);
+  assert(session.rewards.experience==0 && session.rewards.gella==0);
+  assert(picture.data==unchanged);
+
+  // Once the actual Victory preview is rendered, B can claim it normally.
+  neutral(session,picture);
+  assert_claim_glyphs(picture,"B CLAIM EXP 8  GELLA 12");
+  const auto claimed=advance_arm_training_session(session,close,picture.target);
+  assert(claimed.exited && claimed.payout.experience==8);
+  assert(claimed.payout.gella==12);
+  assert(session.history.victories==1 && !session.active);
   picture.padding_unchanged();
 }
 
@@ -512,6 +539,7 @@ int main() {
   zr_conflicts_require_full_release_before_attacking();
   real_two_bursts_victory_credit_once_and_visible_after_reentry();
   victory_preview_and_paid_amount_use_same_variable_offer();
+  victory_cannot_be_claimed_before_preview_was_rendered();
   victory_preview_is_actual_saturated_credit_and_text_never_overflows();
   custom_volatile_reward_offer_is_previewed_and_credited_once();
   near_limit_preview_matches_actual_saturated_credit();
