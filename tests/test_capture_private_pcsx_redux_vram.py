@@ -60,6 +60,7 @@ class Stage429CaptureTests(unittest.TestCase):
                     "http://example.org:8080/api/v1/gpu/vram/raw",
                     "http://localhost:8080/api/v1/gpu/vram/raw",
                     "http://127.0.0.2:8080/api/v1/gpu/vram/raw",
+                    "http://127.0.0.1:0/api/v1/gpu/vram/raw",
                     "http://127.0.0.1:8080/api/v1/gpu/vram/raw?x=1",
                     "http://127.0.0.1:8080/api/v1/cpu/ram/raw",
                     "http://someone@127.0.0.1:8080/api/v1/gpu/vram/raw"):
