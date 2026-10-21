@@ -11,6 +11,7 @@ on:
       - 'stage-400-*'
       - 'stage-401-*'
       - 'stage-402-*'
+      - 'stage-403-*'
   pull_request:
     paths:
       - '.github/workflows/arm-guest-audit-intel.yml'
