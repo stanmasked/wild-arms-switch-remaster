@@ -1,0 +1,50 @@
+name: Private PS1 icons preview NRO (asset-free)
+
+on:
+  pull_request:
+    paths:
+      - 'switch/Makefile'
+      - 'switch/source/main.cpp'
+      - 'include/field_private_icon.hpp'
+      - 'tools/pack_private_waic.py'
+      - 'tests/test_private_icon.cpp'
+      - 'tests/test_pack_private_waic.py'
+      - '.github/workflows/private-icon-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-optin-preview:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify no original WAIC files are in source tree
+        run: |
+          if find . -type f -iname '*.waic' -print -quit | grep -q .; then
+            echo "ERROR: copyrighted original-derived private WAIC file is present in public source."
+            exit 1
+          fi
+      - name: Compile optional Switch icon preview without any artwork
+        run: make -C switch -j2 WA_PRIVATE_ICON_PREVIEW=1
+      - name: Audit normal homebrew NRO structure
+        run: |
+          test -s switch/wild_arms_field.nro
+          python3 tools/audit_switch_nro.py switch/wild_arms_field.nro \
+            --json switch/wild_arms_private_icon_preview.audit.json
+          echo 'Optional WAIC preview compiled without including original artwork.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Not a Nintendo Switch emulator screenshot or original PS1 scene.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wild-arms-private-icon-preview-no-artwork
+          path: |
+            switch/wild_arms_field.nro
+            switch/wild_arms_private_icon_preview.audit.json
+          if-no-files-found: error
