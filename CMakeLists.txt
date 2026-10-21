@@ -100,6 +100,13 @@ target_link_libraries(wa_field_battle_arm_training_tests PRIVATE wa_field_core)
 add_test(NAME wa_field_battle_arm_training_tests
          COMMAND wa_field_battle_arm_training_tests)
 
+# Stage404: versioned, isolated ARM reward journal and cold-boot recovery.
+add_executable(wa_field_arm_reward_file_tests
+               tests/test_field_arm_reward_file.cpp)
+target_link_libraries(wa_field_arm_reward_file_tests PRIVATE wa_field_core)
+add_test(NAME wa_field_arm_reward_file_tests
+         COMMAND wa_field_arm_reward_file_tests)
+
 # Stage392: exhaustive R versus ZL+R ARM feature routing truth table.
 add_executable(wa_field_battle_arm_entry_tests
                tests/test_field_battle_arm_entry.cpp)
