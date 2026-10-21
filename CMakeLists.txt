@@ -741,3 +741,10 @@ set_tests_properties(wa_mips_matrix_arithmetic_attribution PROPERTIES WORKING_DI
 add_test(NAME wa_ps1_arithmetic_matrix_attribution
          COMMAND ${Python3_EXECUTABLE} -m unittest discover -s tests -p test_ps1_arithmetic_matrix_attribution.py)
 set_tests_properties(wa_ps1_arithmetic_matrix_attribution PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+
+# Stage421: synthetic-only portable indexed icon contract used by an opt-in
+# Switch preview. Does not need libnx, real PNGs, ROMs or Pillow.
+add_executable(wa_private_icon_tests tests/test_private_icon.cpp)
+target_include_directories(wa_private_icon_tests PRIVATE include)
+add_test(NAME wa_private_icon_tests COMMAND wa_private_icon_tests)
