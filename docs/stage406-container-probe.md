@@ -13,6 +13,16 @@ python tools/probe_container.py /private/path/CDFLR.BIN --layout prefix --sample
 
 The returned `sample.sha256` hashes exactly the sampled prefix and can be compared locally with the prior report's `header_sample_sha256`. The tool does not output the bytes themselves.
 
+For a machine-readable comparison against the saved private header-probe report, save each prefix report locally, then run:
+
+```sh
+python tools/probe_container.py /private/path/CDSTG.BIN --layout prefix --sample-bytes 256 > /tmp/cdstg-prefix.json
+python tools/probe_container.py /private/path/CDFLR.BIN --layout prefix --sample-bytes 256 > /tmp/cdflr-prefix.json
+python tools/compare_container_probe.py /private/path/wild_arms_ps1_resource_probe.json /tmp/cdstg-prefix.json /tmp/cdflr-prefix.json
+```
+
+The comparator checks canonical filename, file size, prefix sample length and prefix SHA-256. It exits nonzero if any report differs or has no matching reference entry. The reference report should stay private and be obtained from the existing local project record; it is not committed to the repository.
+
 Use distributed windows to gather a broader first look at each candidate:
 
 ```sh
