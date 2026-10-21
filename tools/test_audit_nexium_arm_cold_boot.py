@@ -10,7 +10,7 @@ from PIL import Image
 
 from audit_nexium_arm_cold_boot import NAMES, audit_arm_cold_boot
 from test_audit_nexium_arm_guest import fixture, put
-from audit_nexium_arm_guest import ARM_FULL_BAR, DARK
+from audit_nexium_arm_guest import ARM_FULL_BAR, DARK, RED
 
 
 def cold_fixture(root):
@@ -21,6 +21,14 @@ def cold_fixture(root):
     for new,old in zip(NAMES,("00_baseline_field",
                                "03_arm_full","00_baseline_field")):
         shutil.copyfile(shots/(old+".png"),cold/(new+".png"))
+    # The old synthetic HUD-only fixture does not paint the untouched
+    # foe HP bar. Both genuine guest opening screens MUST expose it,
+    # so add that exact invariant to both reference and third images.
+    for name in (shots/"03_arm_full.png",cold/"09_arm_restart_full.png"):
+        with Image.open(name) as original:
+            unspent=original.convert("RGB")
+        put(unspent,(692+230,249),RED)
+        unspent.save(name)
     third=root/"third-process.json"
     third.write_text(json.dumps({
         "armrestart_pid":1003,"armrestart_wait_status":143,
