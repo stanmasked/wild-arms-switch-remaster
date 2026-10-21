@@ -37,7 +37,7 @@ def map_record(index, *, palette_banks=2, corrupt=False,
     compressed=[zero_lzss(32768),zero_lzss(65536)]
     if corrupt:
         compressed[1]=compressed[1][:100]
-    first_len=int(palette_banks*512)+(1 if unaligned_first else 0)
+    first_len=int(palette_banks*512)+(4 if unaligned_first else 0)
     first_end=0x100+first_len
     # intermediate filler region and two bounded genuine WA1 streams.
     positions=[0x100,first_end,first_end+32]
