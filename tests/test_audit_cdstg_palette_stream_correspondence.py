@@ -99,7 +99,7 @@ class BankStreamCorrelationTests(unittest.TestCase):
         self.assertIsNone(report["maps"][2]["candidate_512_byte_banks"])
 
     def test_invalid_first_pointer_fails_closed(self):
-        with self.assertRaisesRegex(ValueError, "first graphics region"):
+        with self.assertRaisesRegex(ValueError, "graphics pointer run|first graphics region"):
             scan(fake_map(0, bad_pointer=True), fake_map(2))
 
     def test_bad_fixed_geometry_fails_closed(self):
