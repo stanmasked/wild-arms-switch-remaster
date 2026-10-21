@@ -19,7 +19,7 @@ from audit_nexium_arm_victory import (
 )
 from audit_nexium_field_journal import native_pixel, read_rgb
 
-RETREATS_ONE = (70 + 12 * 13 + 2, 687)
+RETREATS_ONE = (70 + 12 * 13 + 4, 687)
 
 
 def read_progress_slot(path):
