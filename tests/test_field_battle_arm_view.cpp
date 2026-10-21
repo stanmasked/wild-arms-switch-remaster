@@ -40,7 +40,14 @@ void initial_full_ammo_panel_and_unchanged_core_frame() {
   assert(f.at(kArmHudX,kArmHudY)==kBattleGold);
   assert(f.at(kArmHudX+20,kArmHudY+38)==kBattleGold);
   assert(f.at(kArmHudX+20+219,kArmHudY+38)==kBattleGold);
-  assert(f.at(kArmHudX+20,kArmHudY+53)==kBattlePanel);
+  assert(f.at(kArmHudX+20,kArmHudY+46)==kBattlePanel);
+  // First glyph of X, MINUS and RELOAD is actually present and white.
+  constexpr int hint_y=kArmHudY+65;
+  assert(f.at(kArmHudX+20,hint_y)==kBattleWhite);
+  assert(f.at(kArmHudX+20+8*13,hint_y)==kBattleWhite);
+  assert(f.at(kArmHudX+20+14*13,hint_y)==kBattleWhite);
+  // The 20-letter prompt never reaches or paints the right border.
+  assert(f.at(kArmHudX+kArmHudWidth-4,kArmHudY+65)==kBattleGold);
   for(int y=0;y<kRasterHeight;++y)
     for(int x=0;x<kRasterWidth;++x)
       if(x<kArmHudX || x>=kArmHudX+kArmHudWidth ||
@@ -68,6 +75,29 @@ void spent_ammo_changes_only_its_bar_and_label() {
   assert(f.pixels != two); // Empty status/red glyphs and zero-width bar.
   assert(battle.party[0].hp==24);
   f.check_padding();
+}
+
+void hint_is_identical_for_full_partial_and_empty_magazines() {
+  auto battle=make_demo_battle();
+  Frame full,partial,empty;
+  ArmMagazine mag{3,3,10};
+  assert(draw_battle_arm_status(full.target,battle,mag)==ArmHudStatus::Rendered);
+  mag.rounds=2;
+  assert(draw_battle_arm_status(partial.target,battle,mag)==ArmHudStatus::Rendered);
+  mag.rounds=0;
+  assert(draw_battle_arm_status(empty.target,battle,mag)==ArmHudStatus::Rendered);
+  for(int y=kArmHudY+65;y<=kArmHudY+78;++y) {
+    for(int x=kArmHudX+20;x<kArmHudX+kArmHudWidth-4;++x) {
+      assert(full.at(x,y)==partial.at(x,y));
+      assert(partial.at(x,y)==empty.at(x,y));
+    }
+  }
+  // Left/top/bottom/right borders are not painted over by the key hint.
+  for(const auto* frame : {&full,&partial,&empty}) {
+    assert(frame->at(kArmHudX+kArmHudWidth-4,kArmHudY+65)==kBattleGold);
+    assert(frame->at(kArmHudX+20,kArmHudY+80)==kBattleGold);
+    frame->check_padding();
+  }
 }
 
 void bad_target_state_and_magazine_never_touch_any_pixel() {
@@ -129,6 +159,7 @@ void maximal_capacity_has_bounded_math_and_read_only_render() {
 int main() {
   initial_full_ammo_panel_and_unchanged_core_frame();
   spent_ammo_changes_only_its_bar_and_label();
+  hint_is_identical_for_full_partial_and_empty_magazines();
   bad_target_state_and_magazine_never_touch_any_pixel();
   display_matches_explicit_arm_fire_and_reload_but_never_controls_game();
   maximal_capacity_has_bounded_math_and_read_only_render();
