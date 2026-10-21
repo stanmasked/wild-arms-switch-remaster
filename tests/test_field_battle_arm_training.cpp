@@ -1,6 +1,8 @@
 #include "field_battle_arm_training.hpp"
 
 #include <cassert>
+#include <cstring>
+#include <limits>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -347,6 +349,79 @@ void real_two_bursts_victory_credit_once_and_visible_after_reentry() {
   assert(session.rewards.experience==8 && session.rewards.gella==12);
 }
 
+// Exercise alternative rewards without any PlayStation/SDMC input.
+void assert_claim_glyphs(const Frame& frame,const char* message) {
+  const std::size_t length=std::strlen(message);
+  assert(length>0 && length<=40);
+  const int ink_width=static_cast<int>((length-1)*13+10);
+  const int start=440+ink_width>955 ? 955-ink_width : 440;
+  assert(start>=324 && start+ink_width<=955);
+  for(std::size_t i=0;i<length;++i) {
+    const auto& glyph=battle_font(message[i]);
+    for(int y=0;y<7;++y) for(int x=0;x<5;++x) {
+      const auto bit=(glyph[static_cast<std::size_t>(y)]>>(4-x))&1u;
+      const auto pixel=frame.at(start+static_cast<int>(i)*13+x*2,368+y*2);
+      assert(pixel==(bit?kBattleGreen:kBattleBackground));
+    }
+  }
+  frame.padding_unchanged();
+}
+
+void finish_dynamic_victory(ArmTrainingSession& s,Frame& pixels) {
+  launch(s,pixels);
+  s.battle.enemies[0].hp=1;
+  s.battle.enemies[1].hp=1;
+  ArmTrainingInput shot{};shot.arm.fire=true;
+  assert(advance_arm_training_session(s,shot,pixels.target).arm.status==
+         ArmControlStatus::Applied);
+  neutral(s,pixels);
+  ArmTrainingInput melee{};melee.pad.confirm=true;
+  assert(advance_arm_training_session(s,melee,pixels.target).ordinary.status==
+         BattleControlStatus::ActionApplied);
+  assert(s.battle.phase==BattlePhase::Victory);
+}
+
+void custom_volatile_reward_offer_is_previewed_and_credited_once() {
+  ArmTrainingSession s{};Frame pixels;
+  s.victory_offer={19,27};
+  finish_dynamic_victory(s,pixels);
+  assert_claim_glyphs(pixels,"B CLAIM EXP 19  GELLA 27");
+  assert(s.rewards.experience==0 && s.rewards.gella==0);
+  ArmTrainingInput leave{};leave.close=true;
+  const auto awarded=advance_arm_training_session(s,leave,pixels.target);
+  assert(awarded.exited && awarded.payout.experience==19);
+  assert(awarded.payout.gella==27);
+  assert(s.rewards.experience==19 && s.rewards.gella==27);
+  const auto second=advance_arm_training_session(s,leave,pixels.target);
+  assert(!second.exited && second.payout.experience==0);
+  assert(s.rewards.experience==19 && s.rewards.gella==27);
+}
+
+void near_limit_preview_matches_actual_saturated_credit() {
+  ArmTrainingSession s{};Frame pixels;
+  constexpr auto limit=std::numeric_limits<std::uint32_t>::max();
+  s.rewards.experience=limit-3;
+  s.rewards.gella=limit-5;
+  s.victory_offer={27,43};
+  finish_dynamic_victory(s,pixels);
+  assert_claim_glyphs(pixels,"B CLAIM EXP 3  GELLA 5");
+  assert(s.rewards.experience==limit-3 && s.rewards.gella==limit-5);
+  ArmTrainingInput leave{};leave.close=true;
+  const auto paid=advance_arm_training_session(s,leave,pixels.target);
+  assert(paid.exited && paid.payout.experience==3 && paid.payout.gella==5);
+  assert(s.rewards.experience==limit && s.rewards.gella==limit);
+}
+
+void maximum_decimal_reward_preview_is_inside_victory_frame() {
+  ArmTrainingSession s{};Frame pixels;
+  constexpr auto limit=std::numeric_limits<std::uint32_t>::max();
+  s.victory_offer={limit,limit};
+  finish_dynamic_victory(s,pixels);
+  assert_claim_glyphs(pixels,
+    "B CLAIM EXP 4294967295  GELLA 4294967295");
+  assert(s.rewards.experience==0 && s.rewards.gella==0);
+}
+
 } // namespace
 
 int main() {
@@ -359,4 +434,7 @@ int main() {
   zr_burst_real_session_turn_then_insufficient_ammo_refusal();
   zr_conflicts_require_full_release_before_attacking();
   real_two_bursts_victory_credit_once_and_visible_after_reentry();
+  custom_volatile_reward_offer_is_previewed_and_credited_once();
+  near_limit_preview_matches_actual_saturated_credit();
+  maximum_decimal_reward_preview_is_inside_victory_frame();
 }
