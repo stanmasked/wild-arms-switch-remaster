@@ -48,6 +48,17 @@ The analyzer enforces exact slot geometry, bounds, 58-pointer count/ordering, ze
 
 Never place the original disc image, `CDFLR.BIN`, raw RAM, original screenshots, decoded graphics or complete original disassembly into public GitHub or CI artifacts.
 
+## Correction: 24 opaque bytes after the 58 pointers
+
+The first 58 little-endian pointer words occupy bytes 0..231 of each slot.
+Bytes 232..255 are **opaque, not a guaranteed zero terminator**. In the
+genuine source only slot #0 has an all-zero 24-byte trailer. Slots #1..66
+contain nonzero trailer data. A previous synthetic-only check incorrectly
+required a zero sentinel for every slot and therefore could not accept
+the original 67-slot file. The validator and synthetic regression test have
+been corrected. The first pointed-to region still begins at offset 0x100
+in all slots. The trailer has not been decoded.
+
 ## Next steps
 
 1. Investigate the repeated 15-slot group and anomalous 224-/64-byte candidate palette spans while preserving their positions/identity.
