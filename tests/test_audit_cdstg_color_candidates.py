@@ -66,7 +66,7 @@ class ColorCandidateAuditTests(unittest.TestCase):
         self.assertEqual(first["first_region_color_like_16_word_rows"],16)
         self.assertEqual(first["first_region_all_zero_16_word_rows"],4)
         self.assertEqual(first["first_region_16_word_rows_beginning_zero"],16)
-        self.assertEqual(first["first_region_16_word_rows_with_bit15_set"],6)
+        self.assertEqual(first["first_region_16_word_rows_with_bit15_set"],8)
         self.assertEqual(first["first_region_unique_16_word_rows"],3)
         self.assertFalse(result["interpretation"]["original_source_bytes_emitted"])
 
