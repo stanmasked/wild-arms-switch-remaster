@@ -50,6 +50,17 @@ def read_verified_paused_capture(directory, basename):
                               object_pairs_hook=_no_duplicates)
     except (UnicodeError, json.JSONDecodeError) as exc:
         raise ValueError("invalid capture manifest JSON") from exc
+    count = document.get("execution_flow_read_count") if isinstance(document, dict) else None
+    if type(count) is not int or count not in (3, 4):
+        raise ValueError("capture is not an intact Stage430 or Stage432 witness")
+    if count == 4:
+        # Stage432 includes a screenshot and disc-info sidecar. Both must
+        # be verified before accepting the raw VRAM for Stage431 matching.
+        from capture_private_pcsx_frame_witness import verify_private_frame_witness
+        verify_private_frame_witness(root, basename=basename)
+        pause_status_key = "api_reported_running_false_in_all_four_observations"
+    else:
+        pause_status_key = "api_reported_running_false_in_all_three_observations"
     expected = {
         "schema": 1,
         "kind": MANIFEST_KIND,
@@ -58,8 +69,8 @@ def read_verified_paused_capture(directory, basename):
         "manifest_filename": basename + ".capture.json",
         "bytes": RAW_VRAM_BYTES,
         "snapshot_read_count": 2,
-        "execution_flow_read_count": 3,
-        "api_reported_running_false_in_all_three_observations": True,
+        "execution_flow_read_count": count,
+        pause_status_key: True,
         "two_read_bytes_identical": True,
         "emulator_was_paused_at_capture_unverified": True,
         "game_map_and_frame_number_unverified": True,
@@ -68,7 +79,7 @@ def read_verified_paused_capture(directory, basename):
     if (not isinstance(document, dict) or any(
             type(document.get(key)) is not type(value)
             or document.get(key) != value for key, value in expected.items())):
-        raise ValueError("capture is not an intact Stage430 paused double-read")
+        raise ValueError("capture is not an intact Stage430 or Stage432 paused witness")
     digest = document.get("vram_sha256")
     if type(digest) is not str or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
         raise ValueError("capture manifest has invalid SHA-256")
