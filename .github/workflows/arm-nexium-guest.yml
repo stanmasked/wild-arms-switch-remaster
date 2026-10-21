@@ -143,9 +143,8 @@ jobs:
             label="$1"
             root_key="${2:-$label}"
             export NEXIUM_DATA_ROOT="$RUNNER_TEMP/wa-arm-$root_key"
-            # Prepare only the otherwise absent empty game directory.
-            # A mounted/empty ARM directory is a required guest-audit
-            # invariant, not an accidental false-negative on first boot.
+            # Fresh roots must be empty; explicit reuse is reserved for
+            # Stage404's cold-boot test with an existing reward journal.
             mkdir -p "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field"
             if test "${3:-fresh}" = fresh; then
               test -z "$(find "$NEXIUM_DATA_ROOT/sdmc/switch/wild_arms_field" -mindepth 1 -print -quit)"
