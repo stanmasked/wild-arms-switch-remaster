@@ -129,8 +129,9 @@ class Stage434CoreTests(unittest.TestCase):
 
 @unittest.skipUnless(PIL_AVAILABLE,"Pillow needed only for private screenshot integration")
 class Stage434PrivateIntegrationTests(unittest.TestCase):
-    def make_capture(self,folder,basename,*,screen=None,disc=None):
-        capture_private_frame_witness(folder,basename=basename,
+    def make_capture(self,folder,basename,*,screen=None,disc=None,
+                     label="Surf Village (operator label only)"):
+        capture_private_frame_witness(folder,basename=basename,label=label,
                                       opener=expected_sequence(png=screen,disc=disc))
 
     def make_png(self,*colors):
@@ -175,6 +176,16 @@ class Stage434PrivateIntegrationTests(unittest.TestCase):
             self.assertTrue(result["interpretation"][
                 "stable_pixels_mean_consistent_only_in_two_observations"])
             self.assertIsNone(result["candidate_comparison"])
+
+    def test_operator_scene_label_mismatch_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder=Path(temp);out=folder/"out";out.mkdir()
+            self.make_capture(folder,"first",label="Surf Village")
+            self.make_capture(folder,"second",label="Adlehyde")
+            with self.assertRaisesRegex(ValueError,"scene labels differ"):
+                compare_private_reference_frames(folder,"first","second",
+                    out,"fail",x=0,y=0,width=2,height=1)
+            self.assertEqual(list(out.iterdir()),[])
 
     def test_wrong_screenshot_geometry_rejected_without_files(self):
         with tempfile.TemporaryDirectory() as temp:
