@@ -57,6 +57,7 @@ class FixedSlotCatalogTests(unittest.TestCase):
         self.assertEqual(report["slots_with_39_matching_span_rules"], 3)
         self.assertEqual(report["slots_with_all_8_palette_sized_spans"], 3)
         self.assertEqual(report["slots_with_all_8_data_markers"], 3)
+        self.assertEqual(report["slots_with_zero_opaque_header_trailer"], 3)
         self.assertEqual(report["distinct_candidate_ram_bases"], ["0x80183000"])
         self.assertFalse(report["interpretation"]["original_payload_bytes_emitted"])
 
@@ -76,11 +77,18 @@ class FixedSlotCatalogTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "slot_bytes"):
             scan(slot(), slot_bytes=3)
 
-    def test_missing_terminator_rejected(self):
-        data = bytearray(slot())
-        struct.pack_into("<I", data, 58 * 4, 0x1234)
-        with self.assertRaisesRegex(ValueError, "terminator"):
-            scan(bytes(data))
+    def test_nonzero_opaque_header_trailer_is_preserved(self):
+        first = slot()
+        second = bytearray(slot(variant=9))
+        # There is NO guaranteed null terminator after pointer #57;
+        # source originals populate bytes 232..255 in 66/67 slots.
+        second[232:256] = bytes(range(1, 25))
+        result = scan(first + bytes(second))
+        self.assertEqual(result["slots_with_zero_opaque_header_trailer"], 1)
+        self.assertEqual(result["zero_opaque_header_trailer_slot_indices"], [0])
+        self.assertEqual(result["slots"][1]["opaque_header_trailer_bytes"], 24)
+        self.assertEqual(result["slots"][1]["opaque_header_trailer_nonzero_bytes"], 24)
+        self.assertFalse(result["slots"][1]["opaque_header_trailer_is_zero"])
 
     def test_pointer_outside_record_rejected(self):
         data = bytearray(slot())
