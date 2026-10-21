@@ -87,6 +87,10 @@ def audit_reward_persistence(screenshots, first_journal, after_restart_journal,
 
     game_dir = Path(data_root) / "sdmc" / "switch" / "wild_arms_field"
     names = {p.name for p in game_dir.iterdir()} if game_dir.is_dir() else set()
+    try:
+        committed_in_root = (game_dir / "arm-rewards.a").read_bytes()
+    except OSError:
+        committed_in_root = b""
     checks = {
         "two_distinct_ne_xium_processes_completed": pids_valid and waits_valid,
         "both_processes_used_the_same_isolated_sdmc_root": roots_valid,
@@ -94,14 +98,15 @@ def audit_reward_persistence(screenshots, first_journal, after_restart_journal,
             first["generation"] == 1 and first["experience"] == 8 and
             first["gella"] == 12,
         "cold_boot_read_preserved_exact_committed_journal_bytes":
-            first["raw"] == after["raw"] and after["generation"] == 1 and
-            after["experience"] == 8 and after["gella"] == 12,
+            first["raw"] == after["raw"] == committed_in_root and
+            after["generation"] == 1 and after["experience"] == 8 and
+            after["gella"] == 12,
         "cold_boot_field_frame_is_visible":
             native_pixel(field, 0, 5) == GREEN,
-        "cold_boot_arm_screen_shows_restored_8_exp_12_gella":
-            all(native_pixel(balance, x, y) == (GREEN if lit else
-                    native_pixel(balance, x, y))
-                for _, (x, y, lit) in []),
+        "cold_boot_arm_screen_shows_restored_8_exp_12_gella": all(
+            (native_pixel(balance, x, y) == GREEN) == lit
+            for _, (x, y, lit) in BALANCE_PIXELS.items()
+        ),
         "arm_reward_journal_is_the_only_committed_slot":
             "arm-rewards.a" in names and "arm-rewards.b" not in names and
             "arm-rewards.tmp" not in names,
@@ -111,12 +116,6 @@ def audit_reward_persistence(screenshots, first_journal, after_restart_journal,
                 "battle-progress.a", "battle-progress.b", "battle-progress.tmp",
             )),
     }
-    # Check positive and negative glyph pixels separately; the negative
-    # samples distinguish 8/12 from plausible 1/24-looking alternatives.
-    checks["cold_boot_arm_screen_shows_restored_8_exp_12_gella"] = all(
-        (native_pixel(balance, x, y) == GREEN) == lit
-        for _, (x, y, lit) in BALANCE_PIXELS.items()
-    )
 
     payload = {
         "kind": "stage404_real_nexium_arm_reward_cold_boot",
