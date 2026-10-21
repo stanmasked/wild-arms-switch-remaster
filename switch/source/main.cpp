@@ -40,6 +40,10 @@ constexpr const char* kSaveBase =
 // Distinct journal namespace; never share a slot with field exploration.
 constexpr const char* kBattleSaveBase =
     "sdmc:/switch/wild_arms_field/battle-progress";
+// Separate experimental ARM history/reward journal. Never shares regular
+// battle-progress slots or the WAFS exploration quicksave namespace.
+constexpr const char* kArmSaveBase =
+    "sdmc:/switch/wild_arms_field/arm-training-progress";
 
 [[nodiscard]] bool ensure_directory(const char* path) noexcept {
   if (::mkdir(path, 0777) == 0) return true;
@@ -130,6 +134,19 @@ int main() {
       // only on an explicitly requested ZL panel, never on normal field.
       battle_journal_corrupt=battle_journal_needs_warning(loaded.status);
     }
+#if defined(WA_ARM_EXPERIMENTAL)
+    // ARM progress is independently versioned and never aliases the
+    // ordinary battle journal. A cold process restores only validated data.
+    BattleProgress arm_restored{};
+    const auto arm_loaded=load_battle_progress_file(kArmSaveBase,arm_restored);
+    if (arm_loaded.status==BattleJournalStatus::Loaded) {
+      arm_scene.history=arm_restored.history;
+      arm_scene.rewards=arm_restored.rewards;
+    } else {
+      battle_journal_corrupt = battle_journal_corrupt ||
+          battle_journal_needs_warning(arm_loaded.status);
+    }
+#endif
   }
   // ZR explicitly toggles optional step encounters. Default is off so
   // previous NeXium autoplay, saves and field captures stay unchanged.
@@ -273,6 +290,19 @@ int main() {
         arm_frame.status == ArmTrainingStatus::InvalidController) {
       framebufferEnd(&fb);
       break;
+    }
+    // A confirmed ARM exit persists only to its own two-slot journal.
+    // Failed storage is nonfatal; the field save and regular battle journal
+    // are never touched by this path.
+    if (arm_frame.exited && storage_ready) {
+      const BattleProgress record{arm_scene.history,arm_scene.rewards};
+      const auto saved=store_battle_progress_file(record,kArmSaveBase);
+      char trace[96]{};
+      const int length=std::snprintf(trace,sizeof(trace),
+          "WA_ARM_PROGRESS v1 result=%d",
+          static_cast<int>(saved));
+      if (length>0 && length<static_cast<int>(sizeof(trace)))
+        (void)svcOutputDebugString(trace,static_cast<std::size_t>(length));
     }
 #endif
 
