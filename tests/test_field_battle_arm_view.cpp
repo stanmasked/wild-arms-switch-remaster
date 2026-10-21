@@ -100,6 +100,29 @@ void hint_is_identical_for_full_partial_and_empty_magazines() {
   }
 }
 
+void gold_zr_burst_hint_is_bounded_and_independent_of_ammo() {
+  auto b=make_demo_battle();ArmMagazine mag{};
+  Frame full,one,empty;
+  assert(draw_battle_arm_status(full.target,b,mag)==ArmHudStatus::Rendered);
+  mag.rounds=1;
+  assert(draw_battle_arm_status(one.target,b,mag)==ArmHudStatus::Rendered);
+  mag.rounds=0;
+  assert(draw_battle_arm_status(empty.target,b,mag)==ArmHudStatus::Rendered);
+  const int top=kArmHudY+14;
+  const int x=kArmHudX+174;
+  for(const auto* frame : {&full,&one,&empty}) {
+    assert(frame->at(x,top)==kBattleGold); // First Z pixel is lit
+    assert(frame->at(kArmHudX+kArmHudWidth-4,top)==kBattleGold);
+    frame->check_padding();
+  }
+  // New gold ZR BURST letters are invariant under ammo changes.
+  for(int py=top;py<top+14;++py)
+    for(int px=x;px<kArmHudX+kArmHudWidth-4;++px) {
+      assert(full.at(px,py)==one.at(px,py));
+      assert(full.at(px,py)==empty.at(px,py));
+    }
+}
+
 void bad_target_state_and_magazine_never_touch_any_pixel() {
   auto battle=make_demo_battle(); ArmMagazine mag{}; Frame f;
   const auto untouched=f.pixels;
@@ -160,6 +183,7 @@ int main() {
   initial_full_ammo_panel_and_unchanged_core_frame();
   spent_ammo_changes_only_its_bar_and_label();
   hint_is_identical_for_full_partial_and_empty_magazines();
+  gold_zr_burst_hint_is_bounded_and_independent_of_ammo();
   bad_target_state_and_magazine_never_touch_any_pixel();
   display_matches_explicit_arm_fire_and_reload_but_never_controls_game();
   maximal_capacity_has_bounded_math_and_read_only_render();
