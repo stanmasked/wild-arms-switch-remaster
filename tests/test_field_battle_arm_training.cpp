@@ -166,7 +166,7 @@ void cold_boot_rewards_render_without_volatile_battle_history() {
   assert(f.at(254,667)==kBattleGreen);  // second digit is 2, not 4
   session.reward_storage_warning=true;
   neutral(session,f);
-  assert(f.at(72,694)==kBattleRed);     // visible RAM-only warning
+  assert(f.at(72,694)==kBattleRed);     // visible storage warning
   f.padding_unchanged();
 }
 
