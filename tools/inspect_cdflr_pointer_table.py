@@ -78,6 +78,7 @@ def inspect_pointer_table(path, executable_path=None):
             raise ValueError("candidate pointer translates outside the file")
         target_tags = Counter()
         tag_0x41_indices = []
+        type_0x41_span_rules = []
         for index, offset in enumerate(offsets):
             source.seek(offset)
             word_bytes = source.read(4)
@@ -87,6 +88,22 @@ def inspect_pointer_table(path, executable_path=None):
             target_tags[tag] += 1
             if tag == 0x41:
                 tag_0x41_indices.append(index)
+                if index + 1 < len(offsets) and offset + 20 <= offsets[index + 1]:
+                    source.seek(offset)
+                    head = source.read(20)
+                    if len(head) != 20:
+                        raise ValueError("candidate type 0x41 header truncated")
+                    kind, zero, one, length_field, count_field = struct.unpack("<5I", head)
+                    actual_span = offsets[index + 1] - offset
+                    header_pattern = kind == 0x41 and zero == 0 and one == 1
+                    size_rule = actual_span == length_field + 8 * count_field + 12
+                    type_0x41_span_rules.append({
+                        "index": index,
+                        "header_pattern": header_pattern,
+                        "size_rule": size_rule,
+                        "length_field": length_field,
+                        "count_field": count_field,
+                    })
 
         source.seek(0)
         source_sha256 = hashlib.sha256()
@@ -117,11 +134,20 @@ def inspect_pointer_table(path, executable_path=None):
         "adjacent_target_span_max": max(deltas),
         "target_first_word_0x41_count": target_tags[0x41],
         "target_first_word_0x41_indices": tag_0x41_indices,
+        "type_0x41_span_rule_candidate_count": len(type_0x41_span_rules),
+        "type_0x41_header_pattern_matches": sum(r["header_pattern"] for r in type_0x41_span_rules),
+        "type_0x41_span_rule_matches": sum(r["size_rule"] for r in type_0x41_span_rules),
+        "type_0x41_span_rule_fail_indices": [r["index"] for r in type_0x41_span_rules if not r["size_rule"]],
+        "type_0x41_length_field_min": min((r["length_field"] for r in type_0x41_span_rules), default=None),
+        "type_0x41_length_field_max": max((r["length_field"] for r in type_0x41_span_rules), default=None),
+        "type_0x41_count_field_min": min((r["count_field"] for r in type_0x41_span_rules), default=None),
+        "type_0x41_count_field_max": max((r["count_field"] for r in type_0x41_span_rules), default=None),
         "independent_executable_literal_check": corroboration,
         "interpretation": {
             "status": "CANDIDATE_POINTER_TABLE_ONLY",
             "base_is_inferred_not_proven": True,
             "mapped_targets_not_decoded": True,
+            "type_0x41_field_meanings_not_proven": True,
             "payload_bytes_emitted": False,
         },
     }
