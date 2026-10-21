@@ -35,7 +35,10 @@ FOE_0=(692+100,249)
 FOE_1_ALIVE=(692+240,491)
 FOE_1_SPENT=(692+270,491)
 FOE_1_DOWN=(692+100,491)
-VICTORY_BORDER=(320,294)
+# The exact corner (320,294) aliases to panel colour after NeXium's
+# 1280→1234 downscale. An inset point on the green TOP stroke is stable:
+# validated against real guest 18_victory_reload and 19_victory_banner.
+VICTORY_BORDER=(324,296)
 EXP_START=(70,667)
 EXP_8_MIDDLE=(70+4*13+2,667+6)
 GELLA_1=(70+13*13+4,667)
