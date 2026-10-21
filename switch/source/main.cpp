@@ -114,8 +114,8 @@ int main() {
   }
 
   StorageFeedback feedback{};
-  // Separate nonpersistent demonstration fight, explicitly opened with R
-  // in manual mode; the original exploration runtime stays intact.
+  // Separate synthetic demonstration fight, explicitly opened with R
+  // in manual mode; battle state never mutates the exploration runtime.
   FieldBattleSession battle_scene{};
 #if defined(WA_ARM_EXPERIMENTAL)
   // Experimental ARM mode is compiled ONLY with WA_ARM_EXPERIMENTAL=1.
