@@ -31,8 +31,10 @@ def _window_offsets(size, sample_bytes):
     """Return aligned, non-overlapping sample windows within the byte budget."""
     if size <= sample_bytes:
         return [(0, size)]
+    if sample_bytes < 4:
+        return [(0, sample_bytes)]
     window_count = min(SAMPLE_WINDOWS, max(1, sample_bytes // 4))
-    window_size = sample_bytes // window_count
+    window_size = (sample_bytes // window_count) // 4 * 4
     if window_size <= 0:
         return [(0, min(size, sample_bytes))]
     if window_count == 1:
