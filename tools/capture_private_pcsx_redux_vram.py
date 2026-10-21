@@ -39,7 +39,7 @@ def validate_endpoint(url):
         raise ValueError("invalid loopback endpoint") from exc
     if (u.scheme != "http" or u.hostname not in ("127.0.0.1", "::1")
             or u.username is not None or u.password is not None
-            or not 1 <= (port or 80) <= 65535
+            or port == 0
             or u.path != "/api/v1/gpu/vram/raw" or u.query or u.fragment):
         raise ValueError("only exact PCSX-Redux loopback VRAM GET endpoint is allowed")
     return url
