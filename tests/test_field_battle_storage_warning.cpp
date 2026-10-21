@@ -40,7 +40,12 @@ void test_banner_only_on_request_and_bounds() {
   require(draw_progress_journal_warning(target,true));
   require(at(kBattleSaveWarningX,kBattleSaveWarningY)==kBattleRed);
   require(at(kBattleSaveWarningX+5,kBattleSaveWarningY+5)==kBattlePanel);
-  require(at(kBattleSaveWarningX+21,kBattleSaveWarningY+11)==kBattleWhite);
+  // The heading now begins with 'S' (0b01111 on its top glyph row):
+  // its top-left pixel is background, and the next two pixels are white.
+  // The old 'B' heading had ink at the first pixel, so that legacy anchor
+  // would incorrectly report a rendering regression after renaming.
+  require(at(kBattleSaveWarningX+21,kBattleSaveWarningY+11)==kBattlePanel);
+  require(at(kBattleSaveWarningX+23,kBattleSaveWarningY+11)==kBattleWhite);
   require(at(kBattleSaveWarningX+21,kBattleSaveWarningY+31)==kBattleRed);
   require(at(kBattleSaveWarningX+2,kBattleSaveWarningY+
              kBattleSaveWarningH-2)==kBattleRed);
