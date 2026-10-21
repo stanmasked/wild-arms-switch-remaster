@@ -35,7 +35,7 @@ def synthetic_map(index, *, corrupt=None):
         struct.pack_into("<I", data, GFX + position * 4, GB + offset)
     data[GFX + 0x100] = index + 10
     if corrupt == "gfx_order":
-        struct.pack_into("<I", data, GFX + 8, GB + 0x180)
+        struct.pack_into("<I", data, GFX + 4, GB + 0x080)
     elif corrupt == "script_outside":
         struct.pack_into("<I", data, 0x40 + 6 * 4, MB + GFX)
     elif corrupt == "script_entries":
@@ -80,7 +80,6 @@ class OriginalMapIndexTests(unittest.TestCase):
         exe[:8] = b"PS-X EXE"
         for idx, label in enumerate((b"Area Zero", b"", b"Surf Village")):
             location = 0x7800 + idx * 32
-            pointer = MB - 0x3DC0 + location - 0x800  # = EXE_RAM_TEXT_BASE + location - 0x800
             pointer = 0x80011420 + location - 0x800
             struct.pack_into("<I", exe, 0x7578 + 4 * idx, pointer)
             exe[location:location + len(label) + 1] = label + b"\0"
