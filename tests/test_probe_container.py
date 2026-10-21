@@ -1,5 +1,5 @@
 """Synthetic-only tests for bounded local container metadata probing."""
-import json
+import hashlib
 import sys
 import tempfile
 import unittest
@@ -28,8 +28,9 @@ class ProbeContainerTests(unittest.TestCase):
         self.assertEqual(result["pointer_like_words"][0], {"value": 0x100, "count": 2})
         self.assertTrue(result["interpretation"]["payload_bytes_emitted"] is False)
         self.assertFalse(result["interpretation"]["complete_file_loaded_into_memory"])
-        self.assertNotIn("payload", json.dumps(result))
-        self.assertEqual(len(result["sha256"]), 64)
+        self.assertNotIn("raw_bytes", result)
+        self.assertNotIn("sample_data", result)
+        self.assertEqual(result["sha256"], hashlib.sha256(data).hexdigest())
 
     def test_rejects_empty_file(self):
         with tempfile.TemporaryDirectory() as folder:
