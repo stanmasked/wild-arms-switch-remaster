@@ -138,8 +138,8 @@ int main() {
       battle_journal_corrupt=battle_journal_needs_warning(loaded.status);
     }
 #if defined(WA_ARM_EXPERIMENTAL)
-    // ARM progress is independently versioned and never aliases the
-    // ordinary battle journal. A cold process restores only validated data.
+    // ARM progress reuses the validated WABJ v1 codec in its own path;
+    // it never aliases the ordinary battle journal. Restore validated data only.
     BattleProgress arm_restored{};
     const auto arm_loaded=load_battle_progress_file(kArmSaveBase,arm_restored);
     if (arm_loaded.status==BattleJournalStatus::Loaded) {
