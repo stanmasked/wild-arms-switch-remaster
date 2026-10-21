@@ -18,8 +18,10 @@ class PrivateRamSnapshotTests(unittest.TestCase):
         memory = bytearray(ram_length)
         physical = address & (RAM_BYTES - 1)
         if physical + compare_bytes <= len(memory):
-            memory[physical:physical + compare_bytes] = source[
-                container_offset:container_offset + compare_bytes]
+            segment = source[container_offset:container_offset + compare_bytes]
+            memory[physical:physical + compare_bytes] = (
+                segment + bytes(compare_bytes - len(segment))
+            )
         for index in mismatches:
             memory[physical + index] ^= 0xFF
         with tempfile.TemporaryDirectory() as folder:
