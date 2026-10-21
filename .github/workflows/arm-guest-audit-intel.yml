@@ -41,7 +41,7 @@ jobs:
           python3 -m py_compile tools/test_audit_nexium_arm_guest.py
           python3 -m py_compile tools/audit_nexium_arm_cold_boot.py
           python3 -m py_compile tools/test_audit_nexium_arm_cold_boot.py
-      - name: Run twenty synthetic auditor contract scenarios
+      - name: Run twenty-two synthetic auditor contract scenarios
         run: |
           python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_guest.py' -v
           python3 -m unittest discover -s tools -p 'test_audit_nexium_arm_cold_boot.py' -v
