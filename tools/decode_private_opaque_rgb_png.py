@@ -51,6 +51,10 @@ def decode_private_opaque_rgb_png(data):
             idat.append(content)
         elif kind==b"IEND":
             break
+        elif kind==b"tRNS":
+            # Even 8-bit RGB PNGs can declare transparent palette-key
+            # colors without an alpha channel. Never call such a PNG opaque.
+            raise ValueError("PNG transparency chunk unsupported for opaque RGB witness")
         elif kind[0]&0x20==0:
             raise ValueError("unknown critical PNG chunk unsupported")
         else:
