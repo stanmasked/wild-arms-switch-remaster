@@ -114,7 +114,7 @@ NEW_FILE_OPEN = """bool PCSX::GPUDumpReader::open(IO<File> file) {
     size_t total = 0;
     while (total < size) {
         ssize_t got = file->read(reinterpret_cast<uint8_t*>(words.data()) + total, size - total);
-        if (got <= 0) return false;
+        if (got <= 0 || size_t(got) > size - total) return false;
         total += size_t(got);
     }
     auto exactFileDigest = waPrivateSha256(reinterpret_cast<const uint8_t*>(words.data()), size);
