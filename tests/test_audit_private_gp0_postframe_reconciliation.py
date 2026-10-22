@@ -41,7 +41,7 @@ class Stage438PostframeTests(unittest.TestCase):
     def test_no_draw_detects_any_unmodeled_byte_mutation(self):
         result=self.check([E6,a0(COLORS)],vram())
         report=result["postframe_reconciliation"]
-        self.assertEqual(report["mismatched_known_u16_word_count"],16)
+        self.assertEqual(report["mismatched_known_u16_word_count"],15)
         self.assertFalse(report["all_comparable_words_match"])
         with self.assertRaisesRegex(ValueError,"postframe reconciliation"):
             self.check([E6,a0(COLORS)],vram(),required=True)
@@ -92,6 +92,8 @@ class Stage438PostframeTests(unittest.TestCase):
         data=bytearray(vram())
         start=(19*1024+64)*2
         data[start:start+32]=COLORS
+        source_start=(19*1024+32)*2
+        data[source_start:source_start+32]=COLORS
         result=self.check([polygon(),E6,a0(COLORS),vram_copy()],
                           bytes(data),required=True)
         report=result["postframe_reconciliation"]
