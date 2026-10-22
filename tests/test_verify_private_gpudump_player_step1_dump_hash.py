@@ -280,6 +280,7 @@ class Stage456PatchTests(unittest.TestCase):
         self.assertIn("m_frozenDumpSHA256",h)
         self.assertIn("'R', 'A', 'M', 'v', '2'",s)
         self.assertIn("memcpy(header + 32, capturedDumpSHA256.data()",s)
+        self.assertIn("std::string(reinterpret_cast<const char*>(selected[0].c_str()))",s)
         self.assertIn("m_frozenDumpSHA256 = player->dumpSHA256()",s)
         self.assertIn("m_frozenDumpSHA256)",s)
 
