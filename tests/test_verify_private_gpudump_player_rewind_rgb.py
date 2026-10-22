@@ -147,6 +147,33 @@ class Stage453PlayerRewindTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"transparent"):
                 verify(paths)
 
+    def test_rgb_png_with_transparency_key_is_rejected(self):
+        from decode_private_opaque_rgb_png import decode_private_opaque_rgb_png
+        # Standard RGB PNG may declare transparency via tRNS, without
+        # an alpha channel. Insert that valid key before IDAT.
+        original=png()
+        trns=struct.pack(">HHH",0,0,0)
+        chunk=(struct.pack(">I",len(trns))+b"tRNS"+trns+
+               struct.pack(">I",zlib.crc32(b"tRNS"+trns)&0xffffffff))
+        modified=original[:33]+chunk+original[33:]
+        with self.assertRaisesRegex(ValueError,"transparency chunk"):
+            decode_private_opaque_rgb_png(modified)
+
+    def test_rgb_png_sub_filter_decodes_exact_original_rgb(self):
+        from decode_private_opaque_rgb_png import decode_private_opaque_rgb_png
+        original=png(color=(32,64,96),width=2,height=1)
+        ihdr=original[8:33]
+        # Filter 1 (Sub): first RGB triple stored literally and the
+        # second identical triple has zero differences from its left.
+        filtered=b"\\x01"+bytes((32,64,96,0,0,0))
+        packed=zlib.compress(filtered)
+        idat=(struct.pack(">I",len(packed))+b"IDAT"+packed+
+              struct.pack(">I",zlib.crc32(b"IDAT"+packed)&0xffffffff))
+        valid=original[:8]+ihdr+idat+original[-12:]
+        size,rgb=decode_private_opaque_rgb_png(valid)
+        self.assertEqual(size,(2,1))
+        self.assertEqual(rgb,bytes((32,64,96,32,64,96)))
+
     def test_png_dimension_must_equal_exact_unscaled_roi(self):
         with tempfile.TemporaryDirectory() as td:
             paths=fixture(td,image=png(width=3))
