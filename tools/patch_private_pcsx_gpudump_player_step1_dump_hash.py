@@ -194,9 +194,10 @@ def patched_gui_source(source):
         "    memcpy(header + 32, capturedDumpSHA256.data(), capturedDumpSHA256.size());\n",
         "native dump digest in binary header")
     source = replace_once(source,
-        "wa1WriteFrozenStepOneVRAM(selected[0], m_frozenStepOneVRAM, m_frozenStepOneFrame)",
-        "wa1WriteFrozenStepOneVRAM(selected[0], m_frozenStepOneVRAM, "
-        "m_frozenStepOneFrame, m_frozenDumpSHA256)",
+        "wa1WriteFrozenStepOneVRAM(std::string(reinterpret_cast<const char*>(selected[0].c_str())), "
+        "m_frozenStepOneVRAM, m_frozenStepOneFrame)",
+        "wa1WriteFrozenStepOneVRAM(std::string(reinterpret_cast<const char*>(selected[0].c_str())), "
+        "m_frozenStepOneVRAM, m_frozenStepOneFrame, m_frozenDumpSHA256)",
         "save frozen dump digest")
     source = replace_once(source, "        m_frozenStepOneFrame = 0;\n",
         "        m_frozenStepOneFrame = 0;\n"
