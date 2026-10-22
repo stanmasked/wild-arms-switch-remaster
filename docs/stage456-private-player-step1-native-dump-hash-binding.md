@@ -114,7 +114,7 @@ equality. It reports only hashes, counts, and status, not raw pixels.
 
 ## Validation
 
-`tests/test_verify_private_gpudump_player_step1_dump_hash.py` adds 20
+`tests/test_verify_private_gpudump_player_step1_dump_hash.py` adds 21
 ROM-free tests for the v2 format, wrong source digest, CRC, length/frame,
 RGB equality, privacy and patch generation. It also compiles the exact
 self-contained C++ SHA-256 helper when a host C++ compiler is available and
