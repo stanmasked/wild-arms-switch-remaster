@@ -110,7 +110,8 @@ NEW_FILE_OPEN = """bool PCSX::GPUDumpReader::open(IO<File> file) {
     // than hashing bytes the packet reader would silently discard.
     if (size % sizeof(uint32_t) != 0) return false;
     std::vector<uint32_t> words(size / sizeof(uint32_t));
-    file->rSeek(0, SEEK_SET);
+    // Hash only a stream whose read cursor was successfully reset to byte zero.
+    if (file->rSeek(0, SEEK_SET) != 0) return false;
     size_t total = 0;
     while (total < size) {
         ssize_t got = file->read(reinterpret_cast<uint8_t*>(words.data()) + total, size - total);
