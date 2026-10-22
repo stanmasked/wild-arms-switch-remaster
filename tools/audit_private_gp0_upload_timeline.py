@@ -24,6 +24,7 @@ from audit_private_surf_gp0_stream_uv_link import (
 from audit_private_gp0_a0_source_payload import match_a0_source_payload
 from audit_private_a0_draw_uv_lineage import PrivateA0DrawLineage
 from audit_private_a0_transitive_copy_lineage import PrivateA0CopyLineage
+from audit_private_gp0_clut_row_origin import inspect_private_clut_row_lineage
 from audit_surf_palette_rows import read_private_candidates
 from audit_surf_vram_palette_occurrences import _row_filter, VRAM_BYTES
 
@@ -327,8 +328,15 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
                             "no_original_a0_copy_origin_asserted": True,
                         }
                         counters["A0_COPY_LINEAGE_UNAVAILABLE"] += 1
+                clut_origin = None
+                if a0_lineage is not None:
+                    clut_origin = inspect_private_clut_row_lineage(
+                        vram, a0_lineage, pixel_epoch, draw_epoch,
+                        texture_probe, candidates)
+                    counters["CLUT_ROW_ORIGIN_" + clut_origin["status"]] += 1
                 if len(evidence) < max_evidence:
                     evidence.append({
+                        "first_uv_clut_row_origin": clut_origin,
                         "first_uv_transitive_a0_copy_lineage": transitive_lineage,
                         "first_uv_direct_a0_lineage": lineage,
                         "first_uv_source_run_linkage": stream_linkage,
@@ -431,6 +439,8 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
             "transitive_a0_origin_copy_hops_conservatively_tracked": True,
             "transitive_copy_source_run_must_remain_contiguous": True,
             "copy_origin_is_not_a_direct_a0_writer_at_destination": True,
+            "first_uv_palette_row_and_texture_origin_independently_tested": True,
+            "palette_origin_equality_does_not_authenticate_gpu_clut_sampling": True,
         },
     }
 
