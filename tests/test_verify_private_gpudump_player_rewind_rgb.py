@@ -32,8 +32,8 @@ def png(color=(0,0,0),width=2,height=1, mode="RGB"):
         raise ValueError("fixture PNG channel count unsupported")
     ihdr=struct.pack(">IIBBBBB",width,height,8,
                      2 if mode=="RGB" else 6,0,0,0)
-    scanlines=(b"\\x00"+bytes(color)*width)*height
-    return (b"\\x89PNG\\r\\n\\x1a\\n"+
+    scanlines=(b"\x00"+bytes(color)*width)*height
+    return (b"\x89PNG\r\n\x1a\n"+
             chunk(b"IHDR",ihdr)+chunk(b"IDAT",zlib.compress(scanlines))+
             chunk(b"IEND",b""))
 
