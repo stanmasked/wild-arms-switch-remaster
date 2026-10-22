@@ -17,6 +17,9 @@ from import_private_pcsx_native_gpudump import (
     TRACE_BEGIN, GPU_VERSION, GAME_ID, VIDEO_FORMAT, COMMENT,
     read_native_gpu_dump, select_first_native_gp0_frame,
 )
+from audit_private_pcsx_native_vsync_chronology import (
+    inspect_native_vsync_chronology,
+)
 
 NAMES = {
     GP0:"GP0", GP1:"GP1", VSYNC:"VSYNC", THROWAWAY:"THROWAWAY",
@@ -36,6 +39,9 @@ def summarize_private_native_gpudump(blob, *, max_frame_summaries=12):
             not 1 <= max_frame_summaries <= 64):
         raise ValueError("invalid private frame summary limit")
     records=read_native_gpu_dump(blob)
+    # This is independent of the first-frame GPU command-subset verdict:
+    # a valid first frame can still coexist with an incomplete final tail.
+    chronology=inspect_native_vsync_chronology(records)
     total=Counter()
     bootstrap=Counter()
     frames=[]
@@ -99,6 +105,7 @@ def summarize_private_native_gpudump(blob, *, max_frame_summaries=12):
     return {
         "schema":1,
         "kind":"WA1_PRIVATE_PCSX_NATIVE_GPUDUMP_PREFLIGHT",
+        "native_vsync_chronology":chronology,
         "native_dump_sha256":hashlib.sha256(blob).hexdigest(),
         "native_dump_byte_count":len(blob),
         "native_typed_record_count":len(records),
