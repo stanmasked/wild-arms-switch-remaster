@@ -120,7 +120,9 @@ class Stage452PausedScreenBindingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             witness,native,pre,trace=setup(td)
             disc=witness/"surf.cdinfo.json"
-            disc.write_bytes(b'{"disc":"different"}')
+            original=bytearray(disc.read_bytes())
+            original[10]^=1  # same-length changed content: digest, not length, must fail
+            disc.write_bytes(original)
             with self.assertRaisesRegex(ValueError,"hash mismatch"):
                 bind(witness,native,pre,trace)
 
