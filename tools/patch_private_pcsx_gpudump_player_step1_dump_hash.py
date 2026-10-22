@@ -169,15 +169,15 @@ def patched_core_source(source):
     source = replace_once(source, OLD_VECTOR_OPEN, NEW_VECTOR_OPEN,
                           "in-memory reader digest")
     source = replace_once(source,
-        "    for (unsigned i = 0; i < 4; i++) {\\n"
-        "        if (m_words[i] != SWAP_LE32(magic[i])) return false;\\n"
-        "    }\\n"
-        "    return true;\\n}",
-        "    for (unsigned i = 0; i < 4; i++) {\\n"
-        "        if (m_words[i] != SWAP_LE32(magic[i])) return false;\\n"
-        "    }\\n"
-        "    m_sha256 = rawDigest;\\n"
-        "    return true;\\n}",
+        "    for (unsigned i = 0; i < 4; i++) {\n"
+        "        if (m_words[i] != SWAP_LE32(magic[i])) return false;\n"
+        "    }\n"
+        "    return true;\n}",
+        "    for (unsigned i = 0; i < 4; i++) {\n"
+        "        if (m_words[i] != SWAP_LE32(magic[i])) return false;\n"
+        "    }\n"
+        "    m_sha256 = rawDigest;\n"
+        "    return true;\n}",
         "commit reader digest only after valid native header")
     return source
 
