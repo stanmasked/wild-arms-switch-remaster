@@ -21,6 +21,7 @@ from audit_surf_gp0_clut_references import decode_packet
 from audit_private_gp0_texture_first_uv import probe_first_uv_4bpp
 from audit_private_surf_gp0_stream_uv_link import (
     prepare_private_stream_index, match_first_uv_to_private_streams)
+from audit_private_gp0_a0_source_payload import match_a0_source_payload
 from audit_surf_palette_rows import read_private_candidates
 from audit_surf_vram_palette_occurrences import _row_filter, VRAM_BYTES
 
@@ -156,6 +157,7 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
     mask_mode = None  # GPU state at preframe snapshot is unknown.
     texture_window = None  # An initial GPU E2 register value is unknown.
     evidence = []
+    a0_source_reports = []
     counters = Counter()
     for index, packet in enumerate(packets):
         if (type(packet) is not list or not 1 <= len(packet) <= MAX_PACKET_WORDS or
@@ -199,6 +201,17 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
                 vram[address*2:address*2+2] = payload[j*2:j*2+2]
                 pixel_epoch[address] = draw_epoch
             counters["A0_CPU_TO_VRAM"] += 1
+            if source_index is not None:
+                a0_match = match_a0_source_payload(source_index, packet)
+                counters["A0_SOURCE_BYTE_RUN_MATCHES"] += (
+                    a0_match["matching_decoded_stream_run_count"])
+                counters["A0_PACKETS_WITH_SOURCE_RUNS"] += int(
+                    a0_match["matching_decoded_stream_run_count"] > 0)
+                if len(a0_source_reports) < max_evidence:
+                    a0_source_reports.append({
+                        "packet_index": index, "report": a0_match})
+                else:
+                    counters["A0_SOURCE_PACKET_REPORTS_TRUNCATED"] += 1
             continue
         if opcode == 0x80:
             if len(packet) != 4:
@@ -354,6 +367,7 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
         "indexed_candidate_decoded_stream_count": (
             len(source_index["source_streams"]) if source_index is not None else None),
         "clut_draw_events": evidence,
+        "a0_source_payload_reports": a0_source_reports,
         "postframe_reconciliation": reconciliation,
         "interpretation": {
             "gpu_a0_and_nonoverlapping_80_copy_replayed_in_order": True,
@@ -370,6 +384,7 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
             "no_original_vram_words_palette_values_or_packets_in_report": True,
             "source_stream_uv_covering_runs_are_memory_occurrences_not_gp0_upload_proof": True,
             "first_uv_pixel_visibility_and_scene_geometry_unverified": True,
+            "a0_payload_matches_do_not_authenticate_gpu_upload_or_draw_use": True,
         },
     }
 
