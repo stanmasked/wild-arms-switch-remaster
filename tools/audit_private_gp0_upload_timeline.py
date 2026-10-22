@@ -19,6 +19,8 @@ import struct
 
 from audit_surf_gp0_clut_references import decode_packet
 from audit_private_gp0_texture_first_uv import probe_first_uv_4bpp
+from audit_private_surf_gp0_stream_uv_link import (
+    prepare_private_stream_index, match_first_uv_to_private_streams)
 from audit_surf_palette_rows import read_private_candidates
 from audit_surf_vram_palette_occurrences import _row_filter, VRAM_BYTES
 
@@ -121,7 +123,8 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
                                      frame=0, max_evidence=MAX_EVIDENCE,
                                      minimum_distinct_nonzero=3,
                                      observed_post_vram=None,
-                                     require_post_match=False):
+                                     require_post_match=False,
+                                     source_streams=None):
     """Replay only supported pixel-copy GP0 operations; conservatively score draws.
 
     Freshly written means all 16 CLUT halfwords were copied/uploaded AFTER
@@ -142,6 +145,8 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
     if require_post_match and observed_post_vram is None:
         raise ValueError("cannot require postframe match without a postframe VRAM")
     palette_rows = _build_candidates(banks, minimum_distinct_nonzero)
+    source_index = (prepare_private_stream_index(source_streams)
+                    if source_streams is not None else None)
     vram = bytearray(initial_vram)
     # Each u16 pixel records the most recent *completed* draw epoch in which
     # it was explicitly rewritten by a modeled copy/upload. -1 = no proof.
@@ -250,8 +255,29 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
                 texture_probe = probe_first_uv_4bpp(
                     vram, pixel_epoch, draw_epoch, info, texture_window)
                 counters["FIRST_UV_PROBE_" + texture_probe["status"]] += 1
+                stream_linkage = None
+                if source_index is not None:
+                    if texture_probe["status"] == (
+                            "MODELED_FIRST_DECLARED_UV_WITH_DISABLED_TEXTURE_WINDOW"):
+                        stream_linkage = match_first_uv_to_private_streams(
+                            source_index, vram,
+                            texture_probe["first_uv_texture_word_x_words"],
+                            texture_probe["first_uv_texture_word_y"],
+                            pixel_epoch, draw_epoch)
+                        counters["UV_SOURCE_LINKAGE_COVERING_RUNS"] += (
+                            stream_linkage["covering_byte_identical_run_count"])
+                        counters["UV_SOURCE_LINKAGE_DRAWS_WITH_RUN"] += int(
+                            stream_linkage["covering_byte_identical_run_count"] > 0)
+                    else:
+                        stream_linkage = {
+                            "status": "FIRST_UV_TEXTURE_ADDRESS_UNAVAILABLE",
+                            "texture_window_or_source_page_not_proven": True,
+                            "no_source_run_match_attempted": True,
+                        }
+                        counters["UV_SOURCE_LINKAGE_UNAVAILABLE"] += 1
                 if len(evidence) < max_evidence:
                     evidence.append({
+                        "first_uv_source_run_linkage": stream_linkage,
                         "first_uv_texture_probe": texture_probe,
                         "packet_index": index,
                         "frame": frame,
@@ -324,6 +350,9 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
         "initial_vram_sha256": hashlib.sha256(initial_vram).hexdigest(),
         "candidate_eligible_distinct_rows": len(palette_rows),
         "candidate_bank_row_reference_count": sum(map(len,palette_rows.values())),
+        "decoded_stream_run_matching_enabled": source_index is not None,
+        "indexed_candidate_decoded_stream_count": (
+            len(source_index["source_streams"]) if source_index is not None else None),
         "clut_draw_events": evidence,
         "postframe_reconciliation": reconciliation,
         "interpretation": {
@@ -339,6 +368,8 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
             "gp0_packet_trace_provenance_and_completeness_unverified": True,
             "no_final_post_frame_vram_equivalence_claim": True,
             "no_original_vram_words_palette_values_or_packets_in_report": True,
+            "source_stream_uv_covering_runs_are_memory_occurrences_not_gp0_upload_proof": True,
+            "first_uv_pixel_visibility_and_scene_geometry_unverified": True,
         },
     }
 
@@ -370,7 +401,8 @@ def audit_private_gp0_upload_timeline(cdstg, initial_vram_path, timeline_path,
         initial,packets,private["candidate_banks"],
         frame=header["frame"],max_evidence=max_evidence,
         observed_post_vram=observed_post_vram,
-        require_post_match=require_post_match)
+        require_post_match=require_post_match,
+        source_streams=private["verified_streams"])
     return {
         **report,
         "source_map_index": private["map_index"],
