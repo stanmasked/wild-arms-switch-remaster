@@ -159,9 +159,11 @@ class Stage449ImportIntegrityTests(unittest.TestCase):
 
     def test_gameid_after_trace_begin_rejected(self):
         with tempfile.TemporaryDirectory() as td:
+            native,pre,trace=prepared(td)
             rec=base_records()
+            rec[1]=(GAME_ID,valid_game_id_words())
             rec.insert(-1,(GAME_ID,valid_game_id_words()))
-            native,pre,trace=prepared(td,records=rec)
+            native.write_bytes(dump_bytes(rec))
             with self.assertRaisesRegex(ValueError,"preamble-only"):
                 verify_private_native_import(native,pre,trace)
 
