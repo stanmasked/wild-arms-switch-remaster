@@ -245,10 +245,12 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
                     counters["4BPP_CLUT_FULL_ROW_REWRITTEN_SINCE_LAST_DRAW"] += 1
                 if candidates:
                     counters["4BPP_CLUT_MODELED_ROW_MATCHES_SOURCE"] += 1
+                # Count every probe even when the privacy-bounded event
+                # sample has reached its cap; never silently undercount.
+                texture_probe = probe_first_uv_4bpp(
+                    vram, pixel_epoch, draw_epoch, info, texture_window)
+                counters["FIRST_UV_PROBE_" + texture_probe["status"]] += 1
                 if len(evidence) < max_evidence:
-                    texture_probe = probe_first_uv_4bpp(
-                        vram, pixel_epoch, draw_epoch, info, texture_window)
-                    counters["FIRST_UV_PROBE_" + texture_probe["status"]] += 1
                     evidence.append({
                         "first_uv_texture_probe": texture_probe,
                         "packet_index": index,
