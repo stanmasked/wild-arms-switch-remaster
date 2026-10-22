@@ -137,10 +137,10 @@ NEW_FILE_OPEN = """bool PCSX::GPUDumpReader::open(IO<File> file) {
     } catch (...) {
         return false;
     }
-    auto exactFileDigest = waPrivateSha256(reinterpret_cast<const uint8_t*>(words.data()), size);
-    bool valid = open(std::move(words));
-    if (valid) m_sha256 = exactFileDigest;
-    return valid;
+    // The vector overload hashes this exact raw byte buffer before endian
+    // conversion and publishes the digest only after header validation.
+    // Keep one SHA-256 pass for potentially large native dumps.
+    return open(std::move(words));
 }"""
 
 OLD_VECTOR_OPEN = """bool PCSX::GPUDumpReader::open(std::vector<uint32_t>&& words) {

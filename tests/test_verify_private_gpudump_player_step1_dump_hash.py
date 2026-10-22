@@ -245,8 +245,11 @@ class Stage456PatchTests(unittest.TestCase):
     def test_reader_hashes_raw_file_before_byte_swapping(self):
         result=patched_core_source(CORE_SOURCE_SNIPPET)
         self.assertLess(result.index("m_sha256.fill(0);"),result.index("if (!file || file->failed())"))
-        self.assertLess(result.index("auto exactFileDigest"),result.index("bool valid = open"))
-        self.assertIn("if (valid) m_sha256 = exactFileDigest",result)
+        self.assertNotIn("exactFileDigest",result)
+        self.assertIn("return open(std::move(words));",result)
+        self.assertEqual(result.count("auto rawDigest = waPrivateSha256"),1)
+        self.assertLess(result.index("while (total < size)"),result.index("return open(std::move(words));"))
+        self.assertLess(result.index("auto rawDigest = waPrivateSha256"),result.index("m_words = std::move(words)"))
         self.assertIn("waPrivateSha256(reinterpret_cast<const uint8_t*>(words.data())",result)
         self.assertIn("size_t(got) > size - total",result)
         self.assertLess(result.index("auto rawDigest"),result.index("m_words = std::move(words)"))
@@ -260,7 +263,7 @@ class Stage456PatchTests(unittest.TestCase):
         alignment='if (size % sizeof(uint32_t) != 0) return false;'
         read_loop='while (total < size)'
         invalid_count='if (got <= 0 || size_t(got) > size - total) return false;'
-        digest='auto exactFileDigest = waPrivateSha256'
+        digest='auto rawDigest = waPrivateSha256'
         self.assertIn(alignment,result)
         self.assertIn(read_loop,result)
         self.assertIn(invalid_count,result)
@@ -271,13 +274,14 @@ class Stage456PatchTests(unittest.TestCase):
         self.assertIn('m_ptr = 4;',result)
         self.assertLess(result.index(alignment),result.index(read_loop))
         self.assertLess(result.index(invalid_count),result.index(digest))
-        self.assertLess(result.index(digest),result.index('bool valid = open(std::move(words))'))
+        self.assertLess(result.index(invalid_count),result.index('return open(std::move(words));'))
+        self.assertLess(result.index(digest),result.index('m_words = std::move(words)'))
 
     def test_reader_requires_successful_rewind_before_hashing(self):
         result=patched_core_source(CORE_SOURCE_SNIPPET)
         rewind='if (file->rSeek(0, SEEK_SET) != 0) return false;'
         read_loop='while (total < size)'
-        digest='auto exactFileDigest = waPrivateSha256'
+        digest='auto rawDigest = waPrivateSha256'
         self.assertIn(rewind,result)
         self.assertLess(result.index(rewind),result.index(read_loop))
         self.assertLess(result.index(read_loop),result.index(digest))
@@ -286,8 +290,8 @@ class Stage456PatchTests(unittest.TestCase):
         result=patched_core_source(CORE_SOURCE_SNIPPET)
         rewind='if (file->rSeek(0, SEEK_SET) != 0) return false;'
         read_loop='while (total < size)'
-        digest='auto exactFileDigest = waPrivateSha256'
-        parse='bool valid = open(std::move(words))'
+        digest='auto rawDigest = waPrivateSha256'
+        parse='return open(std::move(words));'
         self.assertIn(rewind,result)
         rewind_pos=result.index(rewind)
         read_pos=result.index(read_loop,rewind_pos)
@@ -296,8 +300,9 @@ class Stage456PatchTests(unittest.TestCase):
         parse_pos=result.index(parse,rewind_pos)
         self.assertLess(rewind_pos,read_pos)
         self.assertLess(read_pos,catch_pos)
-        self.assertLess(catch_pos,digest_pos)
-        self.assertLess(digest_pos,parse_pos)
+        self.assertLess(catch_pos,parse_pos)
+        self.assertLess(parse_pos,digest_pos)
+        self.assertLess(digest_pos,result.index("for (auto& w : m_words)"))
 
     def test_gui_embeds_loaded_dump_digest_and_v2_container(self):
         h=patched_gui_header(__import__(

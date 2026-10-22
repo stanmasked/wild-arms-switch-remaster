@@ -161,3 +161,15 @@ Wild Arms dump being loaded by a locally built emulator. The latest
 Stage477/478 Disc analysis and patched-build Actions runs are queued; no new
 pass is claimed until they finish.
 
+## Stage480 follow-up — avoid hashing a native dump twice
+
+The file-backed reader validates the seek and completes the exact-size read,
+then transfers the untouched byte buffer to the vector overload. That overload
+computes SHA-256 once, before endian conversion, and publishes the digest only
+after the native GPUDUMP header validates. This preserves the fail-closed
+identity semantics while avoiding a second full pass over large dump files.
+
+The regression tests assert that the file path delegates only after a complete
+read, that the raw digest is computed before byte swapping, and that the digest
+is committed only after header validation. CI is still pending; this change is
+not marked validated until the current-head workflows complete.
