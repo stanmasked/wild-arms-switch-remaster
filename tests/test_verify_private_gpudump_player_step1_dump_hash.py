@@ -263,6 +263,15 @@ class Stage456PatchTests(unittest.TestCase):
         self.assertLess(result.index(invalid_count),result.index(digest))
         self.assertLess(result.index(digest),result.index('bool valid = open(std::move(words))'))
 
+    def test_reader_requires_successful_rewind_before_hashing(self):
+        result=patched_core_source(CORE_SOURCE_SNIPPET)
+        rewind='if (file->rSeek(0, SEEK_SET) != 0) return false;'
+        read_loop='while (total < size)'
+        digest='auto exactFileDigest = waPrivateSha256'
+        self.assertIn(rewind,result)
+        self.assertLess(result.index(rewind),result.index(read_loop))
+        self.assertLess(result.index(read_loop),result.index(digest))
+
     def test_gui_embeds_loaded_dump_digest_and_v2_container(self):
         h=patched_gui_header(__import__(
             "patch_private_pcsx_gpudump_player_step1_export").patched_header(GUI_HEADER_SNIPPET))
