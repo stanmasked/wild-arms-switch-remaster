@@ -10,7 +10,37 @@ concurrency:
 on:
   push:
     branches: [main]
+    paths:
+      - 'CMakeLists.txt'
+      - 'src/**'
+      - 'include/**'
+      - 'switch/**'
+      - 'tests/*.c'
+      - 'tests/*.cc'
+      - 'tests/*.cpp'
+      - 'tests/*.h'
+      - 'tests/*.hpp'
+      - 'tests/**/*.c'
+      - 'tests/**/*.cc'
+      - 'tests/**/*.cpp'
+      - 'tests/**/*.h'
+      - 'tests/**/*.hpp'
   pull_request:
+    paths:
+      - 'CMakeLists.txt'
+      - 'src/**'
+      - 'include/**'
+      - 'switch/**'
+      - 'tests/*.c'
+      - 'tests/*.cc'
+      - 'tests/*.cpp'
+      - 'tests/*.h'
+      - 'tests/*.hpp'
+      - 'tests/**/*.c'
+      - 'tests/**/*.cc'
+      - 'tests/**/*.cpp'
+      - 'tests/**/*.h'
+      - 'tests/**/*.hpp'
 jobs:
   test:
     runs-on: ubuntu-latest
