@@ -40,9 +40,10 @@ emulator by this repository's CI.
 
 ## New binding path
 
-1. `GPUDumpReader::open(IO<File>)` requires a word-aligned dump and reads
-   the complete file into the reader's word buffer. It hashes those exact raw
-   bytes before interpreting/swapping packet words; partial reads fail closed.
+1. `GPUDumpReader::open(IO<File>)` requires a word-aligned dump and a
+   successful seek to byte zero, then reads the complete file into the reader's
+   word buffer. It hashes those exact raw bytes before interpreting/swapping
+   packet words; partial or invalid-sized reads fail closed.
 2. The digest is stored on that reader and exposed read-only through the
    loaded `GPUDumpPlayer`.
 3. The export button remains enabled only while paused at `Frame 1`.
