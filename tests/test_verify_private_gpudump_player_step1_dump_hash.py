@@ -244,10 +244,13 @@ class Stage456PatchTests(unittest.TestCase):
 
     def test_reader_hashes_raw_file_before_byte_swapping(self):
         result=patched_core_source(CORE_SOURCE_SNIPPET)
+        self.assertLess(result.index("m_sha256.fill(0);"),result.index("if (!file || file->failed())"))
         self.assertLess(result.index("auto exactFileDigest"),result.index("bool valid = open"))
-        self.assertIn("m_sha256 = exactFileDigest",result)
+        self.assertIn("if (valid) m_sha256 = exactFileDigest",result)
         self.assertIn("waPrivateSha256(reinterpret_cast<const uint8_t*>(words.data())",result)
         self.assertIn("size_t(got) > size - total",result)
+        self.assertLess(result.index("auto rawDigest"),result.index("m_words = std::move(words)"))
+        self.assertLess(result.index("m_sha256 = rawDigest"),result.index("return true;"))
 
     def test_reader_rejects_misaligned_or_incomplete_native_file_reads(self):
         result=patched_core_source(CORE_SOURCE_SNIPPET)
@@ -259,6 +262,8 @@ class Stage456PatchTests(unittest.TestCase):
         self.assertIn(read_loop,result)
         self.assertIn(invalid_count,result)
         self.assertIn('total += size_t(got);',result)
+        self.assertIn('m_words.clear();',result)
+        self.assertIn('m_ptr = 4;',result)
         self.assertLess(result.index(alignment),result.index(read_loop))
         self.assertLess(result.index(invalid_count),result.index(digest))
         self.assertLess(result.index(digest),result.index('bool valid = open(std::move(words))'))
@@ -377,6 +382,7 @@ public:
     const std::array<uint8_t,32>& digest() const { return m_sha256; }
 private:
     std::vector<uint32_t> m_words;
+    size_t m_ptr=4;
     std::array<uint8_t,32> m_sha256{};
 };
 }
@@ -393,18 +399,26 @@ int main() {
     auto misaligned=std::make_shared<PCSX::File>();
     misaligned->bytes.assign(5,1);
     if (reader.open(misaligned)) return 3;
+    if (reader.digest()!=std::array<uint8_t,32>{}) return 7;
     auto seekFailure=std::make_shared<PCSX::File>();
     seekFailure->bytes=bytes;
     seekFailure->seekFails=true;
     if (reader.open(seekFailure)) return 4;
+    if (reader.digest()!=std::array<uint8_t,32>{}) return 8;
     auto interrupted=std::make_shared<PCSX::File>();
     interrupted->bytes=bytes;
     interrupted->mode=1;
     if (reader.open(interrupted)) return 5;
+    if (reader.digest()!=std::array<uint8_t,32>{}) return 9;
     auto invalidCount=std::make_shared<PCSX::File>();
     invalidCount->bytes=bytes;
     invalidCount->mode=2;
     if (reader.open(invalidCount)) return 6;
+    if (reader.digest()!=std::array<uint8_t,32>{}) return 10;
+    auto invalidHeader=std::make_shared<PCSX::File>();
+    invalidHeader->bytes.assign(8,0);
+    if (reader.open(invalidHeader)) return 11;
+    if (reader.digest()!=std::array<uint8_t,32>{}) return 12;
     return 0;
 }
 '''
