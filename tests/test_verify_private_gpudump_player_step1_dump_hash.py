@@ -282,6 +282,23 @@ class Stage456PatchTests(unittest.TestCase):
         self.assertLess(result.index(rewind),result.index(read_loop))
         self.assertLess(result.index(read_loop),result.index(digest))
 
+    def test_reader_rewind_exception_is_caught_before_read_or_parse(self):
+        result=patched_core_source(CORE_SOURCE_SNIPPET)
+        rewind='if (file->rSeek(0, SEEK_SET) != 0) return false;'
+        read_loop='while (total < size)'
+        digest='auto exactFileDigest = waPrivateSha256'
+        parse='bool valid = open(std::move(words))'
+        self.assertIn(rewind,result)
+        rewind_pos=result.index(rewind)
+        read_pos=result.index(read_loop,rewind_pos)
+        catch_pos=result.index('} catch (...) {',rewind_pos)
+        digest_pos=result.index(digest,rewind_pos)
+        parse_pos=result.index(parse,rewind_pos)
+        self.assertLess(rewind_pos,read_pos)
+        self.assertLess(read_pos,catch_pos)
+        self.assertLess(catch_pos,digest_pos)
+        self.assertLess(digest_pos,parse_pos)
+
     def test_gui_embeds_loaded_dump_digest_and_v2_container(self):
         h=patched_gui_header(__import__(
             "patch_private_pcsx_gpudump_player_step1_export").patched_header(GUI_HEADER_SNIPPET))
@@ -373,6 +390,7 @@ class Stage456PatchTests(unittest.TestCase):
 #include <vector>
 #include <sys/types.h>
 #define SWAP_LE32(value) (value)
+int vectorOpenCalls = 0;
 namespace PCSX {
 template<class T> using IO = std::shared_ptr<T>;
 struct File {
@@ -384,6 +402,7 @@ struct File {
     bool readThrows=false;
     int mode=0;
     size_t maxChunk=static_cast<size_t>(-1);
+    size_t readCalls=0;
     bool failed() const { return false; }
     size_t size() const {
         if (sizeThrows) throw std::runtime_error("size failure");
@@ -396,6 +415,7 @@ struct File {
         return ssize_t(cursor);
     }
     ssize_t read(void* dst,size_t amount) {
+        ++readCalls;
         if (readThrows) throw std::runtime_error("read failure");
         if (mode==2) return ssize_t(amount+1);
         if (mode==1 && cursor>=5) return -1;
@@ -423,7 +443,8 @@ private:
     std::array<uint8_t,32> m_sha256{};
 };
 }
-''' + SHA256_HELPER + "\n" + NEW_FILE_OPEN + "\n" + NEW_VECTOR_OPEN + vector_tail + r'''
+''' + SHA256_HELPER + "\n" + NEW_FILE_OPEN + "\n" + NEW_VECTOR_OPEN.replace("bool PCSX::GPUDumpReader::open(std::vector<uint32_t>&& words) {",
+        "bool PCSX::GPUDumpReader::open(std::vector<uint32_t>&& words) {\\n    ++vectorOpenCalls;") + vector_tail + r'''
 int main() {
     std::vector<uint8_t> bytes={'P','S','X','G','P','U','D','U','M','P','v','1','r','1',0,0};
     auto partial=std::make_shared<PCSX::File>();
@@ -438,14 +459,20 @@ int main() {
     auto seekFailure=std::make_shared<PCSX::File>();
     seekFailure->bytes=bytes;
     seekFailure->seekFails=true;
+    int parserCallsBeforeSeekException = vectorOpenCalls;
     if (reader.open(seekFailure)) return 3;
+    if (vectorOpenCalls != parserCallsBeforeSeekException) return 25;
+    if (seekFailure->readCalls != 0) return 26;
     if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0 || reader.position()!=4) return 4;
 
     // Also exercise backends that report seek failure as a negative value.
     auto seekNegative=std::make_shared<PCSX::File>();
     seekNegative->bytes=bytes;
     seekNegative->seekReturnsNegative=true;
+    int parserCallsBeforeNegativeSeek = vectorOpenCalls;
     if (reader.open(seekNegative)) return 5;
+    if (vectorOpenCalls != parserCallsBeforeNegativeSeek) return 27;
+    if (seekNegative->readCalls != 0) return 28;
     if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0) return 6;
 
     auto sizeFailure=std::make_shared<PCSX::File>();
