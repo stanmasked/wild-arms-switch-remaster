@@ -58,6 +58,7 @@ def probe_first_uv_4bpp(vram, last_upload_epoch, draw_epoch, info,
     palette_16=vram[palette_address*2:palette_address*2+2]
     return {
         "status":"MODELED_FIRST_DECLARED_UV_WITH_DISABLED_TEXTURE_WINDOW",
+        "first_uv_nibble_within_u16": u % 4,
         "first_uv_texture_word_x_words":texture_x,
         "first_uv_texture_word_y":texture_y,
         "first_uv_clut_row_x_words":clut_x,
