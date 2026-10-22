@@ -6,11 +6,13 @@ on:
     paths:
       - tools/patch_private_pcsx_gpudump_player_step1_export.py
       - tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py
+      - docs/stage456-private-player-step1-native-dump-hash-binding.md
       - .github/workflows/pcsx-redux-patched-build.yml
   pull_request:
     paths:
       - tools/patch_private_pcsx_gpudump_player_step1_export.py
       - tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py
+      - docs/stage456-private-player-step1-native-dump-hash-binding.md
       - .github/workflows/pcsx-redux-patched-build.yml
   workflow_dispatch:
 
