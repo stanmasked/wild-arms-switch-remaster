@@ -1,6 +1,11 @@
 name: Pinned OpenBIOS runtime artifact
 
 on:
+  push:
+    branches:
+      - stage-456-private-player-step1-native-dump-hash-binding
+    paths:
+      - .github/workflows/openbios-runtime-artifact.yml
   pull_request:
     paths:
       - .github/workflows/openbios-runtime-artifact.yml
