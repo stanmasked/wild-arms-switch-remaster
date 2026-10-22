@@ -105,10 +105,11 @@ def match_decoded_stream_runs(
                 # A run should be reported once at its earliest position.
                 # Even if its prior block was low-information, suppress a
                 # continuation that would exaggerate placement evidence.
-                if (source_offset >= BLOCK_BYTES and x_bytes >= BLOCK_BYTES
-                    and source[source_offset-BLOCK_BYTES:source_offset]
-                        == row[x_bytes-BLOCK_BYTES:x_bytes]):
-                    continue
+                if (source_offset >= BLOCK_BYTES and x_bytes >= BLOCK_BYTES):
+                    previous = source[source_offset-BLOCK_BYTES:source_offset]
+                    if (previous in index and
+                            previous == row[x_bytes-BLOCK_BYTES:x_bytes]):
+                        continue
                 extension = 0
                 while (source_offset+(extension+1)*BLOCK_BYTES <= len(source)
                        and x_bytes+(extension+1)*BLOCK_BYTES <= VRAM_ROW_BYTES
