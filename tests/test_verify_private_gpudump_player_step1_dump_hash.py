@@ -539,7 +539,7 @@ int main() {
     if (seekFailure->readCalls != 0) return 26;
     if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0 || reader.position()!=4) return 4;
 
-    // Exercise the actual Player load ordering: a valid load reaches packet
+    // Mirror the pinned Player load ordering: a valid load reaches packet
     // iteration; a subsequent throwing rewind must stop before GPU setup/rewind.
     auto playerValid=std::make_shared<PCSX::File>();
     playerValid->bytes=bytes;
@@ -571,6 +571,14 @@ int main() {
     if (gpuSetupCalls != gpuSetupBeforeNegativeSeek) return 40;
     if (seekNegative->readCalls != 0) return 28;
     if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0) return 6;
+
+    int packetCallsBeforePlayerNegativeSeek = packetNextCalls;
+    int gpuSetupBeforePlayerNegativeSeek = gpuSetupCalls;
+    if (player.load(seekNegative)) return 41;
+    if (packetNextCalls != packetCallsBeforePlayerNegativeSeek) return 42;
+    if (gpuSetupCalls != gpuSetupBeforePlayerNegativeSeek) return 43;
+    if (seekNegative->readCalls != 0) return 44;
+    if (player.digest()!=std::array<uint8_t,32>{}) return 45;
 
     auto sizeFailure=std::make_shared<PCSX::File>();
     sizeFailure->bytes=bytes;
