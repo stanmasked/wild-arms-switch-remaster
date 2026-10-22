@@ -125,13 +125,18 @@ GP1-derived VRAM rectangle as the four coordinate arguments.
 ## Tests
 
 `tests/test_verify_private_gpudump_player_rewind_rgb.py`
-contains **22 ROM-free synthetic regressions**, including
+contains **24 ROM-free synthetic regressions**, including
 zero/mismatched pixels, 5-to-8-bit conversion, high bit15,
-nonzero VRAM row offsets, no scaling/alpha support,
+nonzero VRAM row offsets, no scaling/alpha/transparency-key support,
 independent PNG SHA-256 check, GP1 display window geometry,
 missing/duplicate GP1 state, nonwrapping boundaries, file
 symlinks, expected native SHA/frame mismatch and metadata
 privacy.
+
+The PNG decoder uses only Python's standard library (zlib/struct),
+validates PNG CRC and scanline filters, and rejects color formats
+and transparency modes it cannot verify exactly. CI does not
+need Pillow to validate these owner-private RGB ROI files.
 
 **Accept only exact equality as conditional rewind-state
 evidence. Do not call any original Surf Village artwork
