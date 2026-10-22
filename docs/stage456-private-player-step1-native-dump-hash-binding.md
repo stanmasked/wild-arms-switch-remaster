@@ -35,7 +35,7 @@ The first invocation validates the patch with `git apply --check` without
 modifying the checkout. The second explicitly modifies the owner's local
 checkout. It refuses an unexpected upstream commit or dirty working tree.
 After applying, build PCSX-Redux locally according to upstream instructions.
-The Disc analysis unit tests workflow also fetches this exact upstream commit and runs the generator's `git apply --check` against the real four source files. This verifies patch applicability, not compilation of the complete emulator or attestation of the patched binary; the owner-local build remains a separate gate.
+The Disc analysis unit tests workflow fetches this exact upstream commit and runs the generator's `git apply --check` against the real four source files. The separate `PCSX-Redux patched build` workflow fetches the pinned source and submodules, applies this combined patch in a disposable CI checkout, and builds the full emulator plus host tests/tools using the upstream Linux build container. These checks establish patch applicability and CI compilation only; they do not attest the owner's local binary or replace the private runtime capture.
 
 ## New binding path
 
@@ -101,8 +101,9 @@ equality. It reports only hashes, counts, and status, not raw pixels.
 
 ## Remaining limitations
 
-- The patch must be built and run locally; this project CI does not build
-  PCSX-Redux or attest the resulting binary.
+- The patched emulator must still be built and run in the owner's private
+  environment against the original GPU dump. CI compiles a disposable patched
+  checkout but does not attest the owner's binary or certify runtime behavior.
 - A malicious or modified emulator could fabricate its own embedded digest.
   Treat the patch source and local build provenance as part of the evidence.
 - The PNG is still operator-supplied. A stronger capture would export the

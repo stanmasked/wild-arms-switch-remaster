@@ -1,0 +1,58 @@
+name: PCSX-Redux patched build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/patch_private_pcsx_gpudump_player_step1_export.py
+      - tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py
+      - .github/workflows/pcsx-redux-patched-build.yml
+  pull_request:
+    paths:
+      - tools/patch_private_pcsx_gpudump_player_step1_export.py
+      - tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py
+      - .github/workflows/pcsx-redux-patched-build.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pcsx-redux-patched-build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-patched-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: ghcr.io/grumpycoders/pcsx-redux-build:noble
+      options: --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor:unconfined
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          set-safe-directory: true
+
+      - name: Fetch exact pinned PCSX-Redux source
+        env:
+          UPSTREAM_SHA: de4a33e9a69abec4f567ae33567537f867dc2bba
+        run: |
+          git init "$RUNNER_TEMP/pcsx-redux"
+          git -C "$RUNNER_TEMP/pcsx-redux" remote add origin https://github.com/grumpycoders/pcsx-redux.git
+          git -C "$RUNNER_TEMP/pcsx-redux" fetch --depth 1 origin "$UPSTREAM_SHA"
+          git -C "$RUNNER_TEMP/pcsx-redux" checkout --detach FETCH_HEAD
+          git config --global --add safe.directory "$RUNNER_TEMP/pcsx-redux"
+
+      - name: Fetch upstream submodules
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: ./.github/scripts/update-submodules.sh
+
+      - name: Apply combined owner-local research patch
+        run: |
+          python3 "$GITHUB_WORKSPACE/tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py" \
+            "$RUNNER_TEMP/pcsx-redux" --apply
+          git -C "$RUNNER_TEMP/pcsx-redux" diff --check
+
+      - name: Build patched PCSX-Redux, host tests, and tools
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: make -j 2 all pcsx-redux-tests tools LDFLAGS_Release="-static-libstdc++ -static-libgcc"
