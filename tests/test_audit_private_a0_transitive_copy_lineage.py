@@ -162,6 +162,17 @@ class Stage444CopyChainTests(unittest.TestCase):
         self.assertEqual(transitive(out)["status"],
                          "NO_KNOWN_A0_ORIGIN_FOR_FIRST_UV")
 
+    def test_copy_to_last_vram_row_can_be_addressed_with_page_y_bit(self):
+        out=play([E2_ZERO,E6,upload(),copy(dx=928,dy=511),
+                  draw(page=0x1e,u=208,v=255)])
+        lineage=transitive(out)
+        self.assertEqual(lineage["status"],
+                         "CONDITIONAL_FRESH_TRANSITIVE_SOURCE_RUN")
+        self.assertEqual((lineage["first_uv_x_words"],lineage["first_uv_y"]),
+                         (948,511))
+        self.assertEqual(lineage["run_samples"][0]["current_run_start_x_words"],
+                         928)
+
     def test_mixed_hop_counts_still_validate_consecutive_origin_words(self):
         out=play([E2_ZERO,E6,upload(),copy(),
                   copy(sx=256,dx=512,width=48),
