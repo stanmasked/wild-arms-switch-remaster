@@ -119,8 +119,29 @@ equality. It reports only hashes, counts, and status, not raw pixels.
 
 ## Validation
 
-`tests/test_verify_private_gpudump_player_step1_dump_hash.py` adds 24
+`tests/test_verify_private_gpudump_player_step1_dump_hash.py` adds 25
 ROM-free tests for the v2 format, wrong source digest, CRC, length/frame,
-RGB equality, privacy and patch generation. It also compiles the exact
+RGB equality, privacy, patch generation, and fail-closed native I/O. It also compiles the exact
 self-contained C++ SHA-256 helper when a host C++ compiler is available and
 checks three standard known vectors against Python's `hashlib`.
+
+## Stage476 follow-up — thrown seek failure must stop before parsing
+
+The pinned upstream `src/support/file.h` declares the base `File::rSeek()`
+as throwing by default, and `src/support/file.cc` shows that
+`PosixFile::rSeek()` throws `std::runtime_error` when `fseek()` fails.
+The patch's reader catches that exception and rejects the open; it also
+rejects backends that return a negative seek result.
+
+The compiled C++ regression harness now counts both file-read calls and
+calls to the vector-backed `GPUDumpReader::open()` packet parser. For both
+the thrown-exception and negative-return seek failures, it asserts that no
+read or packet parse starts, the digest is zeroed, and the reader buffer
+remains empty. A source-order regression also checks that rewind/read
+exceptions are handled before digest calculation and packet parsing.
+
+This remains a synthetic host regression against a mock File backend; the
+pinned upstream source establishes the real exception semantics, while the
+separate patched-emulator build and private runtime capture retain their
+own validation gates.
+
