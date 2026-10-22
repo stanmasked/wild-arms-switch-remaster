@@ -249,6 +249,20 @@ class Stage456PatchTests(unittest.TestCase):
         self.assertIn("waPrivateSha256(reinterpret_cast<const uint8_t*>(words.data())",result)
         self.assertIn("size_t(got) > size - total",result)
 
+    def test_reader_rejects_misaligned_or_incomplete_native_file_reads(self):
+        result=patched_core_source(CORE_SOURCE_SNIPPET)
+        alignment='if (size % sizeof(uint32_t) != 0) return false;'
+        read_loop='while (total < size)'
+        invalid_count='if (got <= 0 || size_t(got) > size - total) return false;'
+        digest='auto exactFileDigest = waPrivateSha256'
+        self.assertIn(alignment,result)
+        self.assertIn(read_loop,result)
+        self.assertIn(invalid_count,result)
+        self.assertIn('total += size_t(got);',result)
+        self.assertLess(result.index(alignment),result.index(read_loop))
+        self.assertLess(result.index(invalid_count),result.index(digest))
+        self.assertLess(result.index(digest),result.index('bool valid = open(std::move(words))'))
+
     def test_gui_embeds_loaded_dump_digest_and_v2_container(self):
         h=patched_gui_header(__import__(
             "patch_private_pcsx_gpudump_player_step1_export").patched_header(GUI_HEADER_SNIPPET))
