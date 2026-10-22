@@ -18,3 +18,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run synthetic overlay tests (no game image required)
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Fetch exact pinned PCSX-Redux source
+        run: |
+          git init "$RUNNER_TEMP/pcsx-redux"
+          git -C "$RUNNER_TEMP/pcsx-redux" remote add origin https://github.com/grumpycoders/pcsx-redux.git
+          git -C "$RUNNER_TEMP/pcsx-redux" fetch --depth 1 origin de4a33e9a69abec4f567ae33567537f867dc2bba
+          git -C "$RUNNER_TEMP/pcsx-redux" checkout --detach FETCH_HEAD
+      - name: Validate generated patch against real upstream sources
+        run: python3 tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py "$RUNNER_TEMP/pcsx-redux"

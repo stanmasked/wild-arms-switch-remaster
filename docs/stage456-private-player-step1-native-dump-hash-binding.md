@@ -35,8 +35,7 @@ The first invocation validates the patch with `git apply --check` without
 modifying the checkout. The second explicitly modifies the owner's local
 checkout. It refuses an unexpected upstream commit or dirty working tree.
 After applying, build PCSX-Redux locally according to upstream instructions.
-The generated patch is not claimed to have been built against the complete
-emulator by this repository's CI.
+The Disc analysis unit tests workflow also fetches this exact upstream commit and runs the generator's `git apply --check` against the real four source files. This verifies patch applicability, not compilation of the complete emulator or attestation of the patched binary; the owner-local build remains a separate gate.
 
 ## New binding path
 
