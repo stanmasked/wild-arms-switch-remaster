@@ -22,6 +22,7 @@ from audit_private_gp0_texture_first_uv import probe_first_uv_4bpp
 from audit_private_surf_gp0_stream_uv_link import (
     prepare_private_stream_index, match_first_uv_to_private_streams)
 from audit_private_gp0_a0_source_payload import match_a0_source_payload
+from audit_private_a0_draw_uv_lineage import PrivateA0DrawLineage
 from audit_surf_palette_rows import read_private_candidates
 from audit_surf_vram_palette_occurrences import _row_filter, VRAM_BYTES
 
@@ -148,6 +149,7 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
     palette_rows = _build_candidates(banks, minimum_distinct_nonzero)
     source_index = (prepare_private_stream_index(source_streams)
                     if source_streams is not None else None)
+    a0_lineage = PrivateA0DrawLineage() if source_index is not None else None
     vram = bytearray(initial_vram)
     # Each u16 pixel records the most recent *completed* draw epoch in which
     # it was explicitly rewritten by a modeled copy/upload. -1 = no proof.
@@ -202,7 +204,9 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
                 pixel_epoch[address] = draw_epoch
             counters["A0_CPU_TO_VRAM"] += 1
             if source_index is not None:
-                a0_match = match_a0_source_payload(source_index, packet)
+                a0_match = match_a0_source_payload(
+                    source_index, packet, max_run_samples=256)
+                a0_lineage.record_a0(index, x, y, width, height, a0_match)
                 counters["A0_SOURCE_BYTE_RUN_MATCHES"] += (
                     a0_match["matching_decoded_stream_run_count"])
                 counters["A0_PACKETS_WITH_SOURCE_RUNS"] += int(
@@ -232,6 +236,8 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
                 start = (dy+ry)*VRAM_WIDTH+dx
                 vram[start*2:(start+width)*2] = data
                 pixel_epoch[start:start+width] = states
+            if a0_lineage is not None:
+                a0_lineage.invalidate_vram_copy_destination(dx, dy, width, height)
             counters["80_VRAM_TO_VRAM"] += 1
             continue
         if len(packet) > 32:
@@ -288,8 +294,24 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
                             "no_source_run_match_attempted": True,
                         }
                         counters["UV_SOURCE_LINKAGE_UNAVAILABLE"] += 1
+                lineage = None
+                if a0_lineage is not None:
+                    if texture_probe["status"] == (
+                            "MODELED_FIRST_DECLARED_UV_WITH_DISABLED_TEXTURE_WINDOW"):
+                        lineage = a0_lineage.inspect(
+                            texture_probe["first_uv_texture_word_x_words"],
+                            texture_probe["first_uv_texture_word_y"],
+                            draw_epoch, pixel_epoch)
+                        counters["A0_UV_LINEAGE_"+lineage["status"]] += 1
+                    else:
+                        lineage = {
+                            "status": "FIRST_UV_NOT_AVAILABLE_FOR_A0_ATTRIBUTION",
+                            "no_a0_writer_attribution_attempted": True,
+                        }
+                        counters["A0_UV_LINEAGE_UNAVAILABLE"] += 1
                 if len(evidence) < max_evidence:
                     evidence.append({
+                        "first_uv_direct_a0_lineage": lineage,
                         "first_uv_source_run_linkage": stream_linkage,
                         "first_uv_texture_probe": texture_probe,
                         "packet_index": index,
@@ -385,6 +407,8 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
             "source_stream_uv_covering_runs_are_memory_occurrences_not_gp0_upload_proof": True,
             "first_uv_pixel_visibility_and_scene_geometry_unverified": True,
             "a0_payload_matches_do_not_authenticate_gpu_upload_or_draw_use": True,
+            "direct_a0_writer_lineage_excludes_unattributed_vram_copies": True,
+            "matched_packet_to_uv_link_does_not_prove_real_gpu_execution": True,
         },
     }
 
