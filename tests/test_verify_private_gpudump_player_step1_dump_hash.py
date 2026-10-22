@@ -250,6 +250,8 @@ class Stage456PatchTests(unittest.TestCase):
         self.assertIn("waPrivateSha256(reinterpret_cast<const uint8_t*>(words.data())",result)
         self.assertIn("size_t(got) > size - total",result)
         self.assertLess(result.index("auto rawDigest"),result.index("m_words = std::move(words)"))
+        self.assertLess(result.index("if (m_words[i] != SWAP_LE32(magic[i])) return false;"),
+                        result.index("m_sha256 = rawDigest"))
         self.assertLess(result.index("m_sha256 = rawDigest"),result.index("return true;"))
 
     def test_reader_rejects_misaligned_or_incomplete_native_file_reads(self):
