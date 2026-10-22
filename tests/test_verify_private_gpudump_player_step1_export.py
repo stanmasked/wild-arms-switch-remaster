@@ -204,6 +204,7 @@ class Stage455UpstreamPatchTests(unittest.TestCase):
         result=patched_header(HEADER_SNIPPET)
         self.assertIn("m_stepExportDialog",result)
         self.assertIn("m_frozenStepOneVRAM",result)
+        self.assertIn("m_frozenStepOneFrame = 0",result)
         self.assertIn("m_openDialog",result)
 
     def test_patched_source_has_only_frame_one_and_detached_player_gpu(self):
@@ -220,6 +221,10 @@ class Stage455UpstreamPatchTests(unittest.TestCase):
                         result.index("m_stepExportDialog.openDialog()"))
         self.assertIn("std::filesystem::permissions(",result)
         self.assertIn("std::remove(path.c_str())",result)
+        self.assertIn("m_frozenStepOneFrame = player->frame()",result)
+        self.assertIn("m_frozenStepOneVRAM, m_frozenStepOneFrame",result)
+        self.assertIn("capturedFrame != 1",result)
+        self.assertIn("header[16 + i] = uint8_t(capturedFrame",result)
 
     def test_patch_generator_rejects_changed_or_duplicate_upstream_anchors(self):
         with self.assertRaisesRegex(ValueError,"absent or duplicated"):
