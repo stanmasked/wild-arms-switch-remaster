@@ -269,6 +269,39 @@ class Stage456PatchTests(unittest.TestCase):
         self.assertIn("player->dumpSHA256()",diff)
         self.assertNotIn("src/core/gpu.cc",diff)
 
+    def test_combined_diff_applies_to_clean_synthetic_four_file_checkout(self):
+        git=shutil.which("git")
+        if git is None:
+            self.skipTest("git executable not installed")
+        originals={
+            "src/core/gpudump.h":CORE_HEADER_SNIPPET,
+            "src/core/gpudump.cc":CORE_SOURCE_SNIPPET,
+            "src/gui/widgets/gpudump.h":GUI_HEADER_SNIPPET,
+            "src/gui/widgets/gpudump.cc":GUI_SOURCE_SNIPPET,
+        }
+        diff=make_diff(CORE_HEADER_SNIPPET,CORE_SOURCE_SNIPPET,
+                       GUI_HEADER_SNIPPET,GUI_SOURCE_SNIPPET)
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            for name,content in originals.items():
+                path=root/name
+                path.parent.mkdir(parents=True,exist_ok=True)
+                path.write_text(content)
+            subprocess.run([git,"init","-q",str(root)],check=True)
+            subprocess.run([git,"-C",str(root),"add","."],check=True)
+            subprocess.run([git,"-C",str(root),"-c","user.name=Stage456",
+                            "-c","user.email=stage456@example.invalid",
+                            "commit","-qm","synthetic pristine base"],check=True)
+            checked=subprocess.run([git,"-C",str(root),"apply","--check","-"],
+                                   input=diff,capture_output=True,text=True)
+            self.assertEqual(checked.returncode,0,checked.stderr)
+            applied=subprocess.run([git,"-C",str(root),"apply","-"],
+                                   input=diff,capture_output=True,text=True)
+            self.assertEqual(applied.returncode,0,applied.stderr)
+            self.assertIn("m_sha256", (root/"src/core/gpudump.h").read_text())
+            self.assertIn("capturedDumpSHA256.data()",
+                          (root/"src/gui/widgets/gpudump.cc").read_text())
+
     def test_cpp_sha256_matches_empty_abc_and_million_a_vectors(self):
         compiler=shutil.which("c++") or shutil.which("g++") or shutil.which("clang++")
         if compiler is None:
