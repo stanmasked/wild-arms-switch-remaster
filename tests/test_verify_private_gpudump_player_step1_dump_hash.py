@@ -444,7 +444,7 @@ private:
 };
 }
 ''' + SHA256_HELPER + "\n" + NEW_FILE_OPEN + "\n" + NEW_VECTOR_OPEN.replace("bool PCSX::GPUDumpReader::open(std::vector<uint32_t>&& words) {",
-        "bool PCSX::GPUDumpReader::open(std::vector<uint32_t>&& words) {\\n    ++vectorOpenCalls;") + vector_tail + r'''
+        "bool PCSX::GPUDumpReader::open(std::vector<uint32_t>&& words) {\n    ++vectorOpenCalls;") + vector_tail + r'''
 int main() {
     std::vector<uint8_t> bytes={'P','S','X','G','P','U','D','U','M','P','v','1','r','1',0,0};
     auto partial=std::make_shared<PCSX::File>();
