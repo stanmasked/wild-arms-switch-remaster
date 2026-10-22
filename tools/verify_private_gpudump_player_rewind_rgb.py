@@ -17,7 +17,7 @@ import json
 from pathlib import Path
 import re
 
-from audit_private_surf_reference_patch import _opaque_rgb_png
+from decode_private_opaque_rgb_png import decode_private_opaque_rgb_png
 from bind_private_pcsx_first_frame_evidence import bind_private_first_frame_capture
 from import_private_pcsx_native_gpudump import (
     GP1, TRACE_BEGIN, MAX_DUMP_BYTES, read_native_gpu_dump
@@ -158,14 +158,14 @@ def verify_private_gpudump_rewind_image(
     image_sha=hashlib.sha256(image).hexdigest()
     if expected_png_sha256 is not None and image_sha!=expected_png_sha256:
         raise ValueError("owner PNG differs from independent expected hash")
-    image_dimensions,decoded=_opaque_rgb_png(image)
+    image_dimensions,decoded=decode_private_opaque_rgb_png(image)
     if image_dimensions!=(width,height):
         raise ValueError("rewind PNG must have exact unscaled ROI dimensions")
     vram=pre.read_bytes()
     if hashlib.sha256(vram).hexdigest()!=binding["imported_prepacket_vram_sha256"]:
         raise ValueError("pretrace VRAM changed after Stage451 integrity binding")
     result=compare_private_rewind_vram_rgb(
-        vram,decoded.tobytes(),x,y,width,height)
+        vram,decoded,x,y,width,height)
     if require_exact_rgb and not result["rgb_pixel_values_exactly_equal"]:
         raise ValueError("owner rewind PNG RGB differs from native pretrace VRAM")
     return {
