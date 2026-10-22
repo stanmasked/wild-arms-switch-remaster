@@ -277,6 +277,21 @@ class Stage456PatchTests(unittest.TestCase):
         self.assertLess(result.index(invalid_count),result.index('return open(std::move(words));'))
         self.assertLess(result.index(digest),result.index('m_words = std::move(words)'))
 
+    def test_reader_allocation_failure_is_caught_before_seek_or_read(self):
+        result=patched_core_source(CORE_SOURCE_SNIPPET)
+        allocation=(
+            "std::vector<uint32_t> words;\n"
+            "    try {\n"
+            "        words.resize(size / sizeof(uint32_t));\n"
+            "    } catch (...) {\n"
+            "        return false;\n"
+            "    }"
+        )
+        self.assertIn(allocation,result)
+        self.assertLess(result.index(allocation),
+                        result.index("if (file->rSeek(0, SEEK_SET) != 0) return false;"))
+        self.assertLess(result.index(allocation),result.index("while (total < size)"))
+
     def test_reader_requires_successful_rewind_before_hashing(self):
         result=patched_core_source(CORE_SOURCE_SNIPPET)
         rewind='if (file->rSeek(0, SEEK_SET) != 0) return false;'
@@ -389,6 +404,7 @@ class Stage456PatchTests(unittest.TestCase):
 #include <cstdio>
 #include <cstring>
 #include <memory>
+#include <limits>
 #include <string>
 #include <stdexcept>
 #include <utility>
@@ -407,15 +423,19 @@ struct File {
     bool seekReturnsNegative=false;
     bool sizeThrows=false;
     bool readThrows=false;
+    bool overrideReportedSize=false;
+    size_t reportedSize=0;
+    size_t seekCalls=0;
     int mode=0;
     size_t maxChunk=static_cast<size_t>(-1);
     size_t readCalls=0;
     bool failed() const { return false; }
     size_t size() const {
         if (sizeThrows) throw std::runtime_error("size failure");
-        return bytes.size();
+        return overrideReportedSize ? reportedSize : bytes.size();
     }
     ssize_t rSeek(ssize_t pos,int wheel) {
+        ++seekCalls;
         if (seekFails) throw std::runtime_error("seek failure");
         if (seekReturnsNegative || wheel!=SEEK_SET || pos<0) return -1;
         cursor=size_t(pos);
@@ -590,6 +610,18 @@ int main() {
     sizeFailure->sizeThrows=true;
     if (reader.open(sizeFailure)) return 7;
     if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0) return 8;
+
+    // A word-aligned but unrepresentable size must fail during buffer
+    // allocation, before any seek, file read, digest, or packet parsing.
+    auto allocationFailure=std::make_shared<PCSX::File>();
+    allocationFailure->bytes=bytes;
+    allocationFailure->overrideReportedSize=true;
+    allocationFailure->reportedSize=std::numeric_limits<size_t>::max() & ~size_t(3);
+    int allocationFailureParserCalls = vectorOpenCalls;
+    if (reader.open(allocationFailure)) return 46;
+    if (allocationFailure->seekCalls != 0 || allocationFailure->readCalls != 0) return 47;
+    if (vectorOpenCalls != allocationFailureParserCalls) return 48;
+    if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0 || reader.position()!=4) return 49;
 
     auto readFailure=std::make_shared<PCSX::File>();
     readFailure->bytes=bytes;

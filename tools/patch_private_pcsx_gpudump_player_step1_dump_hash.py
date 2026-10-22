@@ -121,7 +121,12 @@ NEW_FILE_OPEN = """bool PCSX::GPUDumpReader::open(IO<File> file) {
     // Native GPUDUMP packets are 32-bit words; reject malformed tails rather
     // than hashing bytes the packet reader would silently discard.
     if (size % sizeof(uint32_t) != 0) return false;
-    std::vector<uint32_t> words(size / sizeof(uint32_t));
+    std::vector<uint32_t> words;
+    try {
+        words.resize(size / sizeof(uint32_t));
+    } catch (...) {
+        return false;
+    }
     size_t total = 0;
     try {
         // In the pinned PCSX-Redux source, PosixFile::rSeek throws

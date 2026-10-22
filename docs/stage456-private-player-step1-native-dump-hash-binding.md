@@ -45,6 +45,8 @@ The Disc analysis unit tests workflow fetches this exact upstream commit and run
    packet words; partial or invalid-sized reads fail closed. Exceptions raised
    by the pinned `File::size()`, `rSeek()`, or `read()` implementations are
    converted to a failed open, with the previous digest and packet buffer cleared.
+   Word-buffer allocation is also guarded; an unrepresentable size or allocation
+   failure returns before seek, read, hashing, or packet parsing.
 2. The digest is stored on that reader and exposed read-only through the
    loaded `GPUDumpPlayer`.
 3. The export button remains enabled only while paused at `Frame 1`.
@@ -119,7 +121,7 @@ equality. It reports only hashes, counts, and status, not raw pixels.
 
 ## Validation
 
-`tests/test_verify_private_gpudump_player_step1_dump_hash.py` adds 25
+`tests/test_verify_private_gpudump_player_step1_dump_hash.py` adds 26
 ROM-free tests for the v2 format, wrong source digest, CRC, length/frame,
 RGB equality, privacy, patch generation, and fail-closed native I/O. It also compiles the exact
 self-contained C++ SHA-256 helper when a host C++ compiler is available and
@@ -173,3 +175,12 @@ The regression tests assert that the file path delegates only after a complete
 read, that the raw digest is computed before byte swapping, and that the digest
 is committed only after header validation. CI is still pending; this change is
 not marked validated until the current-head workflows complete.
+
+## Stage484 follow-up — oversized input must fail before I/O
+
+The reader catches exceptions from allocating the word buffer after validating
+word alignment. A synthetic mock file reports the largest word-aligned
+`size_t` value while containing only a small byte vector; the host C++ regression
+requires the open to fail with zero seek calls, zero read calls, no vector-parser
+call, a zero digest, and an empty reader. This closes the allocation/length-error
+path without adding an arbitrary maximum size for legitimate private dumps.
