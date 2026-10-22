@@ -23,6 +23,7 @@ from audit_private_surf_gp0_stream_uv_link import (
     prepare_private_stream_index, match_first_uv_to_private_streams)
 from audit_private_gp0_a0_source_payload import match_a0_source_payload
 from audit_private_a0_draw_uv_lineage import PrivateA0DrawLineage
+from audit_private_a0_transitive_copy_lineage import PrivateA0CopyLineage
 from audit_surf_palette_rows import read_private_candidates
 from audit_surf_vram_palette_occurrences import _row_filter, VRAM_BYTES
 
@@ -149,7 +150,9 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
     palette_rows = _build_candidates(banks, minimum_distinct_nonzero)
     source_index = (prepare_private_stream_index(source_streams)
                     if source_streams is not None else None)
-    a0_lineage = PrivateA0DrawLineage() if source_index is not None else None
+    # Subclass retains the Stage443 DIRECT A0 writer model, while
+    # separately following original packet/word coordinates over GP0(80).
+    a0_lineage = PrivateA0CopyLineage() if source_index is not None else None
     vram = bytearray(initial_vram)
     # Each u16 pixel records the most recent *completed* draw epoch in which
     # it was explicitly rewritten by a modeled copy/upload. -1 = no proof.
@@ -237,7 +240,7 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
                 vram[start*2:(start+width)*2] = data
                 pixel_epoch[start:start+width] = states
             if a0_lineage is not None:
-                a0_lineage.invalidate_vram_copy_destination(dx, dy, width, height)
+                a0_lineage.copy_vram(sx, sy, dx, dy, width, height)
             counters["80_VRAM_TO_VRAM"] += 1
             continue
         if len(packet) > 32:
@@ -309,8 +312,24 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
                             "no_a0_writer_attribution_attempted": True,
                         }
                         counters["A0_UV_LINEAGE_UNAVAILABLE"] += 1
+                transitive_lineage = None
+                if a0_lineage is not None:
+                    if texture_probe["status"] == (
+                            "MODELED_FIRST_DECLARED_UV_WITH_DISABLED_TEXTURE_WINDOW"):
+                        transitive_lineage = a0_lineage.inspect_copy_lineage(
+                            texture_probe["first_uv_texture_word_x_words"],
+                            texture_probe["first_uv_texture_word_y"],
+                            draw_epoch, pixel_epoch)
+                        counters["A0_COPY_LINEAGE_" + transitive_lineage["status"]] += 1
+                    else:
+                        transitive_lineage = {
+                            "status": "FIRST_UV_UNAVAILABLE_FOR_COPY_LINEAGE",
+                            "no_original_a0_copy_origin_asserted": True,
+                        }
+                        counters["A0_COPY_LINEAGE_UNAVAILABLE"] += 1
                 if len(evidence) < max_evidence:
                     evidence.append({
+                        "first_uv_transitive_a0_copy_lineage": transitive_lineage,
                         "first_uv_direct_a0_lineage": lineage,
                         "first_uv_source_run_linkage": stream_linkage,
                         "first_uv_texture_probe": texture_probe,
@@ -409,6 +428,9 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
             "a0_payload_matches_do_not_authenticate_gpu_upload_or_draw_use": True,
             "direct_a0_writer_lineage_excludes_unattributed_vram_copies": True,
             "matched_packet_to_uv_link_does_not_prove_real_gpu_execution": True,
+            "transitive_a0_origin_copy_hops_conservatively_tracked": True,
+            "transitive_copy_source_run_must_remain_contiguous": True,
+            "copy_origin_is_not_a_direct_a0_writer_at_destination": True,
         },
     }
 
