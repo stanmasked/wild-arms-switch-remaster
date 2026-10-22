@@ -118,7 +118,9 @@ def _build_candidates(banks, minimum_distinct_nonzero):
 
 def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
                                      frame=0, max_evidence=MAX_EVIDENCE,
-                                     minimum_distinct_nonzero=3):
+                                     minimum_distinct_nonzero=3,
+                                     observed_post_vram=None,
+                                     require_post_match=False):
     """Replay only supported pixel-copy GP0 operations; conservatively score draws.
 
     Freshly written means all 16 CLUT halfwords were copied/uploaded AFTER
@@ -130,6 +132,14 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
             or type(frame) is not int or frame < 0
             or type(max_evidence) is not int or not 1 <= max_evidence <= MAX_EVIDENCE):
         raise ValueError("invalid GP0 replay inputs")
+    if type(require_post_match) is not bool:
+        raise ValueError("require_post_match must be a boolean")
+    if (observed_post_vram is not None and
+            (type(observed_post_vram) is not bytes or
+             len(observed_post_vram) != VRAM_BYTES)):
+        raise ValueError("post-packet VRAM must be exactly 1048576 bytes")
+    if require_post_match and observed_post_vram is None:
+        raise ValueError("cannot require postframe match without a postframe VRAM")
     palette_rows = _build_candidates(banks, minimum_distinct_nonzero)
     vram = bytearray(initial_vram)
     # Each u16 pixel records the most recent *completed* draw epoch in which
@@ -247,6 +257,47 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
             # rasterization its overlap with CLUT memory cannot be excluded.
             draw_epoch += 1
             counters["GPU_DRAW_PACKET_NOT_RASTERIZED"] += 1
+    reconciliation = None
+    if observed_post_vram is not None:
+        # GP0 drawing is not rasterized. ONLY words explicitly rewritten
+        # after the most recent draw have a known final value. With no
+        # draws, all words retain modeled contents under the full-trace
+        # premise, even if they were originally present in the baseline.
+        if draw_epoch == 0:
+            known_words = VRAM_WIDTH * VRAM_HEIGHT
+            mismatches = sum(
+                vram[index*2:index*2+2] != observed_post_vram[index*2:index*2+2]
+                for index in range(known_words))
+            comparison_scope = "ENTIRE_VRAM_NO_GPU_DRAW_PACKETS"
+        else:
+            known_words = 0
+            mismatches = 0
+            for index, epoch in enumerate(pixel_epoch):
+                if epoch == draw_epoch:
+                    known_words += 1
+                    if (vram[index*2:index*2+2] !=
+                            observed_post_vram[index*2:index*2+2]):
+                        mismatches += 1
+            comparison_scope = "EXPLICIT_TRANSFERS_AFTER_LAST_DRAW_ONLY"
+        verdict = None if known_words == 0 else mismatches == 0
+        reconciliation = {
+            "scope": comparison_scope,
+            "post_vram_sha256": hashlib.sha256(observed_post_vram).hexdigest(),
+            "modeled_vram_sha256_untrusted_where_drawing_unmodeled":
+                hashlib.sha256(vram).hexdigest(),
+            "known_final_u16_word_count": known_words,
+            "unknown_or_unmodeled_final_u16_word_count":
+                VRAM_WIDTH * VRAM_HEIGHT - known_words,
+            "mismatched_known_u16_word_count": mismatches,
+            "all_comparable_words_match": verdict,
+            "no_comparable_words_means_no_verdict": known_words == 0,
+            "postframe_snapshot_timing_not_authenticated": True,
+            "gpu_drawn_pixels_and_cache_effects_unmodeled": True,
+            "no_raw_vram_words_or_pixel_values_exported": True,
+        }
+        if require_post_match and verdict is not True:
+            raise ValueError(
+                "postframe reconciliation has no known comparable words or mismatch")
     return {
         "schema": 1,
         "kind": "WA1_PRIVATE_SURF_GP0_UPLOAD_CLUT_TIMELINE",
@@ -257,6 +308,7 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
         "candidate_eligible_distinct_rows": len(palette_rows),
         "candidate_bank_row_reference_count": sum(map(len,palette_rows.values())),
         "clut_draw_events": evidence,
+        "postframe_reconciliation": reconciliation,
         "interpretation": {
             "gpu_a0_and_nonoverlapping_80_copy_replayed_in_order": True,
             "gpu_e6_masking_disabled_explicitly_required_for_transfers": True,
@@ -273,7 +325,9 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
 
 
 def audit_private_gp0_upload_timeline(cdstg, initial_vram_path, timeline_path,
-                                       *, map_index=2, max_evidence=MAX_EVIDENCE):
+                                       *, map_index=2, max_evidence=MAX_EVIDENCE,
+                                       observed_post_vram_path=None,
+                                       require_post_match=False):
     path = Path(initial_vram_path)
     if (path.is_symlink() or not path.is_file()
             or path.stat().st_size != VRAM_BYTES):
@@ -283,10 +337,21 @@ def audit_private_gp0_upload_timeline(cdstg, initial_vram_path, timeline_path,
         raise ValueError("private VRAM changed length during read")
     digest = hashlib.sha256(initial).hexdigest()
     header, packets, trace_digest = read_private_gp0_timeline(timeline_path,digest)
+    observed_post_vram = None
+    if observed_post_vram_path is not None:
+        post_path = Path(observed_post_vram_path)
+        if (post_path.is_symlink() or not post_path.is_file()
+                or post_path.stat().st_size != VRAM_BYTES):
+            raise ValueError("post-packet private VRAM must be an exact 1MiB file")
+        observed_post_vram = post_path.read_bytes()
+        if len(observed_post_vram) != VRAM_BYTES:
+            raise ValueError("post-packet private VRAM length changed during read")
     private = read_private_candidates(cdstg,map_index=map_index)
     report = replay_private_gp0_clut_timeline(
         initial,packets,private["candidate_banks"],
-        frame=header["frame"],max_evidence=max_evidence)
+        frame=header["frame"],max_evidence=max_evidence,
+        observed_post_vram=observed_post_vram,
+        require_post_match=require_post_match)
     return {
         **report,
         "source_map_index": private["map_index"],
@@ -302,11 +367,17 @@ def main():
     ap.add_argument("private_complete_gp0_timeline_jsonl",type=Path)
     ap.add_argument("--map-index",type=int,default=2)
     ap.add_argument("--max-evidence",type=int,default=MAX_EVIDENCE)
+    ap.add_argument("--post-vram",type=Path,
+                    help="Optional private 1 MiB VRAM AFTER ordered packets")
+    ap.add_argument("--require-post-match",action="store_true",
+                    help="Fail if no deterministically comparable words or any mismatch")
     args=ap.parse_args()
     print(json.dumps(audit_private_gp0_upload_timeline(
         args.private_cdstg,args.private_initial_vram_u16le,
         args.private_complete_gp0_timeline_jsonl,map_index=args.map_index,
-        max_evidence=args.max_evidence),indent=2,sort_keys=True))
+        max_evidence=args.max_evidence,
+        observed_post_vram_path=args.post_vram,
+        require_post_match=args.require_post_match),indent=2,sort_keys=True))
 
 
 if __name__=="__main__":
