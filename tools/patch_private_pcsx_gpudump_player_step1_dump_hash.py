@@ -171,6 +171,8 @@ def patched_gui_header(source):
 
 
 def patched_gui_source(source):
+    source = replace_once(source, "#include <cstdio>\n",
+        "#include <cstdio>\n#include <cstring>\n", "GUI memcpy include")
     source = replace_once(source,
         "static bool wa1WriteFrozenStepOneVRAM(const std::string& path, const std::vector<uint8_t>& pixels, uint64_t capturedFrame) {",
         "static bool wa1WriteFrozenStepOneVRAM(const std::string& path, const std::vector<uint8_t>& pixels, "
