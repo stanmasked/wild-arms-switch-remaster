@@ -62,10 +62,13 @@ def match_a0_source_payload(index, packet, *, minimum_contiguous_blocks=3,
         rows_scanned += 1
         # A0 destination X is in u16 words, not bytes; enforce the
         # final *global VRAM* alignment rather than row-relative one.
-        for offset in range(0, row_size-BLOCK_BYTES+1, VRAM_GRID_BYTES):
+        # The packet's destination may itself be unaligned. Start at
+        # the next aligned *absolute* VRAM word rather than assuming
+        # a transfer-relative 32-byte grid.
+        first_aligned_offset = ((-x) % 16) * 2
+        for offset in range(first_aligned_offset,
+                            row_size-BLOCK_BYTES+1, VRAM_GRID_BYTES):
             global_x=x+offset//2
-            if global_x % 16:
-                continue
             aligned_positions_scanned += 1
             key=row[offset:offset+BLOCK_BYTES]
             origins=anchors.get(key, ())
