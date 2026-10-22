@@ -247,6 +247,7 @@ class Stage456PatchTests(unittest.TestCase):
         self.assertLess(result.index("auto exactFileDigest"),result.index("bool valid = open"))
         self.assertIn("m_sha256 = exactFileDigest",result)
         self.assertIn("waPrivateSha256(reinterpret_cast<const uint8_t*>(words.data())",result)
+        self.assertIn("size_t(got) > size - total",result)
 
     def test_gui_embeds_loaded_dump_digest_and_v2_container(self):
         h=patched_gui_header(__import__(
