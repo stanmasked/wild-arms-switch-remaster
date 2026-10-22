@@ -7,7 +7,8 @@ import sys
 import tempfile
 import unittest
 
-from PIL import Image
+import struct
+import zlib
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
 sys.path.insert(0,str(Path(__file__).resolve().parent))
@@ -21,11 +22,20 @@ from test_verify_private_pcsx_native_gpudump_import import prepared
 
 
 def png(color=(0,0,0),width=2,height=1, mode="RGB"):
-    image=Image.new(mode,(width,height),color)
-    stream=BytesIO()
-    image.save(stream,format="PNG")
-    return stream.getvalue()
-
+    if mode not in ("RGB","RGBA"):
+        raise ValueError("fixture PNG mode unsupported")
+    def chunk(kind,payload):
+        return (struct.pack(">I",len(payload))+kind+payload+
+                struct.pack(">I",zlib.crc32(kind+payload)&0xffffffff))
+    components=3 if mode=="RGB" else 4
+    if len(color)!=components:
+        raise ValueError("fixture PNG channel count unsupported")
+    ihdr=struct.pack(">IIBBBBB",width,height,8,
+                     2 if mode=="RGB" else 6,0,0,0)
+    scanlines=(b"\\x00"+bytes(color)*width)*height
+    return (b"\\x89PNG\\r\\n\\x1a\\n"+
+            chunk(b"IHDR",ihdr)+chunk(b"IDAT",zlib.compress(scanlines))+
+            chunk(b"IEND",b""))
 
 def fixture(folder, *,image=None,records=None):
     folder=Path(folder)
