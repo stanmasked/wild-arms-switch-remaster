@@ -133,15 +133,31 @@ as throwing by default, and `src/support/file.cc` shows that
 The patch's reader catches that exception and rejects the open; it also
 rejects backends that return a negative seek result.
 
-The compiled C++ regression harness now counts both file-read calls and
-calls to the vector-backed `GPUDumpReader::open()` packet parser. For both
+The compiled C++ regression harness counts file-read calls and calls to the
+vector-backed `GPUDumpReader::open()` header-validation overload. For both
 the thrown-exception and negative-return seek failures, it asserts that no
-read or packet parse starts, the digest is zeroed, and the reader buffer
+read or header validation starts, the digest is zeroed, and the reader buffer
 remains empty. A source-order regression also checks that rewind/read
-exceptions are handled before digest calculation and packet parsing.
+exceptions are handled before digest calculation and header validation.
 
 This remains a synthetic host regression against a mock File backend; the
 pinned upstream source establishes the real exception semantics, while the
 separate patched-emulator build and private runtime capture retain their
 own validation gates.
+
+## Stage477 follow-up — Player load must stop before GPU setup
+
+The synthetic C++ harness now also mirrors the relevant ordering in the pinned
+`GPUDumpPlayer::load()`: unload the prior player state, open the reader, and
+only then create and initialize the detached GPU and rewind through packets.
+A valid mock dump must reach `GPUDumpReader::next()`; after that, a thrown
+rewind failure or a negative-return failure must make `load()` return false
+without file reads, GPU setup, or packet iteration, and the reader's digest
+must be zero. The same negative-return case is checked through the Player
+path, not just the reader overload.
+
+This remains a synthetic mock-backed regression, not evidence of a private
+Wild Arms dump being loaded by a locally built emulator. The latest
+Stage477/478 Disc analysis and patched-build Actions runs are queued; no new
+pass is claimed until they finish.
 
