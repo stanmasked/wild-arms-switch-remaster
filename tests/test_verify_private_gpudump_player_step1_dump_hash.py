@@ -13,7 +13,7 @@ import zlib
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from patch_private_pcsx_gpudump_player_step1_dump_hash import (
-    PINNED, SHA256_HELPER, OLD_FILE_OPEN, OLD_VECTOR_OPEN,
+    PINNED, SHA256_HELPER, OLD_FILE_OPEN, NEW_FILE_OPEN, OLD_VECTOR_OPEN,
     patched_core_header, patched_core_source, patched_gui_header,
     patched_gui_source, make_diff,
 )
@@ -325,6 +325,98 @@ class Stage456PatchTests(unittest.TestCase):
             self.assertIn("m_sha256", (root/"src/core/gpudump.h").read_text())
             self.assertIn("capturedDumpSHA256.data()",
                           (root/"src/gui/widgets/gpudump.cc").read_text())
+
+    def test_cpp_native_reader_handles_partial_reads_and_rejects_bad_io(self):
+        compiler=shutil.which("c++") or shutil.which("g++") or shutil.which("clang++")
+        if compiler is None:
+            self.skipTest("no C++ compiler installed")
+        source=r'''#include <array>
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+#include <sys/types.h>
+namespace PCSX {
+template<class T> using IO = std::shared_ptr<T>;
+struct File {
+    std::vector<uint8_t> bytes;
+    size_t cursor=0;
+    bool seekFails=false;
+    int mode=0;
+    size_t maxChunk=static_cast<size_t>(-1);
+    bool failed() const { return false; }
+    size_t size() const { return bytes.size(); }
+    ssize_t rSeek(ssize_t pos,int wheel) {
+        if (seekFails || wheel!=SEEK_SET || pos<0) return -1;
+        cursor=size_t(pos);
+        return ssize_t(cursor);
+    }
+    ssize_t read(void* dst,size_t amount) {
+        if (mode==2) return ssize_t(amount+1);
+        if (mode==1 && cursor>=5) return -1;
+        if (cursor>=bytes.size()) return -1;
+        size_t n=std::min(amount,std::min(maxChunk,bytes.size()-cursor));
+        if (mode==1) n=std::min(n,size_t(5-cursor));
+        std::memcpy(dst,bytes.data()+cursor,n);
+        cursor+=n;
+        return ssize_t(n);
+    }
+};
+class GPUDumpReader {
+public:
+    bool open(IO<File> file);
+    bool open(std::vector<uint32_t>&& words) {
+        m_words=std::move(words);
+        return m_words.size()>=4;
+    }
+    const std::array<uint8_t,32>& digest() const { return m_sha256; }
+private:
+    std::vector<uint32_t> m_words;
+    std::array<uint8_t,32> m_sha256{};
+};
+}
+''' + SHA256_HELPER + "\n" + NEW_FILE_OPEN + r'''
+int main() {
+    std::vector<uint8_t> bytes(16);
+    for (size_t i=0;i<bytes.size();++i) bytes[i]=uint8_t(i);
+    auto partial=std::make_shared<PCSX::File>();
+    partial->bytes=bytes;
+    partial->maxChunk=3;
+    PCSX::GPUDumpReader reader;
+    if (!reader.open(partial)) return 1;
+    if (reader.digest()!=waPrivateSha256(bytes.data(),bytes.size())) return 2;
+    auto misaligned=std::make_shared<PCSX::File>();
+    misaligned->bytes.assign(5,1);
+    if (reader.open(misaligned)) return 3;
+    auto seekFailure=std::make_shared<PCSX::File>();
+    seekFailure->bytes=bytes;
+    seekFailure->seekFails=true;
+    if (reader.open(seekFailure)) return 4;
+    auto interrupted=std::make_shared<PCSX::File>();
+    interrupted->bytes=bytes;
+    interrupted->mode=1;
+    if (reader.open(interrupted)) return 5;
+    auto invalidCount=std::make_shared<PCSX::File>();
+    invalidCount->bytes=bytes;
+    invalidCount->mode=2;
+    if (reader.open(invalidCount)) return 6;
+    return 0;
+}
+'''
+        with tempfile.TemporaryDirectory() as d:
+            src=Path(d)/"native_reader.cpp"
+            exe=Path(d)/"native_reader"
+            src.write_text(source)
+            built=subprocess.run([compiler,"-std=c++17",str(src),"-o",str(exe)],
+                                 capture_output=True,text=True)
+            self.assertEqual(built.returncode,0,built.stderr)
+            run=subprocess.run([str(exe)],capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,
+                "native reader harness exit "+str(run.returncode)+": "+run.stderr)
 
     def test_cpp_sha256_matches_empty_abc_and_million_a_vectors(self):
         compiler=shutil.which("c++") or shutil.which("g++") or shutil.which("clang++")
