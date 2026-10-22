@@ -41,7 +41,7 @@ The added GPU Dump Player UI control:
 - Is enabled only when playback is paused and `player->frame() == 1`.
 - Reads exactly **1024×512×u16** from `player->gpu()->getVRAM()`, not
   the live emulator's `g_emulator->m_gpu`.
-- **Copies the full snapshot immediately on button click**. The later
+- **Copies the full snapshot and the actual `player->frame()` counter immediately on button click**. The later
   Save dialog writes the frozen snapshot, so stepping or changing the
   emulator between button click and filename selection does not alter it.
 - Encodes each 16-bit VRAM word explicitly in **little-endian** order.
@@ -62,7 +62,7 @@ run on GitHub Actions and cannot be assumed to exist in stock binaries.
 | Offset | Bytes | Field |
 | --- | --- | --- |
 | 0 | 16 | Magic `WA1STEPVRAMv1` followed by three NULs |
-| 16 | 8 | little-endian unsigned Player frame, **exactly 1** |
+| 16 | 8 | little-endian unsigned **captured** `player->frame()`; must equal **1** |
 | 24 | 4 | little-endian VRAM byte count, **1,048,576** |
 | 28 | 4 | little-endian CRC32 over the VRAM payload |
 | 32 | 1,048,576 | u16le Player detached software GPU VRAM |
