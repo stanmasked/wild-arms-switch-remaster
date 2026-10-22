@@ -170,6 +170,15 @@ class Stage439FirstUVTests(unittest.TestCase):
         info=report["clut_draw_events"][0]["first_uv_texture_probe"]
         self.assertTrue(info["no_raw_texture_index_color_or_halfword_exported"])
 
+    def test_capped_evidence_does_not_underreport_texture_probe_counts(self):
+        result=replay([E2_ZERO,E6,a0(COLORS),texture_packet(),
+                       sample_polygon(),sample_polygon(),sample_polygon()],
+                      max_evidence=1)
+        self.assertEqual(len(result["clut_draw_events"]),1)
+        self.assertEqual(result["counts"][
+            "FIRST_UV_PROBE_MODELED_FIRST_DECLARED_UV_WITH_DISABLED_TEXTURE_WINDOW"],3)
+        self.assertEqual(result["counts"]["4BPP_CLUT_DRAWS"],3)
+
     def test_model_rejects_invalid_probe_inputs(self):
         from array import array
         px=array("i",[-1])*(1024*512)
