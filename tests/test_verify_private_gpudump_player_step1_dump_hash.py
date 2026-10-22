@@ -250,8 +250,9 @@ class Stage456PatchTests(unittest.TestCase):
         self.assertIn("waPrivateSha256(reinterpret_cast<const uint8_t*>(words.data())",result)
         self.assertIn("size_t(got) > size - total",result)
         self.assertLess(result.index("auto rawDigest"),result.index("m_words = std::move(words)"))
-        self.assertLess(result.index("if (m_words[i] != SWAP_LE32(magic[i])) return false;"),
+        self.assertLess(result.index("if (m_words[i] != SWAP_LE32(magic[i])) {"),
                         result.index("m_sha256 = rawDigest"))
+        self.assertIn("m_words.clear();",result)
         self.assertLess(result.index("m_sha256 = rawDigest"),result.index("return true;"))
 
     def test_reader_rejects_misaligned_or_incomplete_native_file_reads(self):
@@ -342,11 +343,19 @@ class Stage456PatchTests(unittest.TestCase):
             self.skipTest("no C++ compiler installed")
         vector_tail=r'''
     m_ptr = 4;
-    if (m_words.size() < 4) return false;
+    if (m_words.size() < 4) {
+        m_words.clear();
+        m_ptr = 4;
+        return false;
+    }
     uint32_t magic[4];
     memcpy(magic, GPUDumper::c_magic, sizeof(magic));
     for (unsigned i = 0; i < 4; i++) {
-        if (m_words[i] != SWAP_LE32(magic[i])) return false;
+        if (m_words[i] != SWAP_LE32(magic[i])) {
+            m_words.clear();
+            m_ptr = 4;
+            return false;
+        }
     }
     m_sha256 = rawDigest;
     return true;
@@ -485,7 +494,7 @@ int main() {
 
     std::vector<uint32_t> invalidWords(4,0);
     if (reader.open(std::move(invalidWords))) return 23;
-    if (reader.digest()!=std::array<uint8_t,32>{}) return 24;
+    if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0 || reader.position()!=4) return 24;
     return 0;
 }
 '''

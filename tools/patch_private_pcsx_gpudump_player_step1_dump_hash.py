@@ -183,11 +183,24 @@ def patched_core_source(source):
                           "in-memory reader digest")
     source = replace_once(source,
         "    for (unsigned i = 0; i < 4; i++) {\n"
-        "        if (m_words[i] != SWAP_LE32(magic[i])) return false;\n"
+        "        if (m_words[i] != SWAP_LE32(magic[i])) {\n"
+        "            m_words.clear();\n"
+        "            m_ptr = 4;\n"
+        "            return false;\n"
+        "        }\n"
         "    }\n"
         "    return true;\n}",
+        "    if (m_words.size() < 4) {\n"
+        "        m_words.clear();\n"
+        "        m_ptr = 4;\n"
+        "        return false;\n"
+        "    }\n"
         "    for (unsigned i = 0; i < 4; i++) {\n"
-        "        if (m_words[i] != SWAP_LE32(magic[i])) return false;\n"
+        "        if (m_words[i] != SWAP_LE32(magic[i])) {\n"
+        "            m_words.clear();\n"
+        "            m_ptr = 4;\n"
+        "            return false;\n"
+        "        }\n"
         "    }\n"
         "    m_sha256 = rawDigest;\n"
         "    return true;\n}",
