@@ -29,8 +29,8 @@ EXPORT_HELPER=r"""
 // WA1 owner-local research export; format specified in Stage455.
 // The 'x' modifier is C11 exclusive-create. Never silently replace
 // an existing original-frame witness or user file.
-static bool wa1WriteFrozenStepOneVRAM(const std::string& path, const std::vector<uint8_t>& pixels) {
-    if (pixels.size() != 1024u * 512u * 2u) return false;
+static bool wa1WriteFrozenStepOneVRAM(const std::string& path, const std::vector<uint8_t>& pixels, uint64_t capturedFrame) {
+    if (pixels.size() != 1024u * 512u * 2u || capturedFrame != 1) return false;
     FILE* handle = std::fopen(path.c_str(), "wbx");
     if (!handle) return false;
     // Set owner-only permissions before writing any content.
@@ -48,7 +48,7 @@ static bool wa1WriteFrozenStepOneVRAM(const std::string& path, const std::vector
                           'R', 'A', 'M', 'v', '1', 0, 0, 0};
     // Versioned fixed-size record: 16-byte magic, frame u64 LE == 1,
     // VRAM byte length u32 LE, CRC32 of the following raw VRAM u32 LE.
-    header[16] = 1;
+    for (unsigned i = 0; i < 8; i++) header[16 + i] = uint8_t(capturedFrame >> (8 * i));
     header[24] = 0x00; header[25] = 0x00;
     header[26] = 0x10; header[27] = 0x00; // 1 MiB
     uint32_t crc = uint32_t(crc32(0L, Z_NULL, 0));
@@ -73,7 +73,8 @@ def patched_header(source):
     source=replace_once(source,
         "    std::vector<uint32_t> m_pixels;\n",
         "    std::vector<uint32_t> m_pixels;\n"
-        "    std::vector<uint8_t> m_frozenStepOneVRAM;\n",
+        "    std::vector<uint8_t> m_frozenStepOneVRAM;\n"
+        "    uint64_t m_frozenStepOneFrame = 0;\n",
         "header GPU frozen snapshot storage")
     return source
 
@@ -100,13 +101,14 @@ def patched_source(source):
         '    if (m_stepExportDialog.draw()) {\n'
         '        auto& selected = m_stepExportDialog.selected();\n'
         '        if (!selected.empty()) {\n'
-        '            if (!wa1WriteFrozenStepOneVRAM(selected[0], m_frozenStepOneVRAM)) {\n'
+        '            if (!wa1WriteFrozenStepOneVRAM(selected[0], m_frozenStepOneVRAM, m_frozenStepOneFrame)) {\n'
         '                m_error = _("Unable to export private GPU Player Step 1 VRAM (or file already exists).");\n'
         '            } else {\n'
         '                m_error.clear();\n'
         '            }\n'
         '        }\n'
         '        m_frozenStepOneVRAM.clear();\n'
+        '        m_frozenStepOneFrame = 0;\n'
         '    }\n'
         '    if (m_openDialog.draw()) {\n',
         "Step Save dialog")
@@ -121,6 +123,7 @@ def patched_source(source):
         '        if (state.size() != 1024u * 512u * 2u) {\n'
         '            m_error = _("Detached player VRAM is not exactly 1 MiB.");\n'
         '        } else {\n'
+        '            m_frozenStepOneFrame = player->frame();\n'
         '            m_frozenStepOneVRAM.resize(1024u * 512u * 2u);\n'
         '            const uint16_t* words = state.data<uint16_t>();\n'
         '            for (unsigned i = 0; i < 1024u * 512u; i++) {\n'
