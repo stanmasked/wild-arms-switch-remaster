@@ -104,6 +104,10 @@ OLD_FILE_OPEN = """bool PCSX::GPUDumpReader::open(IO<File> file) {
 }"""
 
 NEW_FILE_OPEN = """bool PCSX::GPUDumpReader::open(IO<File> file) {
+    // A failed reopen must never leave a prior file's identity available.
+    m_sha256.fill(0);
+    m_words.clear();
+    m_ptr = 4;
     if (!file || file->failed()) return false;
     size_t size = file->size();
     // Native GPUDUMP packets are 32-bit words; reject malformed tails rather
@@ -120,7 +124,7 @@ NEW_FILE_OPEN = """bool PCSX::GPUDumpReader::open(IO<File> file) {
     }
     auto exactFileDigest = waPrivateSha256(reinterpret_cast<const uint8_t*>(words.data()), size);
     bool valid = open(std::move(words));
-    m_sha256 = exactFileDigest;
+    if (valid) m_sha256 = exactFileDigest;
     return valid;
 }"""
 
@@ -129,8 +133,11 @@ OLD_VECTOR_OPEN = """bool PCSX::GPUDumpReader::open(std::vector<uint32_t>&& word
     for (auto& w : m_words) w = SWAP_LE32(w);"""
 
 NEW_VECTOR_OPEN = """bool PCSX::GPUDumpReader::open(std::vector<uint32_t>&& words) {
-    m_sha256 = waPrivateSha256(reinterpret_cast<const uint8_t*>(words.data()),
-                               words.size() * sizeof(uint32_t));
+    // Hash the original byte representation before word swapping, but publish
+    // it only if the complete native GPUDUMP header is valid.
+    m_sha256.fill(0);
+    auto rawDigest = waPrivateSha256(reinterpret_cast<const uint8_t*>(words.data()),
+                                     words.size() * sizeof(uint32_t));
     m_words = std::move(words);
     for (auto& w : m_words) w = SWAP_LE32(w);"""
 
@@ -161,6 +168,17 @@ def patched_core_source(source):
                           "native file open and SHA-256 helper")
     source = replace_once(source, OLD_VECTOR_OPEN, NEW_VECTOR_OPEN,
                           "in-memory reader digest")
+    source = replace_once(source,
+        "    for (unsigned i = 0; i < 4; i++) {\\n"
+        "        if (m_words[i] != SWAP_LE32(magic[i])) return false;\\n"
+        "    }\\n"
+        "    return true;\\n}",
+        "    for (unsigned i = 0; i < 4; i++) {\\n"
+        "        if (m_words[i] != SWAP_LE32(magic[i])) return false;\\n"
+        "    }\\n"
+        "    m_sha256 = rawDigest;\\n"
+        "    return true;\\n}",
+        "commit reader digest only after valid native header")
     return source
 
 
