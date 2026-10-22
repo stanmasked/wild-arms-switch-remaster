@@ -86,7 +86,6 @@ class Stage447NativeDumpTests(unittest.TestCase):
 
     def test_multiple_native_gp0_transport_records_combine_into_one_a0(self):
         rec=base_records()
-        rec[-2:-2]=[]
         # Replace the live GP0 record with two native transport pieces
         # while preserving raw GP0 chronological word order.
         idx=7
@@ -182,7 +181,7 @@ class Stage447NativeDumpTests(unittest.TestCase):
     def test_duplicate_tracebegin_rejected(self):
         rec=base_records()
         rec.insert(-1,(TRACE_BEGIN,[]))
-        with self.assertRaisesRegex(ValueError,"duplicate|unsupported live"):
+        with self.assertRaisesRegex(ValueError,"TraceBegin"):
             select_first_native_gp0_frame(read_native_gpu_dump(dump_bytes(rec)))
 
     def test_private_import_does_not_overwrite_existing_outputs(self):
