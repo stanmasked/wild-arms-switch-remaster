@@ -101,7 +101,7 @@ def patched_source(source):
         '    if (m_stepExportDialog.draw()) {\n'
         '        auto& selected = m_stepExportDialog.selected();\n'
         '        if (!selected.empty()) {\n'
-        '            if (!wa1WriteFrozenStepOneVRAM(selected[0], m_frozenStepOneVRAM, m_frozenStepOneFrame)) {\n'
+        '            if (!wa1WriteFrozenStepOneVRAM(std::string(reinterpret_cast<const char*>(selected[0].c_str())), m_frozenStepOneVRAM, m_frozenStepOneFrame)) {\n'
         '                m_error = _("Unable to export private GPU Player Step 1 VRAM (or file already exists).");\n'
         '            } else {\n'
         '                m_error.clear();\n'
