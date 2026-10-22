@@ -10,6 +10,7 @@ concurrency:
 
 on:
   push:
+    branches: [main]
     paths:
       - 'tools/audit_gp0_matrix_*.py'
       - 'tools/audit_gp0_trig_table.py'
