@@ -11,25 +11,35 @@ the original PS1 program renders slowly.
 
 See: https://pcsx-redux.consoledev.net/Debugging/gpu-logger/
 
-**Important:** the current published documentation does **not**
-confirm a raw, lossless, per-word GP0 file-export command or
-endpoint from this GUI. The emulator's documented REST interface
-supports raw VRAM but not a complete ordered GP0 wordstream.
-Neither a GUI screenshot of logged commands nor a general CPU
-trace is a drop-in replacement for ordered, complete raw GPU
-packet bytes. Do not invent such an export or mark a GPU Logger
-screenshot as an authentic complete raw packet trace.
+**Updated upstream-source verification:** PCSX-Redux at pinned
+commit `de4a33e9a69abec4f567ae33567537f867dc2bba` includes
+a **separate native GPU Dump Recorder / Player**. The GUI exposes
+`Debug > GPU > Show GPU dump recorder / player`, then
+`Start recording...` / `Stop recording`. Its native file records
+typed GP0/GP1 packets, v-sync boundaries, initial full VRAM and
+GPU state, starting at an idle GP0 boundary on the next v-sync.
 
-A real end-to-end capture thus needs **separate owner-local
-instrumentation of the original PCSX-Redux build or another
-trusted GP0 source**. No original game trace has been acquired
-in this development environment. This stage supplies the
-**receiving/parser side** of that bridge with exact boundaries
-and strict fail-closed validation.
+Verified upstream implementation:
+https://github.com/grumpycoders/pcsx-redux/blob/de4a33e9a69abec4f567ae33567537f867dc2bba/src/core/gpudump.h
+https://github.com/grumpycoders/pcsx-redux/blob/de4a33e9a69abec4f567ae33567537f867dc2bba/src/gui/widgets/gpudump.cc
+
+**The Stage446 raw-u32le adapter is NOT the native dump reader.**
+The native file is a `PSXGPUDUMPv1r1` typed packet container,
+not a flat GP0 stream, and its initialization contains a full
+1 MiB VRAM upload (larger than Stage437's per-packet limit).
+For compatible emulator builds, a separate Stage447 native-format
+reader is preferable to writing a custom GPU recorder.
+The remaining Stage446 tool is intentionally retained only for
+already available independent *flat* GP0 u32le recordings.
+
+No actual original Wild Arms GPU dump has yet been captured
+in this environment; native capture availability is verified
+from **upstream source**, not from an original-game run.
 
 ## Raw input contract for an independently instrumented GPU
 
-The owner-local instrumentation must output one binary file:
+For the Stage446 **legacy flat-stream adapter only**, an independent
+instrumentation source must output one binary file:
 `original-gp0.u32le`.
 
 - Every **32-bit word passed into the PS1 GPU's GP0 data command
@@ -47,10 +57,9 @@ The owner-local instrumentation must output one binary file:
   boundary does not, by itself, prove the full frame was
   captured. Independent emulator instrumentation must record
   begin/end conditions and frame identity.
-- Do not assume PCSX-Redux's GUI GPU Logger exposes this raw
-  binary export automatically. A separate trusted recorder
-  callback would be required, and needs independent
-  implementation and testing against a pinned emulator revision.
+- Do not mistake the ordinary GPU Logger GUI for a flat binary
+  exporter. On pinned newer upstream PCSX-Redux, use the **native
+  GPU Dump Recorder** instead and a separate typed-dump adapter.
 - In particular, `-trace` is documented as **CPU** trace
   logging, not GP0 packet export; do not confuse the two:
   https://pcsx-redux.consoledev.net/cli_flags/
@@ -126,23 +135,20 @@ session. The full original `Wild Arms (USA).bin` also remains
 out of reach of the connected Google Drive per-file download
 limit, and it has not been analyzed end-to-end.
 
-## Reproducible next engineering gate
+## Reproducible next engineering gate (updated)
 
-1. Identify and pin an exact PCSX-Redux revision, inspect the
-   implementation of the GP0 data-entry path and decide where
-   a recorder would capture **all** CPU/DMA-submitted words,
-   including image payload words.
-2. Add a carefully scoped **local only** instrumentation hook
-   in a private/research emulator build to write the stream.
-   Ensure start/end boundaries and synchronized pre/post VRAM
-   are captured independently, without mixing frames.
-3. Validate the hook against synthetic GPU fixture programs,
-   comparing the GPU Logger's per-command sequence against
-   the bytes received by Stage446; investigate unsupported
-   commands explicitly instead of auto-approving them.
-4. Only then load the owner's original Wild Arms disc and
-   compare real Surf Village source→A0→80→texture/CLUT
-   evidence against actual original framebuffer crops.
+1. Use a PCSX-Redux build containing the pinned native GPU
+   Dump Recorder; verify the GUI record/playback path locally.
+2. Decode the native typed dump format with a strict Stage447
+   adapter: extract pre-trace full VRAM, skip initialization,
+   and preserve the *live* complete GP0 stream up to the first
+   v-sync. Reject unsupported live GP1/readback commands.
+3. Reconstruct the Stage437 private JSONL and compare a dump's
+   original preamble/state/frames against PCSX-Redux's own GPU
+   Dump Player. Unsupported commands must fail closed.
+4. Then use an owner-private Wild Arms disc to record Surf Village
+   and compare real source→A0→80→texture/CLUT evidence against
+   original screenshot crops. Never publish the dump or assets.
 
 The emulator codebase carries GPL obligations; if distributing
 a modified emulator, comply with its license. This PR itself
