@@ -56,7 +56,9 @@ The Disc analysis unit tests workflow fetches this exact upstream commit and run
 The SHA-256 helper is self-contained and has compiled known-vector regression
 tests for the empty string, `abc`, and one million `a` bytes. It processes
 the input in 64-byte blocks without allocating a padded duplicate of the
-whole dump. The complete upstream GUI patch still requires a local build.
+whole dump. The dedicated CI build checks compilation against the pinned
+upstream source; the owner's local build and runtime capture remain necessary
+to validate the private Wild Arms GPU dump.
 
 ## Binary container v2
 
