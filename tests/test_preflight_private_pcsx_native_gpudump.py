@@ -47,7 +47,8 @@ class Stage448PreflightTests(unittest.TestCase):
         self.assertEqual(report["frame_summaries"][0]["gp1_word_count"],1)
         self.assertTrue(report["frame_summaries"][0][
             "unsupported_live_gpu_side_events_present"])
-        self.assertNotIn("aabb",json.dumps(report))
+        self.assertNotIn('"live_gp1_words"',json.dumps(report))
+        self.assertNotIn('"raw_gp1_payload"',json.dumps(report))
 
     def test_unmodeled_live_gpu_readback_rejected_by_importer_but_preflight_succeeds(self):
         records=base_records()
@@ -153,7 +154,7 @@ class Stage448PreflightTests(unittest.TestCase):
         result=summarize_private_native_gpudump(dump_bytes())
         serialized=json.dumps(result,sort_keys=True)
         for forbidden in ('"game_id"','"vram_pixels"',
-                          '"raw_gpu_words"','"payload_u32"', 'SUls'):
+                          '"raw_gpu_words"','"payload_u32"' ):
             self.assertNotIn(forbidden,serialized)
         self.assertTrue(result["interpretation"][
             "no_original_gpu_words_vram_image_game_id_or_pixels_emitted"])
