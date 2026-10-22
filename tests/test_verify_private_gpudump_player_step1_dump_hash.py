@@ -391,6 +391,8 @@ class Stage456PatchTests(unittest.TestCase):
 #include <sys/types.h>
 #define SWAP_LE32(value) (value)
 int vectorOpenCalls = 0;
+int packetNextCalls = 0;
+int gpuSetupCalls = 0;
 namespace PCSX {
 template<class T> using IO = std::shared_ptr<T>;
 struct File {
@@ -432,15 +434,83 @@ struct GPUDumper {
 };
 class GPUDumpReader {
 public:
+    struct Packet { uint8_t type; const uint32_t* words; uint32_t length; };
     bool open(IO<File> file);
     bool open(std::vector<uint32_t>&& words);
     const std::array<uint8_t,32>& digest() const { return m_sha256; }
     size_t position() const { return m_ptr; }
     size_t size() const { return m_words.size(); }
+    void rewind() { m_ptr=4; }
+    bool next(Packet& packet) {
+        ++packetNextCalls;
+        if (m_ptr >= m_words.size()) return false;
+        uint32_t header = m_words[m_ptr++];
+        packet.type = uint8_t(header >> 24);
+        packet.length = header & 0xffffff;
+        if (packet.length > m_words.size() - m_ptr) {
+            m_ptr = m_words.size();
+            return false;
+        }
+        packet.words = m_words.data() + m_ptr;
+        m_ptr += packet.length;
+        return true;
+    }
 private:
     std::vector<uint32_t> m_words;
     size_t m_ptr=4;
     std::array<uint8_t,32> m_sha256{};
+};
+struct GPU {
+    static std::unique_ptr<GPU> getSoft() {
+        ++gpuSetupCalls;
+        return std::make_unique<GPU>();
+    }
+    void detach(void*) {}
+    void init(void*) {}
+    void shutdown() {}
+    void writeStatus(uint32_t) {}
+    void clearVRAM() {}
+};
+class GPUDumpPlayer {
+public:
+    bool load(IO<File> file) {
+        unload();
+        if (!m_reader.open(file)) return false;
+        m_gpu = GPU::getSoft();
+        m_gpu->detach(&m_logger);
+        m_gpu->init(nullptr);
+        rewind();
+        return true;
+    }
+    void unload() {
+        if (m_gpu) m_gpu->shutdown();
+        m_gpu.reset();
+    }
+    void rewind() {
+        if (!m_gpu) return;
+        m_reader.rewind();
+        m_gpu->writeStatus(0);
+        m_gpu->clearVRAM();
+        GPUDumpReader::Packet packet;
+        size_t start = 4;
+        while (m_reader.next(packet)) {
+            if (packet.type == 5) {
+                start = m_reader.position();
+                break;
+            }
+            if (packet.type == 2) {
+                m_reader.rewind();
+                break;
+            }
+        }
+        m_traceStart = start;
+    }
+    const std::array<uint8_t,32>& digest() const { return m_reader.digest(); }
+private:
+    std::unique_ptr<GPU> m_gpu;
+    int m_logger = 0;
+    GPUDumpReader m_reader;
+    size_t m_traceStart = 4;
 };
 }
 ''' + SHA256_HELPER + "\n" + NEW_FILE_OPEN + "\n" + NEW_VECTOR_OPEN.replace("bool PCSX::GPUDumpReader::open(std::vector<uint32_t>&& words) {",
@@ -460,18 +530,45 @@ int main() {
     seekFailure->bytes=bytes;
     seekFailure->seekFails=true;
     int parserCallsBeforeSeekException = vectorOpenCalls;
+    int packetCallsBeforeSeekException = packetNextCalls;
+    int gpuSetupBeforeSeekException = gpuSetupCalls;
     if (reader.open(seekFailure)) return 3;
     if (vectorOpenCalls != parserCallsBeforeSeekException) return 25;
+    if (packetNextCalls != packetCallsBeforeSeekException) return 29;
+    if (gpuSetupCalls != gpuSetupBeforeSeekException) return 30;
     if (seekFailure->readCalls != 0) return 26;
     if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0 || reader.position()!=4) return 4;
+
+    // Exercise the actual Player load ordering: a valid load reaches packet
+    // iteration; a subsequent throwing rewind must stop before GPU setup/rewind.
+    auto playerValid=std::make_shared<PCSX::File>();
+    playerValid->bytes=bytes;
+    PCSX::GPUDumpPlayer player;
+    int packetCallsBeforeValidPlayerLoad = packetNextCalls;
+    int gpuSetupBeforeValidPlayerLoad = gpuSetupCalls;
+    if (!player.load(playerValid)) return 31;
+    if (gpuSetupCalls != gpuSetupBeforeValidPlayerLoad + 1) return 32;
+    if (packetNextCalls <= packetCallsBeforeValidPlayerLoad) return 33;
+    if (player.digest()!=waPrivateSha256(bytes.data(),bytes.size())) return 34;
+
+    int packetCallsBeforePlayerSeekException = packetNextCalls;
+    int gpuSetupBeforePlayerSeekException = gpuSetupCalls;
+    if (player.load(seekFailure)) return 35;
+    if (packetNextCalls != packetCallsBeforePlayerSeekException) return 36;
+    if (gpuSetupCalls != gpuSetupBeforePlayerSeekException) return 37;
+    if (player.digest()!=std::array<uint8_t,32>{}) return 38;
 
     // Also exercise backends that report seek failure as a negative value.
     auto seekNegative=std::make_shared<PCSX::File>();
     seekNegative->bytes=bytes;
     seekNegative->seekReturnsNegative=true;
     int parserCallsBeforeNegativeSeek = vectorOpenCalls;
+    int packetCallsBeforeNegativeSeek = packetNextCalls;
+    int gpuSetupBeforeNegativeSeek = gpuSetupCalls;
     if (reader.open(seekNegative)) return 5;
     if (vectorOpenCalls != parserCallsBeforeNegativeSeek) return 27;
+    if (packetNextCalls != packetCallsBeforeNegativeSeek) return 39;
+    if (gpuSetupCalls != gpuSetupBeforeNegativeSeek) return 40;
     if (seekNegative->readCalls != 0) return 28;
     if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0) return 6;
 
