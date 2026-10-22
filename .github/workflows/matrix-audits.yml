@@ -205,6 +205,18 @@ on:
       - 'tests/test_mips_control_flow.py'
       - '.github/workflows/matrix-audits.yml'
   pull_request:
+    paths:
+      - 'CMakeLists.txt'
+      - 'tools/audit_*.py'
+      - 'tools/mips_*.py'
+      - 'tests/test_audit_*.py'
+      - 'tests/test_gp0_*.py'
+      - 'tests/test_matrix_*.py'
+      - 'tests/test_mips_*.py'
+      - 'tests/test_record_*.py'
+      - 'tests/test_ps1_*.py'
+      - 'tests/test_verify_record_*.py'
+      - 'docs/ps1-*.md'
   workflow_dispatch:
 
 jobs:
