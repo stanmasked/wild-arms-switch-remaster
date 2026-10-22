@@ -13,7 +13,7 @@ import zlib
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from patch_private_pcsx_gpudump_player_step1_dump_hash import (
-    PINNED, SHA256_HELPER, OLD_FILE_OPEN, NEW_FILE_OPEN, OLD_VECTOR_OPEN,
+    PINNED, SHA256_HELPER, OLD_FILE_OPEN, NEW_FILE_OPEN, OLD_VECTOR_OPEN, NEW_VECTOR_OPEN,
     patched_core_header, patched_core_source, patched_gui_header,
     patched_gui_source, make_diff,
 )
@@ -338,6 +338,18 @@ class Stage456PatchTests(unittest.TestCase):
         compiler=shutil.which("c++") or shutil.which("g++") or shutil.which("clang++")
         if compiler is None:
             self.skipTest("no C++ compiler installed")
+        vector_tail=r'''
+    m_ptr = 4;
+    if (m_words.size() < 4) return false;
+    uint32_t magic[4];
+    memcpy(magic, GPUDumper::c_magic, sizeof(magic));
+    for (unsigned i = 0; i < 4; i++) {
+        if (m_words[i] != SWAP_LE32(magic[i])) return false;
+    }
+    m_sha256 = rawDigest;
+    return true;
+}
+'''
         source=r'''#include <array>
 #include <algorithm>
 #include <cstdint>
@@ -348,6 +360,7 @@ class Stage456PatchTests(unittest.TestCase):
 #include <utility>
 #include <vector>
 #include <sys/types.h>
+#define SWAP_LE32(value) (value)
 namespace PCSX {
 template<class T> using IO = std::shared_ptr<T>;
 struct File {
@@ -374,13 +387,13 @@ struct File {
         return ssize_t(n);
     }
 };
+struct GPUDumper {
+    static constexpr char c_magic[16] = {'P','S','X','G','P','U','D','U','M','P','v','1','r','1',0,0};
+};
 class GPUDumpReader {
 public:
     bool open(IO<File> file);
-    bool open(std::vector<uint32_t>&& words) {
-        m_words=std::move(words);
-        return m_words.size()>=4;
-    }
+    bool open(std::vector<uint32_t>&& words);
     const std::array<uint8_t,32>& digest() const { return m_sha256; }
 private:
     std::vector<uint32_t> m_words;
@@ -388,39 +401,57 @@ private:
     std::array<uint8_t,32> m_sha256{};
 };
 }
-''' + SHA256_HELPER + "\n" + NEW_FILE_OPEN + r'''
+''' + SHA256_HELPER + "\n" + NEW_FILE_OPEN + "\n" + NEW_VECTOR_OPEN + vector_tail + r'''
 int main() {
-    std::vector<uint8_t> bytes(16);
-    for (size_t i=0;i<bytes.size();++i) bytes[i]=uint8_t(i);
+    std::vector<uint8_t> bytes={'P','S','X','G','P','U','D','U','M','P','v','1','r','1',0,0};
     auto partial=std::make_shared<PCSX::File>();
     partial->bytes=bytes;
     partial->maxChunk=3;
     PCSX::GPUDumpReader reader;
     if (!reader.open(partial)) return 1;
     if (reader.digest()!=waPrivateSha256(bytes.data(),bytes.size())) return 2;
+
     auto misaligned=std::make_shared<PCSX::File>();
     misaligned->bytes.assign(5,1);
     if (reader.open(misaligned)) return 3;
-    if (reader.digest()!=std::array<uint8_t,32>{}) return 7;
+    if (reader.digest()!=std::array<uint8_t,32>{}) return 4;
+
     auto seekFailure=std::make_shared<PCSX::File>();
     seekFailure->bytes=bytes;
     seekFailure->seekFails=true;
-    if (reader.open(seekFailure)) return 4;
-    if (reader.digest()!=std::array<uint8_t,32>{}) return 8;
+    if (reader.open(seekFailure)) return 5;
+    if (reader.digest()!=std::array<uint8_t,32>{}) return 6;
+
     auto interrupted=std::make_shared<PCSX::File>();
     interrupted->bytes=bytes;
     interrupted->mode=1;
-    if (reader.open(interrupted)) return 5;
-    if (reader.digest()!=std::array<uint8_t,32>{}) return 9;
+    if (reader.open(interrupted)) return 7;
+    if (reader.digest()!=std::array<uint8_t,32>{}) return 8;
+
     auto invalidCount=std::make_shared<PCSX::File>();
     invalidCount->bytes=bytes;
     invalidCount->mode=2;
-    if (reader.open(invalidCount)) return 6;
+    if (reader.open(invalidCount)) return 9;
     if (reader.digest()!=std::array<uint8_t,32>{}) return 10;
+
     auto invalidHeader=std::make_shared<PCSX::File>();
-    invalidHeader->bytes.assign(8,0);
+    invalidHeader->bytes.assign(16,0);
     if (reader.open(invalidHeader)) return 11;
     if (reader.digest()!=std::array<uint8_t,32>{}) return 12;
+
+    auto shortFile=std::make_shared<PCSX::File>();
+    shortFile->bytes.assign(8,0);
+    if (reader.open(shortFile)) return 13;
+    if (reader.digest()!=std::array<uint8_t,32>{}) return 14;
+
+    std::vector<uint32_t> validWords(4);
+    std::memcpy(validWords.data(),bytes.data(),bytes.size());
+    if (!reader.open(std::move(validWords))) return 15;
+    if (reader.digest()!=waPrivateSha256(bytes.data(),bytes.size())) return 16;
+
+    std::vector<uint32_t> invalidWords(4,0);
+    if (reader.open(std::move(invalidWords))) return 17;
+    if (reader.digest()!=std::array<uint8_t,32>{}) return 18;
     return 0;
 }
 '''
