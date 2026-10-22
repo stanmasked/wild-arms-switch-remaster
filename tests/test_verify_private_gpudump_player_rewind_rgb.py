@@ -165,7 +165,7 @@ class Stage453PlayerRewindTests(unittest.TestCase):
         ihdr=original[8:33]
         # Filter 1 (Sub): first RGB triple stored literally and the
         # second identical triple has zero differences from its left.
-        filtered=b"\\x01"+bytes((32,64,96,0,0,0))
+        filtered=b"\x01"+bytes((32,64,96,0,0,0))
         packed=zlib.compress(filtered)
         idat=(struct.pack(">I",len(packed))+b"IDAT"+packed+
               struct.pack(">I",zlib.crc32(b"IDAT"+packed)&0xffffffff))
