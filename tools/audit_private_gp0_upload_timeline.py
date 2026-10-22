@@ -18,6 +18,7 @@ import re
 import struct
 
 from audit_surf_gp0_clut_references import decode_packet
+from audit_private_gp0_texture_first_uv import probe_first_uv_4bpp
 from audit_surf_palette_rows import read_private_candidates
 from audit_surf_vram_palette_occurrences import _row_filter, VRAM_BYTES
 
@@ -148,6 +149,7 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
     draw_epoch = 0
     draw_mode = None
     mask_mode = None  # GPU state at preframe snapshot is unknown.
+    texture_window = None  # An initial GPU E2 register value is unknown.
     evidence = []
     counters = Counter()
     for index, packet in enumerate(packets):
@@ -155,6 +157,15 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
                 any(type(x) is not int or not 0 <= x <= 0xffffffff for x in packet)):
             raise ValueError("invalid GP0 packet sequence element")
         opcode = packet[0] >> 24
+        if opcode == 0xe2:
+            # Texture-window control GP0(E2) has four 5-bit fields.
+            # Unknown/nonzero settings forbid first-UV sampling until
+            # a subsequent explicit E2 zero clears the ambiguity.
+            if len(packet) != 1 or packet[0] & 0x00f00000:
+                raise ValueError("invalid or reserved GP0 E2 texture-window bits")
+            texture_window = packet[0] & 0x000fffff
+            counters["E2_TEXTURE_WINDOW_EXPLICIT"] += 1
+            continue
         if opcode == 0xe6:
             # GP0(E6) changes bit15 masking for CPU/GPU copies too.
             # Modeling those cases would require true GPU mask semantics.
@@ -234,8 +245,14 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
                     counters["4BPP_CLUT_FULL_ROW_REWRITTEN_SINCE_LAST_DRAW"] += 1
                 if candidates:
                     counters["4BPP_CLUT_MODELED_ROW_MATCHES_SOURCE"] += 1
+                # Count every probe even when the privacy-bounded event
+                # sample has reached its cap; never silently undercount.
+                texture_probe = probe_first_uv_4bpp(
+                    vram, pixel_epoch, draw_epoch, info, texture_window)
+                counters["FIRST_UV_PROBE_" + texture_probe["status"]] += 1
                 if len(evidence) < max_evidence:
                     evidence.append({
+                        "first_uv_texture_probe": texture_probe,
                         "packet_index": index,
                         "frame": frame,
                         "primitive": info["primitive"],
@@ -317,6 +334,8 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
             "pre_frame_snapshot_origin_not_independently_authenticated": True,
             "fresh_row_word_write_after_previous_draw_is_conditional_evidence_only": True,
             "actual_ps1_texture_and_clut_cache_semantics_unverified": True,
+            "first_uv_does_not_establish_visible_framebuffer_sampling": True,
+            "nonzero_or_unobserved_gpu_e2_texture_window_not_assumed_zero": True,
             "gp0_packet_trace_provenance_and_completeness_unverified": True,
             "no_final_post_frame_vram_equivalence_claim": True,
             "no_original_vram_words_palette_values_or_packets_in_report": True,
