@@ -124,8 +124,10 @@ NEW_FILE_OPEN = """bool PCSX::GPUDumpReader::open(IO<File> file) {
     std::vector<uint32_t> words(size / sizeof(uint32_t));
     size_t total = 0;
     try {
-        // A zero return is success here because rSeek reports the resulting
-        // absolute cursor; failures may also throw depending on File backend.
+        // In the pinned PCSX-Redux source, PosixFile::rSeek throws
+        // std::runtime_error when fseek fails (and base File::rSeek throws
+        // by default). Alternate backends may return a negative sentinel.
+        // A zero return means the cursor is now at byte zero.
         if (file->rSeek(0, SEEK_SET) != 0) return false;
         while (total < size) {
             ssize_t got = file->read(reinterpret_cast<uint8_t*>(words.data()) + total, size - total);
