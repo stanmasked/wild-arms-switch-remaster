@@ -340,8 +340,8 @@ class Stage456PatchTests(unittest.TestCase):
 #include <utility>
 #include <vector>
 #include <sys/types.h>
-namespace PCSX {
 template<class T> using IO = std::shared_ptr<T>;
+namespace PCSX {
 struct File {
     std::vector<uint8_t> bytes;
     size_t cursor=0;
