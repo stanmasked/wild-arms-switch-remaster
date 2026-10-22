@@ -137,6 +137,7 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
     pixel_epoch = array("i", [-1]) * (VRAM_WIDTH*VRAM_HEIGHT)
     draw_epoch = 0
     draw_mode = None
+    mask_mode = None  # GPU state at preframe snapshot is unknown.
     evidence = []
     counters = Counter()
     for index, packet in enumerate(packets):
@@ -144,6 +145,16 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
                 any(type(x) is not int or not 0 <= x <= 0xffffffff for x in packet)):
             raise ValueError("invalid GP0 packet sequence element")
         opcode = packet[0] >> 24
+        if opcode == 0xe6:
+            # GP0(E6) changes bit15 masking for CPU/GPU copies too.
+            # Modeling those cases would require true GPU mask semantics.
+            if len(packet) != 1 or packet[0] & 3:
+                raise ValueError("unsupported GP0 E6 VRAM write-mask mode")
+            mask_mode = 0
+            counters["E6_NO_VRAM_MASK"] += 1
+            continue
+        if opcode in (0xa0, 0x80) and mask_mode != 0:
+            raise ValueError("GP0 transfers require prior explicit E6 masking-disabled state")
         if opcode == 0xa0:
             if len(packet) < 4:
                 raise ValueError("truncated GP0 A0 CPU-to-VRAM packet")
@@ -248,6 +259,7 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
         "clut_draw_events": evidence,
         "interpretation": {
             "gpu_a0_and_nonoverlapping_80_copy_replayed_in_order": True,
+            "gpu_e6_masking_disabled_explicitly_required_for_transfers": True,
             "all_nonreplayed_gp0_commands_rejected_or_non_vram_state_or_draw": True,
             "gpu_framebuffer_drawing_not_rasterized": True,
             "pre_frame_snapshot_origin_not_independently_authenticated": True,
