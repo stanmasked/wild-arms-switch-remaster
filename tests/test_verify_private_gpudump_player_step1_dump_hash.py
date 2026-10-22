@@ -129,7 +129,7 @@ class Stage456BinaryTests(unittest.TestCase):
             for opts,err in (
                 ({"expected_snapshot_sha256":"f"*64},"independent SHA-256"),
                 ({"expected_png_sha256":"a"*64},"PNG differs"),
-                ({"expected_native_sha256":"0"*64},"SHA-256"),
+                ({"expected_native_sha256":"0"*64},"independent SHA256"),
                 ({"expected_snapshot_sha256":"BAD"},"lowercase 64 hex")):
                 with self.subTest(opts=opts),self.assertRaisesRegex(ValueError,err):
                     audit(p,**opts)
