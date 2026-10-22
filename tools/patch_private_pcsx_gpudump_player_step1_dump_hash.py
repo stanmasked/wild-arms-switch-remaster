@@ -106,16 +106,19 @@ OLD_FILE_OPEN = """bool PCSX::GPUDumpReader::open(IO<File> file) {
 NEW_FILE_OPEN = """bool PCSX::GPUDumpReader::open(IO<File> file) {
     if (!file || file->failed()) return false;
     size_t size = file->size();
-    std::vector<uint8_t> raw(size);
+    // Native GPUDUMP packets are 32-bit words; reject malformed tails rather
+    // than hashing bytes the packet reader would silently discard.
+    if (size % sizeof(uint32_t) != 0) return false;
+    std::vector<uint32_t> words(size / sizeof(uint32_t));
     file->rSeek(0, SEEK_SET);
-    ssize_t got = file->read(raw.data(), raw.size());
-    raw.resize(got > 0 ? std::min<size_t>(size_t(got), raw.size()) : 0);
-    auto exactFileDigest = waPrivateSha256(raw.data(), raw.size());
-    std::vector<uint32_t> words(raw.size() / 4);
-    if (!words.empty()) memcpy(words.data(), raw.data(), words.size() * 4);
+    size_t total = 0;
+    while (total < size) {
+        ssize_t got = file->read(reinterpret_cast<uint8_t*>(words.data()) + total, size - total);
+        if (got <= 0) return false;
+        total += size_t(got);
+    }
+    auto exactFileDigest = waPrivateSha256(reinterpret_cast<const uint8_t*>(words.data()), size);
     bool valid = open(std::move(words));
-    // Preserve the digest of the exact bytes read, including any trailing bytes
-    // that the packet reader rejects or ignores.
     m_sha256 = exactFileDigest;
     return valid;
 }"""
