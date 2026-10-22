@@ -42,7 +42,9 @@ The Disc analysis unit tests workflow fetches this exact upstream commit and run
 1. `GPUDumpReader::open(IO<File>)` requires a word-aligned dump and a
    successful seek to byte zero, then reads the complete file into the reader's
    word buffer. It hashes those exact raw bytes before interpreting/swapping
-   packet words; partial or invalid-sized reads fail closed.
+   packet words; partial or invalid-sized reads fail closed. Exceptions raised
+   by the pinned `File::size()`, `rSeek()`, or `read()` implementations are
+   converted to a failed open, with the previous digest and packet buffer cleared.
 2. The digest is stored on that reader and exposed read-only through the
    loaded `GPUDumpPlayer`.
 3. The export button remains enabled only while paused at `Frame 1`.

@@ -109,18 +109,31 @@ NEW_FILE_OPEN = """bool PCSX::GPUDumpReader::open(IO<File> file) {
     m_words.clear();
     m_ptr = 4;
     if (!file || file->failed()) return false;
-    size_t size = file->size();
+    size_t size = 0;
+    // PCSX-Redux File implementations may throw when size/seek/read fails.
+    // Convert those I/O failures to a closed reader instead of leaking them
+    // through the Player UI or continuing with an unverified stream.
+    try {
+        size = file->size();
+    } catch (...) {
+        return false;
+    }
     // Native GPUDUMP packets are 32-bit words; reject malformed tails rather
     // than hashing bytes the packet reader would silently discard.
     if (size % sizeof(uint32_t) != 0) return false;
     std::vector<uint32_t> words(size / sizeof(uint32_t));
-    // Hash only a stream whose read cursor was successfully reset to byte zero.
-    if (file->rSeek(0, SEEK_SET) != 0) return false;
     size_t total = 0;
-    while (total < size) {
-        ssize_t got = file->read(reinterpret_cast<uint8_t*>(words.data()) + total, size - total);
-        if (got <= 0 || size_t(got) > size - total) return false;
-        total += size_t(got);
+    try {
+        // A zero return is success here because rSeek reports the resulting
+        // absolute cursor; failures may also throw depending on File backend.
+        if (file->rSeek(0, SEEK_SET) != 0) return false;
+        while (total < size) {
+            ssize_t got = file->read(reinterpret_cast<uint8_t*>(words.data()) + total, size - total);
+            if (got <= 0 || size_t(got) > size - total) return false;
+            total += size_t(got);
+        }
+    } catch (...) {
+        return false;
     }
     auto exactFileDigest = waPrivateSha256(reinterpret_cast<const uint8_t*>(words.data()), size);
     bool valid = open(std::move(words));

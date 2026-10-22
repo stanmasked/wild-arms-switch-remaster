@@ -263,6 +263,8 @@ class Stage456PatchTests(unittest.TestCase):
         self.assertIn(alignment,result)
         self.assertIn(read_loop,result)
         self.assertIn(invalid_count,result)
+        self.assertIn('catch (...) {',result)
+        self.assertIn('size = file->size();',result)
         self.assertIn('total += size_t(got);',result)
         self.assertIn('m_words.clear();',result)
         self.assertIn('m_ptr = 4;',result)
@@ -357,6 +359,7 @@ class Stage456PatchTests(unittest.TestCase):
 #include <cstring>
 #include <memory>
 #include <string>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 #include <sys/types.h>
@@ -367,16 +370,24 @@ struct File {
     std::vector<uint8_t> bytes;
     size_t cursor=0;
     bool seekFails=false;
+    bool seekReturnsNegative=false;
+    bool sizeThrows=false;
+    bool readThrows=false;
     int mode=0;
     size_t maxChunk=static_cast<size_t>(-1);
     bool failed() const { return false; }
-    size_t size() const { return bytes.size(); }
+    size_t size() const {
+        if (sizeThrows) throw std::runtime_error("size failure");
+        return bytes.size();
+    }
     ssize_t rSeek(ssize_t pos,int wheel) {
-        if (seekFails || wheel!=SEEK_SET || pos<0) return -1;
+        if (seekFails) throw std::runtime_error("seek failure");
+        if (seekReturnsNegative || wheel!=SEEK_SET || pos<0) return -1;
         cursor=size_t(pos);
         return ssize_t(cursor);
     }
     ssize_t read(void* dst,size_t amount) {
+        if (readThrows) throw std::runtime_error("read failure");
         if (mode==2) return ssize_t(amount+1);
         if (mode==1 && cursor>=5) return -1;
         if (cursor>=bytes.size()) return -1;
@@ -395,6 +406,8 @@ public:
     bool open(IO<File> file);
     bool open(std::vector<uint32_t>&& words);
     const std::array<uint8_t,32>& digest() const { return m_sha256; }
+    size_t position() const { return m_ptr; }
+    size_t size() const { return m_words.size(); }
 private:
     std::vector<uint32_t> m_words;
     size_t m_ptr=4;
@@ -411,47 +424,68 @@ int main() {
     if (!reader.open(partial)) return 1;
     if (reader.digest()!=waPrivateSha256(bytes.data(),bytes.size())) return 2;
 
-    auto misaligned=std::make_shared<PCSX::File>();
-    misaligned->bytes.assign(5,1);
-    if (reader.open(misaligned)) return 3;
-    if (reader.digest()!=std::array<uint8_t,32>{}) return 4;
-
+    // The pinned PosixFile::rSeek throws on seek errors; fail closed and
+    // clear the old identity and packet buffer.
     auto seekFailure=std::make_shared<PCSX::File>();
     seekFailure->bytes=bytes;
     seekFailure->seekFails=true;
-    if (reader.open(seekFailure)) return 5;
-    if (reader.digest()!=std::array<uint8_t,32>{}) return 6;
+    if (reader.open(seekFailure)) return 3;
+    if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0 || reader.position()!=4) return 4;
+
+    // Also exercise backends that report seek failure as a negative value.
+    auto seekNegative=std::make_shared<PCSX::File>();
+    seekNegative->bytes=bytes;
+    seekNegative->seekReturnsNegative=true;
+    if (reader.open(seekNegative)) return 5;
+    if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0) return 6;
+
+    auto sizeFailure=std::make_shared<PCSX::File>();
+    sizeFailure->bytes=bytes;
+    sizeFailure->sizeThrows=true;
+    if (reader.open(sizeFailure)) return 7;
+    if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0) return 8;
+
+    auto readFailure=std::make_shared<PCSX::File>();
+    readFailure->bytes=bytes;
+    readFailure->readThrows=true;
+    if (reader.open(readFailure)) return 9;
+    if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0) return 10;
 
     auto interrupted=std::make_shared<PCSX::File>();
     interrupted->bytes=bytes;
     interrupted->mode=1;
-    if (reader.open(interrupted)) return 7;
-    if (reader.digest()!=std::array<uint8_t,32>{}) return 8;
+    if (reader.open(interrupted)) return 11;
+    if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0) return 12;
 
     auto invalidCount=std::make_shared<PCSX::File>();
     invalidCount->bytes=bytes;
     invalidCount->mode=2;
-    if (reader.open(invalidCount)) return 9;
-    if (reader.digest()!=std::array<uint8_t,32>{}) return 10;
+    if (reader.open(invalidCount)) return 13;
+    if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0) return 14;
+
+    auto misaligned=std::make_shared<PCSX::File>();
+    misaligned->bytes.assign(5,1);
+    if (reader.open(misaligned)) return 15;
+    if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0) return 16;
 
     auto invalidHeader=std::make_shared<PCSX::File>();
     invalidHeader->bytes.assign(16,0);
-    if (reader.open(invalidHeader)) return 11;
-    if (reader.digest()!=std::array<uint8_t,32>{}) return 12;
+    if (reader.open(invalidHeader)) return 17;
+    if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0) return 18;
 
     auto shortFile=std::make_shared<PCSX::File>();
     shortFile->bytes.assign(8,0);
-    if (reader.open(shortFile)) return 13;
-    if (reader.digest()!=std::array<uint8_t,32>{}) return 14;
+    if (reader.open(shortFile)) return 19;
+    if (reader.digest()!=std::array<uint8_t,32>{} || reader.size()!=0) return 20;
 
     std::vector<uint32_t> validWords(4);
     std::memcpy(validWords.data(),bytes.data(),bytes.size());
-    if (!reader.open(std::move(validWords))) return 15;
-    if (reader.digest()!=waPrivateSha256(bytes.data(),bytes.size())) return 16;
+    if (!reader.open(std::move(validWords))) return 21;
+    if (reader.digest()!=waPrivateSha256(bytes.data(),bytes.size())) return 22;
 
     std::vector<uint32_t> invalidWords(4,0);
-    if (reader.open(std::move(invalidWords))) return 17;
-    if (reader.digest()!=std::array<uint8_t,32>{}) return 18;
+    if (reader.open(std::move(invalidWords))) return 23;
+    if (reader.digest()!=std::array<uint8_t,32>{}) return 24;
     return 0;
 }
 '''
