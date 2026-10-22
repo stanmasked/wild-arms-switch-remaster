@@ -58,3 +58,7 @@ jobs:
       - name: Build patched PCSX-Redux, host tests, and tools
         working-directory: ${{ runner.temp }}/pcsx-redux
         run: make -j 2 all pcsx-redux-tests tools LDFLAGS_Release="-static-libstdc++ -static-libgcc"
+
+      - name: Run compiled PCSX-Redux host test suite
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: xvfb-run catchsegv ./pcsx-redux-tests
