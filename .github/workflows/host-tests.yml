@@ -1,5 +1,12 @@
 name: Host core tests
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
