@@ -1,6 +1,7 @@
 name: Disc analysis unit tests
 on:
   push:
+    branches: [main]
   pull_request:
 jobs:
   python-tests:
