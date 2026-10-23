@@ -7,6 +7,8 @@ on:
       - tools/patch_private_pcsx_gpudump_player_step1_export.py
       - tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py
       - tools/patch_private_pcsx_gpu_gp0_nop.py
+      - tools/patch_private_pcsx_gp0_nop_runtime_test.py
+      - tests/test_patch_private_pcsx_gp0_nop_runtime_test.py
       - docs/stage456-private-player-step1-native-dump-hash-binding.md
       - .github/workflows/pcsx-redux-patched-build.yml
   pull_request:
@@ -14,6 +16,8 @@ on:
       - tools/patch_private_pcsx_gpudump_player_step1_export.py
       - tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py
       - tools/patch_private_pcsx_gpu_gp0_nop.py
+      - tools/patch_private_pcsx_gp0_nop_runtime_test.py
+      - tests/test_patch_private_pcsx_gp0_nop_runtime_test.py
       - docs/stage456-private-player-step1-native-dump-hash-binding.md
       - .github/workflows/pcsx-redux-patched-build.yml
   workflow_dispatch:
@@ -57,7 +61,10 @@ jobs:
             "$RUNNER_TEMP/pcsx-redux" --apply
           python3 "$GITHUB_WORKSPACE/tools/patch_private_pcsx_gpu_gp0_nop.py" \
             "$RUNNER_TEMP/pcsx-redux" --apply
+          python3 "$GITHUB_WORKSPACE/tools/patch_private_pcsx_gp0_nop_runtime_test.py" \
+            "$RUNNER_TEMP/pcsx-redux" --apply
           git -C "$RUNNER_TEMP/pcsx-redux" diff --check
+          git -C "$RUNNER_TEMP/pcsx-redux/src/mips" diff --check
 
       - name: Build patched PCSX-Redux, host tests, and tools
         working-directory: ${{ runner.temp }}/pcsx-redux
@@ -81,6 +88,8 @@ jobs:
           make -C src/mips/tests -j 2 PCSX_TESTS=true
           cp ./openbios.bin src/mips/openbios/
           test -s src/mips/openbios/openbios.bin
+          cmp -s ./openbios.bin src/mips/openbios/openbios.bin
+          sha256sum ./openbios.bin | awk '{print $1}' > "$RUNNER_TEMP/openbios-tested.sha256"
 
       - name: Build retail monitor for CD-ROM test image
         working-directory: ${{ runner.temp }}/pcsx-redux
@@ -102,12 +111,28 @@ jobs:
 
       - name: Run compiled PCSX-Redux host test suite
         working-directory: ${{ runner.temp }}/pcsx-redux
-        run: xvfb-run catchsegv ./pcsx-redux-tests
+        run: |
+          set -euo pipefail
+          logfile="$RUNNER_TEMP/pcsx-redux-native-tests.log"
+          xvfb-run catchsegv ./pcsx-redux-tests 2>&1 | tee "$logfile"
+          grep -Fq 'GP0_NOP_RUNTIME_PROBE_PASS word=000326cc before=000006d5 after=000006d5' "$logfile"
+          if grep -Fq 'Got an unknown GPU data word: 000326cc' "$logfile"; then
+            echo "GP0(00h) NOP was incorrectly reported as an unknown GPU word"
+            exit 1
+          fi
 
-      - name: Package patched PCSX-Redux AppImage with OpenBIOS
+      - name: Package patched PCSX-Redux AppImage with tested OpenBIOS
         working-directory: ${{ runner.temp }}/pcsx-redux
         run: |
-          make install install-openbios DESTDIR=AppDir/usr
+          set -euo pipefail
+          expected="$(cat "$RUNNER_TEMP/openbios-tested.sha256")"
+          actual="$(sha256sum ./openbios.bin | awk '{print $1}')"
+          test "$actual" = "$expected"
+          make install DESTDIR=AppDir/usr
+          mkdir -p AppDir/usr/share/pcsx-redux/resources
+          cp ./openbios.bin AppDir/usr/share/pcsx-redux/resources/openbios.bin
+          actual="$(sha256sum AppDir/usr/share/pcsx-redux/resources/openbios.bin | awk '{print $1}')"
+          test "$actual" = "$expected"
           sed -i s:/usr/bin/:: AppDir/usr/share/applications/pcsx-redux.desktop
           linuxdeploy -v3 --appdir=AppDir -e AppDir/usr/bin/pcsx-redux -d AppDir/usr/share/applications/pcsx-redux.desktop -i AppDir/usr/share/icons/hicolor/256x256/apps/pcsx-redux.png -o appimage
           mv PCSX-Redux-x86_64.AppImage PCSX-Redux-private-openbios-x86_64.AppImage
@@ -120,6 +145,9 @@ jobs:
           bios="$PWD/AppDir/usr/share/pcsx-redux/resources/openbios.bin"
           test -s "$appimage"
           test -s "$bios"
+          expected="$(cat "$RUNNER_TEMP/openbios-tested.sha256")"
+          actual="$(sha256sum "$bios" | awk '{print $1}')"
+          test "$actual" = "$expected"
           chmod +x "$appimage"
           for cpu in interpreter dynarec; do
             logfile="$RUNNER_TEMP/pcsx-redux-smoke-${cpu}.log"
