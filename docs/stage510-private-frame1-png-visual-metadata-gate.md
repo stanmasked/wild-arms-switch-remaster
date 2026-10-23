@@ -82,3 +82,56 @@ unscaled complete GP1 display rectangle and the privately recorded
 coordinates match the GP1 start. Keep the original screenshot and
 coordinate provenance in private Drive. Matching pixels cannot on its
 own authenticate the screenshot's actual UI origin.
+
+
+## Stage516 — private evidence sealing and post-archive re-download audit
+
+New owner-local tool `tools/seal_private_player_frame1_archive.py` applies the
+strict Stage456/514 native-dump ↔ pretrace ↔ V2 ↔ PNG RGB gate **before**
+writing a private SHA-256 manifest. It does not upload raw data, publish hashes
+or claim screenshot provenance. The seal stores only safe basenames, byte
+counts, SHA-256 checksums, explicit ROI geometry, verification requirements,
+and a fixed label `RGB_EQUALITY_WITH_UNATTESTED_SCREENSHOT_ORIGIN`.
+An existing manifest cannot be overwritten, the file is created with owner-only
+permissions, and the input paths must be distinct regular non-hardlinked files
+(no symlinks or path traversal).
+
+The following commands are illustrative for an owner-private directory that
+already contains the **five authentic files**. These names do not imply that
+such a capture is available yet:
+
+```sh
+python tools/seal_private_player_frame1_archive.py seal /private/wa1-frame1 \
+  --native source.gpudump --pretrace rewind.u16le.bin \
+  --gp0 first.gp0.jsonl --v2 player-step1.v2.bin \
+  --png original-player-roi.png \
+  --x 211 --y 37 --width 256 --height 240 \
+  --require-changed-roi
+```
+
+Enable `--require-native-display-window` only for the **entire** native GP1
+display rectangle, not a subcrop; replace all coordinates with the real
+private capture's VRAM-relative ROI. Keep the PNG from an actual independent
+GPU Dump Player screenshot, never synthesize it from V2 VRAM and present it as
+a UI witness. The sealing script reports no private SHA-256 values to stdout.
+
+Archive all five unmodified original files in the private
+`02_Raw_Traces_and_Captures` project area and the private seal in
+`00_Manifest_and_SHA256`. For independent readback, download the archived
+raw files and manifest into one owner-private directory, retaining the same
+basenames, then run:
+
+```sh
+python tools/seal_private_player_frame1_archive.py verify /private/wa1-restored
+```
+
+Verification checks every file's exact size and SHA-256 **before** replaying
+the complete native/frame/V2/PNG strict RGB audit with the sealed ROI and
+options. A copied directory at a different path works; unknown fields,
+modified hashes, duplicate JSON keys and symlinked or hardlinked evidence
+fail closed. The tests are synthetic and never use original Wild Arms bytes.
+
+This is an **integrity/reproducibility** gate only. It does not cryptographically
+authenticate an operator-supplied screenshot, confirm it was visible in the
+Player window, or prove Surf Village gameplay rendering. Private material
+remains absent from the designated capture folder as of this stage.
