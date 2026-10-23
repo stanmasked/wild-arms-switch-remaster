@@ -48,3 +48,14 @@ export and native first-frame importer agree on the same files.
 
 Original GPU captures, source files, VRAM, game IDs, private hashes
 and PNG remain in owner-private Google Drive, not public CI.
+
+## Next native GP0 compatibility gate
+
+A separately archived authentic INTRO capture also contains GP0(02), the
+PS1 VRAM fill rectangle command. The current Stage437 strict packetizer
+rejects this opcode and its GPU memory effects are not yet modeled by
+that adapter. Do not silently drop or relabel GP0(02) to force the five-file
+seal to pass. Implement and regression-test exact fill geometry, word
+framing, bounds, mask/VRAM behavior and any affected drawing state as a
+separate later stage. The Stage521 GP1 control proof solves only its
+explicit state-equivalence subset.
