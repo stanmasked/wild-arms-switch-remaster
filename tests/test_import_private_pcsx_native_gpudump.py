@@ -220,7 +220,8 @@ class Stage447NativeDumpTests(unittest.TestCase):
             select_first_native_gp0_frame(read_native_gpu_dump(dump_bytes(rec)))
 
     def test_live_unsupported_gp0_opcode_rejected(self):
-        rec=base_records(live=[0x02000000,0,0])
+        # GP0(02) is now modeled; GP0(40) line rasterization remains unmodeled.
+        rec=base_records(live=[0x40000000,0,0])
         with self.assertRaisesRegex(ValueError,"unsupported GP0 opcode"):
             select_first_native_gp0_frame(read_native_gpu_dump(dump_bytes(rec)))
 
