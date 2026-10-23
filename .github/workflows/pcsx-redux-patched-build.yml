@@ -63,10 +63,41 @@ jobs:
         working-directory: ${{ runner.temp }}/pcsx-redux
         run: make -j 2 all pcsx-redux-tests tools LDFLAGS_Release="-static-libstdc++ -static-libgcc"
 
+      - name: Build pinned PS1 test programs
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: make -C src/mips/tests -j 2 PCSX_TESTS=true
+
       - name: Build matching pinned OpenBIOS
         working-directory: ${{ runner.temp }}/pcsx-redux
         run: |
           make -C src/mips/openbios -j 2 all
+          test -s src/mips/openbios/openbios.bin
+
+      - name: Rebuild PS1 test programs with preserved OpenBIOS
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: |
+          cp src/mips/openbios/openbios.bin .
+          make -C src/mips/openbios clean
+          make -C src/mips/tests -j 2 PCSX_TESTS=true
+          cp ./openbios.bin src/mips/openbios/
+          test -s src/mips/openbios/openbios.bin
+
+      - name: Build retail monitor for CD-ROM test image
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: make -C src/mips/monitor/hosts/retail -j 2
+
+      - name: Generate upstream CD-ROM test image
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: xvfb-run catchsegv ./pcsx-redux -stdout -lua_stdout -testmode -no-gui-log -exec "dofile 'src/mips/tests/cdrom/create-test-iso.lua'"
+
+      - name: Validate native test fixtures
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: |
+          test -s test.cue
+          test -s test.bin
+          test -s test-t25.bin
+          test -s src/mips/tests/cdrom/cdrom.ps-exe
+          test -s src/mips/monitor/hosts/retail/monitor-retail.ps-exe
           test -s src/mips/openbios/openbios.bin
 
       - name: Run compiled PCSX-Redux host test suite
