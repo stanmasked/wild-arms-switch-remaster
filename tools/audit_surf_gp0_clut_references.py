@@ -14,6 +14,7 @@ from pathlib import Path
 
 from audit_surf_palette_rows import read_private_candidates
 from audit_surf_vram_palette_occurrences import VRAM_BYTES, _row_filter
+from decode_private_gp0_fill import decode_bounded_gp0_fill
 
 TRACE_KIND = "WA1_PRIVATE_PS1_GP0_PACKET_TRACE"
 MAX_TRACE_BYTES = 16 * 1024 * 1024
@@ -71,6 +72,9 @@ def decode_packet(words, draw_mode):
             type(w) is not int or not 0 <= w <= 0xffffffff for w in words):
         raise ValueError("invalid GP0 packet words")
     opcode = words[0] >> 24
+    if opcode == 0x02:
+        decode_bounded_gp0_fill(words)
+        return "VRAM_FILL_RECTANGLE", draw_mode, None
     if opcode == 0xe1:
         if len(words) != 1:
             raise ValueError("GP0 E1 draw-mode command must have one word")
