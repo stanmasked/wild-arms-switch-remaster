@@ -17,7 +17,15 @@ class GP0NopRuntimeFixtureTests(unittest.TestCase):
         self.assertEqual(changed.count(TEST_NAME), 1)
         self.assertEqual(changed.count(PASS_MARKER), 1)
         self.assertIn("cmdSend(0x000326ccu);", changed)
+        self.assertIn("cester_assert_uint_eq(0x6d5u, (unsigned)before);", changed)
         self.assertIn("cester_assert_uint_eq((unsigned)before, (unsigned)after);", changed)
+        self.assertIn("GP0_NOP_RUNTIME_PROBE_FAIL", changed)
+        pass_marker = changed.index('ramsyscall_printf("GP0_NOP_RUNTIME_PROBE_PASS')
+        setup_assert = changed.index("cester_assert_uint_eq(0x6d5u, (unsigned)before);")
+        unchanged_assert = changed.index("cester_assert_uint_eq((unsigned)before, (unsigned)after);")
+        self.assertLess(setup_assert, pass_marker)
+        self.assertLess(unchanged_assert, pass_marker)
+        self.assertIn("if (before == 0x6d5u && after == before)", changed)
 
     def test_guest_patch_fails_closed_when_anchor_is_missing_or_duplicated(self):
         with self.assertRaisesRegex(ValueError, "anchor absent or duplicated"):

@@ -215,3 +215,19 @@ applies it after the Stage456 hash-binding patch. This is a targeted emulator
 compatibility change, not a modification of game data. A successful original
 game boot remains unconfirmed until the rebuilt artifact passes the private
 runtime probe.
+
+
+## Stage502 follow-up — make the GP0 NOP runtime pass marker trustworthy
+
+The guest regression now verifies that GP0(E1) first establishes the expected
+GPUSTAT low bits (0x6d5), then confirms the 0x000326cc command leaves those
+bits unchanged. It emits the PASS marker only when both conditions are true;
+otherwise it emits a FAIL marker and the CESTER assertions fail the host test.
+The CI log check also requires the exact before=000006d5 after=000006d5
+values, while retaining the check that the original word is not reported as an
+unknown GPU command.
+
+This closes a false-positive path where an unchanged but incorrectly initialized
+GPUSTAT value could previously produce a PASS marker. The change strengthens
+only the synthetic runtime fixture and CI evidence; original Wild Arms data
+remains private and no successful retail-game boot is claimed by this test.

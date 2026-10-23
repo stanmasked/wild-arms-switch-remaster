@@ -28,12 +28,18 @@ RUNTIME_TEST = """CESTER_TEST(command_gp0_00_nop_ignores_low_24_bits, gpu_comman
     rasterReset();
     cmdSend(0xe10006d5u);
     uint32_t before = GPU_STATUS & 0x7ffu;
-    ramsyscall_printf("GP0_NOP_RUNTIME_PROBE_BEGIN word=000326cc\\n");
     cmdSend(0x000326ccu);
     uint32_t after = GPU_STATUS & 0x7ffu;
-    ramsyscall_printf("GP0_NOP_RUNTIME_PROBE_PASS word=000326cc before=%08x after=%08x\\n",
-                      (unsigned)before, (unsigned)after);
+    if (before != 0x6d5u || after != before) {
+        ramsyscall_printf("GP0_NOP_RUNTIME_PROBE_FAIL word=000326cc before=%08x after=%08x\\n",
+                          (unsigned)before, (unsigned)after);
+    }
+    cester_assert_uint_eq(0x6d5u, (unsigned)before);
     cester_assert_uint_eq((unsigned)before, (unsigned)after);
+    if (before == 0x6d5u && after == before) {
+        ramsyscall_printf("GP0_NOP_RUNTIME_PROBE_PASS word=000326cc before=%08x after=%08x\\n",
+                          (unsigned)before, (unsigned)after);
+    }
 )"""
 
 HOST_ANCHOR = """TEST(GPUCommand, StatusAfterWrite) {
