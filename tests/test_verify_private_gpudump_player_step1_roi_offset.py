@@ -62,6 +62,18 @@ def audit(paths,**kwargs):
 
 
 class OffsetRoiTests(unittest.TestCase):
+    def test_missing_native_gp1_display_window_fails_closed(self):
+        with tempfile.TemporaryDirectory() as root:
+            paths=synthetic_pair(root)
+            with self.assertRaisesRegex(ValueError,"not proven"):
+                audit(paths,require_native_display_window=True)
+
+    def test_native_display_option_does_not_accept_truthy_string(self):
+        with tempfile.TemporaryDirectory() as root:
+            paths=synthetic_pair(root)
+            with self.assertRaisesRegex(ValueError,"must be booleans"):
+                audit(paths,require_native_display_window="yes")
+
     def test_true_nonzero_origin_matches_across_vram_rows(self):
         with tempfile.TemporaryDirectory() as root:
             report=audit(synthetic_pair(root),require_changed_roi=True)
