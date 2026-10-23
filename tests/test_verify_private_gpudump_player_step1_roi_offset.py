@@ -13,6 +13,9 @@ import zlib
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from test_verify_private_pcsx_native_gpudump_import import prepared
+from test_import_private_pcsx_native_gpudump import base_records
+from import_private_pcsx_native_gpudump import GP1
+from test_verify_private_gpudump_player_rewind_rgb import png
 from test_verify_private_gpudump_player_step1_dump_hash import container
 from verify_private_gpudump_player_step1_dump_hash import (
     verify_private_dump_hash_bound_step1_export,
@@ -62,6 +65,27 @@ def audit(paths,**kwargs):
 
 
 class OffsetRoiTests(unittest.TestCase):
+    def test_exact_native_gp1_display_window_matches_player_v2(self):
+        with tempfile.TemporaryDirectory() as root:
+            records=base_records()
+            records[5]=(GP1,[0x03000000,0x05000000|(Y<<10)|X,0x08000000])
+            native,before,trace=prepared(Path(root),records=records)
+            snapshot=Path(root)/"display.v2.bin"
+            snapshot.write_bytes(container(before.read_bytes(),
+                hashlib.sha256(native.read_bytes()).digest()))
+            screenshot=Path(root)/"display.png"
+            screenshot.write_bytes(png(width=256,height=240))
+            inputs=(native,before,trace,snapshot,screenshot)
+            report=verify_private_dump_hash_bound_step1_export(
+                *inputs,x=X,y=Y,width=256,height=240,
+                require_native_display_window=True)
+            self.assertTrue(report["roi_exact_rgb_equal"])
+            self.assertTrue(report["native_gp1_display_window_explicitly_verified"])
+            with self.assertRaisesRegex(ValueError,"differs from native GP1"):
+                verify_private_dump_hash_bound_step1_export(
+                    *inputs,x=X+1,y=Y,width=256,height=240,
+                    require_native_display_window=True)
+
     def test_missing_native_gp1_display_window_fails_closed(self):
         with tempfile.TemporaryDirectory() as root:
             paths=synthetic_pair(root)
