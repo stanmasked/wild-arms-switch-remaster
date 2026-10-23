@@ -83,6 +83,13 @@ class StrictFrameWitnessPngTests(unittest.TestCase):
                         decode_private_opaque_rgb_png(
                             synthetic_png(**{side: ((kind, b"data"),)}))
 
+    def test_unrecognized_ancillary_chunk_is_rejected(self):
+        for location in ("before", "after"):
+            with self.subTest(location=location):
+                with self.assertRaisesRegex(ValueError, "unrecognized ancillary"):
+                    decode_private_opaque_rgb_png(
+                        synthetic_png(**{location: ((b"vpAg", b"data"),)}))
+
     def test_animation_chunks_rejected_before_and_after_idat(self):
         payloads={
             b"acTL":struct.pack(">II", 2, 0),
