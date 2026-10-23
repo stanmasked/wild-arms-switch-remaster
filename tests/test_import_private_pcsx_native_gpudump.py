@@ -158,7 +158,58 @@ class Stage447NativeDumpTests(unittest.TestCase):
 
     def test_live_gp1_state_changes_rejected_by_old_replayer(self):
         rec=base_records()
-        rec.insert(-1,(GP1,[0x08000000]))
+        rec.insert(-1,(GP1,[0x08000001]))
+        with self.assertRaisesRegex(ValueError,"unsupported live GP1"):
+            select_first_native_gp0_frame(read_native_gpu_dump(dump_bytes(rec)))
+
+    def test_identical_display_controls_do_not_change_first_frame_gp0(self):
+        original=select_first_native_gp0_frame(
+            read_native_gpu_dump(dump_bytes(base_records())))
+        rec=base_records()
+        rec.insert(-1,(GP1,[0x03000000,0x08000000,0x03000000]))
+        replay=select_first_native_gp0_frame(
+            read_native_gpu_dump(dump_bytes(rec)))
+        self.assertEqual(replay["idempotent_live_gp1_control_word_count"],3)
+        self.assertEqual(replay["modeled_gp0_raw"],original["modeled_gp0_raw"])
+        self.assertEqual(replay["initial_vram"],original["initial_vram"])
+
+    def test_full_control_state_restore_allows_exact_redundant_live_controls(self):
+        rec=base_records()
+        rec[5]=(GP1,[0x03000000,0x08000027,0x05000000,0x04000002])
+        rec.insert(-1,(GP1,[0x05000000,0x04000002,0x03000000,0x04000002]))
+        accepted=select_first_native_gp0_frame(
+            read_native_gpu_dump(dump_bytes(rec)))
+        self.assertEqual(accepted["idempotent_live_gp1_control_word_count"],4)
+        with tempfile.TemporaryDirectory() as td:
+            src,pre,trace=files(td,dump_bytes(rec))
+            report=import_private_native_gpudump(src,pre,trace)
+            self.assertEqual(report["native_live_idempotent_gp1_word_count"],4)
+            self.assertTrue(report["native_live_gp1_control_state_changes_rejected"])
+            self.assertFalse(report["gpu_gp1_and_readback_unmodeled_live_events_rejected"])
+
+    def test_unobserved_gp1_control_rejected_even_when_syntactically_safe(self):
+        rec=base_records()
+        rec.insert(-1,(GP1,[0x04000002]))
+        with self.assertRaisesRegex(ValueError,"unsupported live GP1"):
+            select_first_native_gp0_frame(read_native_gpu_dump(dump_bytes(rec)))
+
+    def test_duplicate_native_gp1_restore_provenance_rejected(self):
+        rec=base_records()
+        rec[5]=(GP1,[0x03000000,0x03000000,0x08000000])
+        with self.assertRaisesRegex(ValueError,"ambiguous duplicate native pretrace GP1"):
+            select_first_native_gp0_frame(read_native_gpu_dump(dump_bytes(rec)))
+
+    def test_gp1_side_effects_not_treated_as_idempotent(self):
+        for word in (0x00000000,0x01000000,0x02000000,0x10000000):
+            rec=base_records()
+            rec.insert(-1,(GP1,[word]))
+            with self.subTest(word=word):
+                with self.assertRaisesRegex(ValueError,"unsupported live GP1"):
+                    select_first_native_gp0_frame(read_native_gpu_dump(dump_bytes(rec)))
+
+    def test_redundant_controls_followed_by_actual_mode_change_rejected(self):
+        rec=base_records()
+        rec.insert(-1,(GP1,[0x03000000,0x08000001]))
         with self.assertRaisesRegex(ValueError,"unsupported live GP1"):
             select_first_native_gp0_frame(read_native_gpu_dump(dump_bytes(rec)))
 

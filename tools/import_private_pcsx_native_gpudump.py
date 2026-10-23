@@ -86,6 +86,11 @@ def select_first_native_gp0_frame(records):
     frame_count=0
     live_gp0_records=0
     metadata_count=0
+    # Only a repeated GP1 control that exactly matches pretrace state is
+    # safe to omit from Stage437's GP0-only replay. Never infer state from
+    # an unobserved register or accept GP1 commands with side effects.
+    pretrace_gp1_controls={}
+    idempotent_live_gp1_words=0
     for kind,words in records:
         if kind==GPU_VERSION:
             if version_seen or start_seen or tuple(words)!=(2,):
@@ -107,6 +112,13 @@ def select_first_native_gp0_frame(records):
                     if tuple(words)!=(0,):
                         raise ValueError("native preamble must start GPU GP1 reset")
                     reset_seen=True
+                else:
+                    for word in words:
+                        cmd=word>>24
+                        if cmd in (3,4,5,8):
+                            if cmd in pretrace_gp1_controls:
+                                raise ValueError("ambiguous duplicate native pretrace GP1 control")
+                            pretrace_gp1_controls[cmd]=word
             elif kind==GP0:
                 if not reset_seen:
                     raise ValueError("native GPU initialization lacks reset")
@@ -131,8 +143,19 @@ def select_first_native_gp0_frame(records):
             if kind==GP0:
                 live.extend(words)
                 live_gp0_records+=1
+            elif kind==GP1:
+                for word in words:
+                    cmd=word>>24
+                    # Strictly idempotent: only display enable, DMA direction,
+                    # VRAM display origin, and display mode, if captured with
+                    # an identical full GP1 word in the native preamble.
+                    # GP1 reset, IRQ ack, FIFO reset and GPU info are NEVER
+                    # treated as harmless, even when their words repeat.
+                    if (cmd not in (3,4,5,8) or
+                            pretrace_gp1_controls.get(cmd)!=word):
+                        raise ValueError("unsupported live GP1 state change or side effect")
+                    idempotent_live_gp1_words+=1
             else:
-                # Missing modeling of GP1/display/readback synchronization.
                 raise ValueError("unsupported live GP1/readback/metadata record")
         # Following the FIRST native frame, additional typed records
         # are structurally parsed but NOT reused with the stale initial VRAM.
@@ -154,6 +177,7 @@ def select_first_native_gp0_frame(records):
         "live_gp0_word_count":len(live),
         "recorded_vsync_count":frame_count,
         "native_metadata_record_count":metadata_count,
+        "idempotent_live_gp1_control_word_count":idempotent_live_gp1_words,
         "modeled_packet_counts":counts,
     }
 
@@ -208,9 +232,13 @@ def import_private_native_gpudump(native_path, output_vram_path,
         "live_frame_gp0_record_count":data["actual_live_gp0_record_count"],
         "first_frame_model_packet_count":packaged["packet_count"],
         "native_total_completed_vsync_count":data["recorded_vsync_count"],
+        "native_live_idempotent_gp1_word_count":data["idempotent_live_gp1_control_word_count"],
+        "native_live_gp1_control_state_changes_rejected":True,
         "only_first_native_frame_selected":True,
         "bootstrap_state_is_pre_trace_restore_not_live_gameplay":True,
-        "gpu_gp1_and_readback_unmodeled_live_events_rejected":True,
+        "gpu_gp1_and_readback_unmodeled_live_events_rejected":(
+            data["idempotent_live_gp1_control_word_count"]==0),
+        "idempotent_native_gp1_commands_are_preamble_equivalent_only":True,
         "native_emulator_binary_version_not_attested_by_file_header":True,
         "original_game_disc_and_map_not_independently_authenticated":True,
         "all_native_game_data_and_hashes_remain_owner_private":True,
