@@ -184,3 +184,15 @@ word alignment. A synthetic mock file reports the largest word-aligned
 requires the open to fail with zero seek calls, zero read calls, no vector-parser
 call, a zero digest, and an empty reader. This closes the allocation/length-error
 path without adding an arbitrary maximum size for legitimate private dumps.
+
+## Stage489 follow-up — internal VRAM backing size
+
+A local native Player probe showed that the pinned PCSX-Redux software GPU can
+return a 2 MiB `1024x1024` uint16_t backing store, even though the native PS1
+GPUDUMP initial upload and this V2 witness cover only `1024x512` pixels (1 MiB).
+The exporter now accepts either the standard 1 MiB slice or the supported 2 MiB
+backing store, rejects all other sizes, and copies exactly the first 512 rows.
+It does not assume that the unused upper half of the implementation's backing
+store is zero. The V2 header, payload length, CRC32, and loaded-dump SHA-256
+binding remain unchanged. This is a source-level fix awaiting current-head CI
+and the matched pinned-OpenBIOS runtime check.

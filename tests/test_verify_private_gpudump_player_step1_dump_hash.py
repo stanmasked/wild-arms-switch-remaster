@@ -330,6 +330,9 @@ class Stage456PatchTests(unittest.TestCase):
         self.assertIn("std::string(reinterpret_cast<const char*>(selected[0].c_str()))",s)
         self.assertIn("m_frozenDumpSHA256 = player->dumpSHA256()",s)
         self.assertIn("m_frozenDumpSHA256)",s)
+        self.assertIn("state.size() != 1024u * 512u * 2u &&",s)
+        self.assertIn("state.size() != 1024u * 1024u * 2u",s)
+        self.assertIn("m_frozenStepOneVRAM.resize(1024u * 512u * 2u)",s)
 
     def test_patch_is_scoped_to_four_pinned_upstream_files(self):
         diff=make_diff(CORE_HEADER_SNIPPET,CORE_SOURCE_SNIPPET,

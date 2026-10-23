@@ -215,6 +215,14 @@ class Stage455UpstreamPatchTests(unittest.TestCase):
             self.assertIn(marker,result)
         self.assertNotIn("g_emulator->m_gpu->getVRAM()",result)
 
+    def test_accepts_supported_backing_sizes_and_exports_standard_ps1_rows(self):
+        result=patched_source(SOURCE_SNIPPET)
+        self.assertIn("state.size() != 1024u * 512u * 2u &&",result)
+        self.assertIn("state.size() != 1024u * 1024u * 2u",result)
+        self.assertIn("first 1024x512 rows",result)
+        self.assertIn("m_frozenStepOneVRAM.resize(1024u * 512u * 2u)",result)
+        self.assertIn("for (unsigned i = 0; i < 1024u * 512u; i++)",result)
+
     def test_snapshot_is_frozen_before_save_dialog(self):
         result=patched_source(SOURCE_SNIPPET)
         self.assertLess(result.index("m_frozenStepOneVRAM.resize"),

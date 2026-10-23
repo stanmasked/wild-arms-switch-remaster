@@ -62,3 +62,24 @@ jobs:
       - name: Run compiled PCSX-Redux host test suite
         working-directory: ${{ runner.temp }}/pcsx-redux
         run: xvfb-run catchsegv ./pcsx-redux-tests
+
+      - name: Build matching pinned OpenBIOS
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: make -C src/mips/openbios -j 2 all
+
+      - name: Package patched PCSX-Redux AppImage with OpenBIOS
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: |
+          make install install-openbios DESTDIR=AppDir/usr
+          sed -i s:/usr/bin/:: AppDir/usr/share/applications/pcsx-redux.desktop
+          linuxdeploy -v3 --appdir=AppDir -e AppDir/usr/bin/pcsx-redux -d AppDir/usr/share/applications/pcsx-redux.desktop -i AppDir/usr/share/icons/hicolor/256x256/apps/pcsx-redux.png -o appimage
+          mv PCSX-Redux-x86_64.AppImage PCSX-Redux-private-openbios-x86_64.AppImage
+
+      - name: Upload patched private-runtime emulator artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcsx-redux-patched-openbios-x86_64
+          path: ${{ runner.temp }}/pcsx-redux/PCSX-Redux-private-openbios-x86_64.AppImage
+          if-no-files-found: error
+          retention-days: 7
