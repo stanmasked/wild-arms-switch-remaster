@@ -393,6 +393,10 @@ on:
       - '.github/workflows/matrix-audits.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
 jobs:
   python-audits:
     runs-on: ubuntu-latest
