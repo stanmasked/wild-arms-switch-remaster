@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import tempfile
 
 from verify_private_gpudump_player_step1_dump_hash import (
     verify_private_dump_hash_bound_step1_export,
@@ -83,6 +84,15 @@ def _strict_audit(paths,roi,flags,expected=None):
     return report
 
 
+def _assert_sealed_file_bytes(paths,files):
+    """Check every role independently; native/PNG/V2 checks alone are insufficient."""
+    for role,path in zip(ROLES,paths):
+        record=files[role]
+        if (path.stat().st_size!=record["size"] or
+                not hmac.compare_digest(_sha(path),record["sha256"])):
+            raise ValueError("archived private evidence differs from manifest")
+
+
 def seal(root,names,*,roi,require_changed_roi=False,require_gp1=False,
          manifest_name="stage516-frame1.private.json"):
     """Refuse overwrite; private hashes are written only inside owner's root."""
@@ -99,6 +109,9 @@ def seal(root,names,*,roi,require_changed_roi=False,require_gp1=False,
     # Re-audit with independently recomputed expectations before publication.
     _strict_audit(paths,roi,flags,{role:files[role]["sha256"]
                                  for role in ("native","v2","png")})
+    # A strict RGB replay binds native/V2/PNG, but the complete manifest
+    # also seals GP0 and pretrace files. Re-hash all five before committing.
+    _assert_sealed_file_bytes(paths,files)
     record={"kind":KIND,"schema":1,"files":files,"roi":roi,"flags":flags,
             "result":"RGB_EQUALITY_WITH_UNATTESTED_SCREENSHOT_ORIGIN",
             "origin":"operator_claim_not_cryptographically_attested",
@@ -106,15 +119,32 @@ def seal(root,names,*,roi,require_changed_roi=False,require_gp1=False,
     data=(json.dumps(record,indent=2,sort_keys=True)+"\n").encode("utf-8")
     if len(data)>MAX_MANIFEST_BYTES:
         raise ValueError("private seal too large")
-    fd=os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    # Write a complete 0600 temporary file, then atomically link it into
+    # place without replacing a prior seal. An interrupted write must not
+    # leave a truncated manifest occupying its final name.
+    temp_name=None
+    published=False
     try:
-        with os.fdopen(fd,"wb") as stream:
+        with tempfile.NamedTemporaryFile(
+                dir=Path(root),prefix="."+target.name+".",suffix=".tmp",
+                delete=False) as stream:
+            temp_name=Path(stream.name)
+            os.chmod(temp_name,0o600)
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
+        _assert_sealed_file_bytes(paths,files)
+        os.link(temp_name,target)
+        published=True
+        # Detect a concurrent source rewrite during manifest publication.
+        _assert_sealed_file_bytes(paths,files)
     except BaseException:
-        target.unlink(missing_ok=True)
+        if published:
+            target.unlink(missing_ok=True)
         raise
+    finally:
+        if temp_name is not None:
+            temp_name.unlink(missing_ok=True)
     return record
 
 
@@ -153,13 +183,11 @@ def verify(root,manifest_name="stage516-frame1.private.json"):
             raise ValueError("invalid private evidence entry")
         names[role]=_name(item["name"])
     paths=_paths(root,names)
-    for role,path in zip(ROLES,paths):
-        item=entries[role]
-        if (path.stat().st_size!=item["size"] or
-                not hmac.compare_digest(_sha(path),item["sha256"])):
-            raise ValueError("archived private evidence differs from manifest")
+    _assert_sealed_file_bytes(paths,entries)
     _strict_audit(paths,record["roi"],record["flags"],
                   {role:entries[role]["sha256"] for role in ("native","v2","png")})
+    # Guard against accidental changes to GP0 or pretrace while replaying.
+    _assert_sealed_file_bytes(paths,entries)
     return True
 
 
