@@ -24,6 +24,12 @@ jobs:
           git -C "$RUNNER_TEMP/pcsx-redux" remote add origin https://github.com/grumpycoders/pcsx-redux.git
           git -C "$RUNNER_TEMP/pcsx-redux" fetch --depth 1 origin de4a33e9a69abec4f567ae33567537f867dc2bba
           git -C "$RUNNER_TEMP/pcsx-redux" checkout --detach FETCH_HEAD
+          git config --global --add safe.directory "$RUNNER_TEMP/pcsx-redux"
+      - name: Fetch pinned MIPS guest-test submodule
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: ./.github/scripts/update-submodules.sh
+      - name: Validate GP0 NOP runtime regression against pinned upstream sources
+        run: python3 tools/patch_private_pcsx_gp0_nop_runtime_test.py "$RUNNER_TEMP/pcsx-redux"
       - name: Validate generated patch against real upstream sources
         run: python3 tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py "$RUNNER_TEMP/pcsx-redux"
       - name: Validate GP0(00h) NOP patch against pinned upstream source

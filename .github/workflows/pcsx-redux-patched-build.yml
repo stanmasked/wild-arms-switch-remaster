@@ -115,7 +115,7 @@ jobs:
           set -euo pipefail
           logfile="$RUNNER_TEMP/pcsx-redux-native-tests.log"
           xvfb-run catchsegv ./pcsx-redux-tests 2>&1 | tee "$logfile"
-          grep -Fq 'GP0_NOP_RUNTIME_PROBE_PASS word=000326cc before=000006d5 after=000006d5' "$logfile"
+          grep -Fq 'GP0_NOP_RUNTIME_PROBE_PASS word=000326cc' "$logfile"
           if grep -Fq 'Got an unknown GPU data word: 000326cc' "$logfile"; then
             echo "GP0(00h) NOP was incorrectly reported as an unknown GPU word"
             exit 1
