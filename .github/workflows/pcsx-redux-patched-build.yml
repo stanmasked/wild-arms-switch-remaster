@@ -6,6 +6,8 @@ on:
     paths:
       - tools/patch_private_pcsx_gpudump_player_step1_export.py
       - tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py
+      - tools/patch_private_pcsx_gpudump_player_step1_owner_path.py
+      - tests/test_patch_private_pcsx_gpudump_player_step1_owner_path.py
       - tools/patch_private_pcsx_gpu_gp0_nop.py
       - tools/patch_private_pcsx_gp0_nop_runtime_test.py
       - tests/test_patch_private_pcsx_gp0_nop_runtime_test.py
@@ -15,6 +17,8 @@ on:
     paths:
       - tools/patch_private_pcsx_gpudump_player_step1_export.py
       - tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py
+      - tools/patch_private_pcsx_gpudump_player_step1_owner_path.py
+      - tests/test_patch_private_pcsx_gpudump_player_step1_owner_path.py
       - tools/patch_private_pcsx_gpu_gp0_nop.py
       - tools/patch_private_pcsx_gp0_nop_runtime_test.py
       - tests/test_patch_private_pcsx_gp0_nop_runtime_test.py
@@ -62,7 +66,7 @@ jobs:
 
       - name: Apply combined owner-local research patch
         run: |
-          python3 "$GITHUB_WORKSPACE/tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py" \
+          python3 "$GITHUB_WORKSPACE/tools/patch_private_pcsx_gpudump_player_step1_owner_path.py" \
             "$RUNNER_TEMP/pcsx-redux" --apply
           python3 "$GITHUB_WORKSPACE/tools/patch_private_pcsx_gpu_gp0_nop.py" \
             "$RUNNER_TEMP/pcsx-redux" --apply
