@@ -56,3 +56,29 @@ observation of Player's displayed texture. Preserve both the untouched
 UI screenshot and any diagnostic conversions separately and identify the
 conversion lineage in the private manifest. Even strict exact RGB equality
 cannot attest the screenshot's UI provenance or GPU rasterization correctness.
+
+
+## Stage513–514 — synthetic ROI offsets and native GP1 display-window gate
+
+Stage513 regression exercises a synthetic three-by-two ROI at VRAM (211,37),
+with distinct RGB555 colors across two 1024-word VRAM rows. The exact
+same-file PNG comparison must pass only for its true VRAM origin and
+orientation; a one-pixel x/y offset, swapped row or changed width must fail.
+
+For a capture of the **entire** Display-area-only preview, the Stage514
+V2 verifier now supports the optional `--require-native-display-window`.
+When enabled, the verifier derives the GP1(05) display start and GP1(08)
+display mode from the bound native dump's *pretrace* control records and
+requires the provided x/y/width/height to equal that exact rectangle.
+Unobserved or repeated display controls must fail closed. The comparison
+assumes the supported first-step trace does not change the display geometry
+before its first VSync. This gate is deliberately **not** the default:
+for a smaller manually cropped portion of a full-VRAM screenshot it would
+incorrectly require the crop to cover the whole display window.
+
+For example, append `--require-native-display-window` to the Stage456
+private verifier invocation **only** when the PNG is a native-resolution,
+unscaled complete GP1 display rectangle and the privately recorded
+coordinates match the GP1 start. Keep the original screenshot and
+coordinate provenance in private Drive. Matching pixels cannot on its
+own authenticate the screenshot's actual UI origin.
