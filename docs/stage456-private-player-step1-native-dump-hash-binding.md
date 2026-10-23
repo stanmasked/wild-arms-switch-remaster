@@ -231,3 +231,21 @@ This closes a false-positive path where an unchanged but incorrectly initialized
 GPUSTAT value could previously produce a PASS marker. The change strengthens
 only the synthetic runtime fixture and CI evidence; original Wild Arms data
 remains private and no successful retail-game boot is claimed by this test.
+
+
+## Stage504 follow-up — use Bash in the containerized build job
+
+The first current-head patched-build run successfully compiled PCSX-Redux, its
+host tests and tools, the PS1 test programs, pinned OpenBIOS, and the synthetic
+CD-ROM fixtures. It then stopped before running the host test binary because
+GitHub Actions selected `sh` inside the build container, which rejected the
+workflow's `set -euo pipefail` option. This was a workflow-shell mismatch, not
+a reported emulator assertion failure. The job now sets `defaults.run.shell:
+bash` so the strict pipeline commands are executed by Bash. Current-head CI
+must rerun before this correction is considered validated.
+
+Separately, an owner-local run using the previous successfully packaged
+patched emulator and the private original Wild Arms (USA) disc reached the
+Sony Computer Entertainment America and Media.Vision opening logos. The disc
+was not uploaded to GitHub; this local boot observation does not replace the
+current-head host regression or its packaged-runtime smoke tests.

@@ -33,6 +33,9 @@ jobs:
   build-patched-emulator:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
     container:
       image: ghcr.io/grumpycoders/pcsx-redux-build:noble
       options: --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor:unconfined
