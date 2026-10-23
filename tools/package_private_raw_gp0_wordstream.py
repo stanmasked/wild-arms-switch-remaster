@@ -24,6 +24,7 @@ from audit_private_gp0_upload_timeline import (
     read_private_gp0_timeline,
 )
 from audit_surf_gp0_clut_references import decode_packet
+from decode_private_gp0_fill import decode_bounded_gp0_fill
 
 MAX_RAW_BYTES = 4 * 1024 * 1024
 MAX_EMITTED_BYTES = 64 * 1024 * 1024
@@ -45,7 +46,9 @@ def packetize_owner_raw_words(source):
         if len(packets) >= MAX_PACKETS:
             raise ValueError("too many GP0 packets in private frame")
         opcode = words[pos] >> 24
-        if opcode == 0xa0:
+        if opcode == 0x02:
+            length=3
+        elif opcode == 0xa0:
             if not e6_explicit_disabled:
                 raise ValueError("A0 transfer without explicit GP0(E6) mask disabled")
             if len(words) - pos < 3:
@@ -87,6 +90,8 @@ def packetize_owner_raw_words(source):
             e6_explicit_disabled = True
         elif opcode == 0xe2 and packet[0] & 0x00f00000:
             raise ValueError("GP0(E2) texture-window reserved bits set")
+        elif opcode == 0x02:
+            decode_bounded_gp0_fill(packet)
         elif opcode == 0x80:
             sx, sy = packet[1] & 0xffff, packet[1] >> 16
             dx, dy = packet[2] & 0xffff, packet[2] >> 16
@@ -103,7 +108,8 @@ def packetize_owner_raw_words(source):
             if kind == "UNSUPPORTED_PACKET":
                 raise ValueError("GP0 command unsupported by modeled renderer")
         label = "A0_UPLOAD" if opcode == 0xa0 else (
-            "80_COPY" if opcode == 0x80 else "OTHER_SUPPORTED")
+            "80_COPY" if opcode == 0x80 else (
+            "02_FILL" if opcode == 0x02 else "OTHER_SUPPORTED"))
         counts[label] = counts.get(label, 0) + 1
         packets.append(packet)
         pos += length
