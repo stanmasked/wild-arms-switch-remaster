@@ -15,8 +15,10 @@ import zlib
 
 from bind_private_pcsx_first_frame_evidence import bind_private_first_frame_capture
 from decode_private_opaque_rgb_png import decode_private_opaque_rgb_png
+from import_private_pcsx_native_gpudump import read_native_gpu_dump
 from verify_private_gpudump_player_rewind_rgb import (
     VRAM_BYTES, compare_private_rewind_vram_rgb,
+    private_pretrace_display_rectangle,
 )
 from verify_private_gpudump_player_first_step_rgb import first_step_change_summary
 
@@ -52,8 +54,11 @@ def verify_private_dump_hash_bound_step1_export(
         native_path,initial_path,gp0_trace_path,snapshot_path,png_path,*,
         x,y,width,height,expected_snapshot_sha256=None,
         expected_png_sha256=None,expected_native_sha256=None,
-        expected_frame=None,require_changed_roi=False,require_exact_rgb=True):
-    if type(require_changed_roi) is not bool or type(require_exact_rgb) is not bool:
+        expected_frame=None,require_changed_roi=False,require_exact_rgb=True,
+        require_native_display_window=False):
+    if (type(require_changed_roi) is not bool or
+            type(require_exact_rgb) is not bool or
+            type(require_native_display_window) is not bool):
         raise ValueError("strict replay comparison options must be booleans")
     for name,value in (("snapshot",expected_snapshot_sha256),
                        ("PNG",expected_png_sha256),
@@ -73,11 +78,16 @@ def verify_private_dump_hash_bound_step1_export(
         source,initial,trace,
         expected_native_sha256=expected_native_sha256,
         expected_frame=expected_frame)
-    native_digest=hashlib.sha256(source.read_bytes()).hexdigest()
+    native_bytes=source.read_bytes()
+    native_digest=hashlib.sha256(native_bytes).hexdigest()
     if native_digest!=binding["native_dump_sha256"]:
         raise ValueError("native GPU dump changed after first-frame binding")
     if hashlib.sha256(initial.read_bytes()).hexdigest()!=binding["imported_prepacket_vram_sha256"]:
         raise ValueError("initial VRAM changed after native binding")
+    if require_native_display_window:
+        display=private_pretrace_display_rectangle(read_native_gpu_dump(native_bytes))
+        if (x,y,width,height)!=display:
+            raise ValueError("Player PNG ROI differs from native GP1 display window")
 
     binary=snapshot.read_bytes()
     if len(binary)!=HEADER.size+VRAM_BYTES:
@@ -126,6 +136,7 @@ def verify_private_dump_hash_bound_step1_export(
         "exported_vram_byte_count":VRAM_BYTES,
         "exported_vram_crc32_verified":parsed["crc32_verified"],
         "roi_exact_rgb_equal":matching["rgb_pixel_values_exactly_equal"],
+        "native_gp1_display_window_explicitly_verified":require_native_display_window,
         "roi_compared_pixel_count":matching["compared_rgb_pixel_count"],
         "roi_mismatched_pixel_count":matching["mismatched_rgb_pixel_count"],
         "change_from_native_pretrace":delta,
@@ -157,6 +168,7 @@ def main():
     parser.add_argument("--expected-native-sha256")
     parser.add_argument("--expected-frame",type=int)
     parser.add_argument("--require-changed-roi",action="store_true")
+    parser.add_argument("--require-native-display-window",action="store_true")
     parser.add_argument("--allow-rgb-mismatch",action="store_true")
     args=parser.parse_args()
     report=verify_private_dump_hash_bound_step1_export(
@@ -169,6 +181,7 @@ def main():
         expected_native_sha256=args.expected_native_sha256,
         expected_frame=args.expected_frame,
         require_changed_roi=args.require_changed_roi,
+        require_native_display_window=args.require_native_display_window,
         require_exact_rgb=not args.allow_rgb_mismatch)
     print(json.dumps(report,indent=2,sort_keys=True))
 

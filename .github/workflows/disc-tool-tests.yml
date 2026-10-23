@@ -32,5 +32,7 @@ jobs:
         run: python3 tools/patch_private_pcsx_gp0_nop_runtime_test.py "$RUNNER_TEMP/pcsx-redux"
       - name: Validate generated patch against real upstream sources
         run: python3 tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py "$RUNNER_TEMP/pcsx-redux"
+      - name: Validate Stage519 direct Player V2 save against pinned upstream source
+        run: python3 tools/patch_private_pcsx_gpudump_player_step1_owner_path.py "$RUNNER_TEMP/pcsx-redux"
       - name: Validate GP0(00h) NOP patch against pinned upstream source
         run: python3 tools/patch_private_pcsx_gpu_gp0_nop.py "$RUNNER_TEMP/pcsx-redux"

@@ -41,13 +41,18 @@ class MutualTlsCustodianTests(unittest.TestCase):
         ca_key = base / 'ca.key'
         openssl('req', '-x509', '-newkey', 'rsa:2048', '-nodes',
                 '-keyout', ca_key, '-out', cls.ca, '-days', '1',
-                '-subj', '/CN=Test Certificate Authority')
+                '-subj', '/CN=Test Certificate Authority',
+                '-addext', 'basicConstraints=critical,CA:TRUE',
+                '-addext', 'keyUsage=critical,keyCertSign,cRLSign')
         for role in ('server', 'client'):
             key = base / (role + '.key')
             request = base / (role + '.csr')
             cert = base / (role + '.pem')
             extensions = base / (role + '.ext')
-            ext = 'subjectAltName=DNS:localhost\nextendedKeyUsage='
+            ext = ('subjectAltName=DNS:localhost\n'
+                   'basicConstraints=critical,CA:FALSE\n'
+                   'keyUsage=critical,digitalSignature,keyEncipherment\n'
+                   'extendedKeyUsage=')
             extensions.write_text(
                 ext + ('serverAuth' if role == 'server' else 'clientAuth') + '\n')
             openssl('req', '-newkey', 'rsa:2048', '-nodes', '-keyout',
@@ -150,6 +155,14 @@ class MutualTlsCustodianTests(unittest.TestCase):
                     raise
                 accepted = done.result(timeout=6)
             return response, accepted
+
+    def test_synthetic_mutual_tls_certificates_pass_strict_x509_validation(self):
+        # OpenSSL 3.5+ requires CA keyCertSign and explicit leaf usages.
+        # Never weaken TLS verification to accommodate test fixtures.
+        openssl('verify', '-x509_strict', '-purpose', 'sslserver',
+                '-CAfile', self.ca, self.server_cert)
+        openssl('verify', '-x509_strict', '-purpose', 'sslclient',
+                '-CAfile', self.ca, self.client_cert)
 
     def test_latest_roundtrip_requires_both_tls_pins_and_ed25519(self):
         (raw, signed, seq), ok = self.run_channel()
