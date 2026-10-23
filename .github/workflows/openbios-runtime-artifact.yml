@@ -15,9 +15,9 @@ permissions:
   contents: read
 
 concurrency:
-  # Reset the legacy key after Actions left current-head validation queued with no active jobs.
-  # The versioned key gives this workflow a fresh concurrency slot.
-  group: pcsx-redux-openbios-runtime-${{ github.event.pull_request.number || github.ref }}-queue-v2
+  # Reset the legacy key after stale queued runs; normalize push and PR events by head branch.
+  # This lets duplicate events for one branch cancel rather than consume two runner slots.
+  group: pcsx-redux-openbios-runtime-${{ github.event.pull_request.head.ref || github.ref_name }}-queue-v2
   cancel-in-progress: true
 
 jobs:
