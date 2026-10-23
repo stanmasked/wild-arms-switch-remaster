@@ -26,3 +26,33 @@ Matching RGB raw bytes show the provided PNG and detached VRAM agree under the e
 ## ROM-free regressions
 
 `tests/test_decode_private_opaque_rgb_png_metadata.py` covers clean RGB/RGBA and benign metadata controls; rejects each listed color/animation ancillary type (including before/after IDAT); confirms the same policy for RGBA and enforces chunk CRC integrity. Existing checks for transparency, dimensions and pixel equality remain in place.
+
+
+## Stage512 pinned Player UI capture geometry (source audit)
+
+Pinned upstream `src/gui/widgets/gpudump.cc` calls `updateTexture()` before
+`ImGui::Image`. The texture is 1024x512 RGBA, with nearest-neighbor scaling.
+The GUI has two independent view controls:
+
+- `Display area only` defaults to **on**, and clips using current GP1(05)
+  VRAM start and GP1(08) mode. The displayed image is not the whole VRAM.
+  If using this mode, record the GPU display rectangle origin **in VRAM
+  coordinates** as well as the actual PNG crop. A screenshot's top-left at
+  pixel 0 is not necessarily VRAM x=0, y=0.
+- `Zoom` defaults to 1.0x but is user-adjustable from 0.5x to 4.0x.
+  Select 1.0x and verify the final **physical-pixel** capture is one-to-one,
+  without OS display scaling, window resizing, or screenshot interpolation.
+
+For the simplest full-VRAM capture, disable `Display area only`, set `Zoom`
+to 1.0x, and capture a completely visible, unobscured source-aligned ROI from
+the actual Player preview after it displays Frame 1. Log the ROI's original
+VRAM x/y/width/height and the screenshot extraction method privately.
+Never assume mouse/window/DPI coordinates equal VRAM coordinates without
+independent confirmation. No accepted ROI may cross a VRAM row boundary.
+
+The captured PNG must not be generated from the separately exported V2
+container: that is a tautological consistency check, not independent
+observation of Player's displayed texture. Preserve both the untouched
+UI screenshot and any diagnostic conversions separately and identify the
+conversion lineage in the private manifest. Even strict exact RGB equality
+cannot attest the screenshot's UI provenance or GPU rasterization correctness.
