@@ -52,6 +52,7 @@ class StrictFrameWitnessPngTests(unittest.TestCase):
         expected={
             b"gAMA", b"cHRM", b"iCCP", b"sRGB", b"cICP", b"mDCv",
             b"cLLi", b"sBIT", b"eXIf", b"bKGD", b"acTL", b"fcTL", b"fdAT",
+            b"pHYs", b"oFFs", b"sCAL", b"pCAL", b"sTER",
         }
         self.assertEqual(VISUAL_TRANSFORM_CHUNKS, expected)
 
