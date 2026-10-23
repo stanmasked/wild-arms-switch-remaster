@@ -26,7 +26,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: pcsx-redux-patched-build-${{ github.event.pull_request.number || github.ref }}
+  # Reset the legacy key after Actions left current-head validation queued with no active jobs.
+  # The versioned key gives this workflow a fresh concurrency slot.
+  group: pcsx-redux-patched-build-${{ github.event.pull_request.number || github.ref }}-queue-v2
   cancel-in-progress: true
 
 jobs:
