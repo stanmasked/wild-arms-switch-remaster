@@ -66,7 +66,8 @@ class Stage448PreflightTests(unittest.TestCase):
         self.assertEqual(report["frame_summaries"][0]["throwaway_record_count"],1)
 
     def test_unmodeled_gp0_opcode_yields_diagnostic_only(self):
-        records=base_records(live=[0x02000000,0,0])
+        # GP0(02) is now modeled; keep diagnostic-only handling of GP0(40).
+        records=base_records(live=[0x40000000,0,0])
         report=summarize_private_native_gpudump(dump_bytes(records))
         self.assertFalse(report["first_frame_import_accepted_by_stage447_subset"])
         self.assertIn("unsupported GP0 opcode",report["first_frame_import_diagnostic"])
