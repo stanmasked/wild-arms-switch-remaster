@@ -41,13 +41,18 @@ class MutualTlsCustodianTests(unittest.TestCase):
         ca_key = base / 'ca.key'
         openssl('req', '-x509', '-newkey', 'rsa:2048', '-nodes',
                 '-keyout', ca_key, '-out', cls.ca, '-days', '1',
-                '-subj', '/CN=Test Certificate Authority')
+                '-subj', '/CN=Test Certificate Authority',
+                '-addext', 'basicConstraints=critical,CA:TRUE',
+                '-addext', 'keyUsage=critical,keyCertSign,cRLSign')
         for role in ('server', 'client'):
             key = base / (role + '.key')
             request = base / (role + '.csr')
             cert = base / (role + '.pem')
             extensions = base / (role + '.ext')
-            ext = 'subjectAltName=DNS:localhost\nextendedKeyUsage='
+            ext = ('subjectAltName=DNS:localhost\n'
+                   'basicConstraints=critical,CA:FALSE\n'
+                   'keyUsage=critical,digitalSignature,keyEncipherment\n'
+                   'extendedKeyUsage=')
             extensions.write_text(
                 ext + ('serverAuth' if role == 'server' else 'clientAuth') + '\n')
             openssl('req', '-newkey', 'rsa:2048', '-nodes', '-keyout',
