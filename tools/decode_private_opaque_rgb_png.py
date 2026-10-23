@@ -14,6 +14,16 @@ from capture_private_pcsx_frame_witness import (
 
 MAX_RAW_PIXELS=1024*512
 
+# Exact raw RGB equality is meaningful only for an ordinary, static,
+# untransformed PNG pixel raster. Color-profile/gamma/HDR metadata can change
+# how an image viewer presents those bytes; APNG and EXIF can select or
+# transform a different visual frame. Refuse those features rather than
+# accidentally certifying an ambiguous screenshot presentation.
+VISUAL_TRANSFORM_CHUNKS=frozenset((
+    b"gAMA", b"cHRM", b"iCCP", b"sRGB", b"cICP", b"mDCv", b"cLLi",
+    b"sBIT", b"eXIf", b"bKGD", b"acTL", b"fcTL", b"fdAT",
+))
+
 
 def decode_private_opaque_rgb_png(data):
     """Return ((width,height), pure RGB bytes), no user pixels in reports."""
@@ -55,6 +65,10 @@ def decode_private_opaque_rgb_png(data):
             # Even 8-bit RGB PNGs can declare transparent palette-key
             # colors without an alpha channel. Never call such a PNG opaque.
             raise ValueError("PNG transparency chunk unsupported for opaque RGB witness")
+        elif kind in VISUAL_TRANSFORM_CHUNKS:
+            raise ValueError(
+                "PNG visual-transform metadata or animation unsupported "
+                "for exact raw RGB witness")
         elif kind[0]&0x20==0:
             raise ValueError("unknown critical PNG chunk unsupported")
         else:
