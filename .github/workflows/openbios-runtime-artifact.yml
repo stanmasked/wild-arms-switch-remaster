@@ -12,8 +12,8 @@ permissions:
   contents: read
 
 concurrency:
-  # Reset the legacy key after stale queued runs; normalize push and PR events by head branch.
-  # This lets duplicate events for one branch cancel rather than consume two runner slots.
+  # Reset the legacy key after stale queued runs; keep PR and manual runs keyed by branch.
+  # The versioned group gives the current-head workflow a fresh concurrency slot.
   group: pcsx-redux-openbios-runtime-${{ github.event.pull_request.head.ref || github.ref_name }}-queue-v2
   cancel-in-progress: true
 
