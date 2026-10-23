@@ -75,6 +75,14 @@ class StrictFrameWitnessPngTests(unittest.TestCase):
                 decode_private_opaque_rgb_png(
                     synthetic_png(before=((kind, payload),)))
 
+    def test_visual_geometry_rejected_on_both_sides_of_idat(self):
+        for kind in (b"pHYs", b"oFFs", b"sCAL", b"pCAL", b"sTER"):
+            for side in ("before", "after"):
+                with self.subTest(kind=kind, side=side):
+                    with self.assertRaisesRegex(ValueError, "visual-transform"):
+                        decode_private_opaque_rgb_png(
+                            synthetic_png(**{side: ((kind, b"data"),)}))
+
     def test_animation_chunks_rejected_before_and_after_idat(self):
         payloads={
             b"acTL":struct.pack(">II", 2, 0),
