@@ -107,9 +107,10 @@ equality. It reports only hashes, counts, and status, not raw pixels.
 
 ## Remaining limitations
 
-- The patched emulator must still be built and run in the owner's private
-  environment against the original GPU dump. CI compiles a disposable patched
-  checkout but does not attest the owner's binary or certify runtime behavior.
+- Stage507 now verifies the exact current-head CI AppImage locally against the
+  private native boot dump and retail disc. This closes the artifact-identity
+  and boot-dump replay gates for this revision, but not a full gameplay test
+  or a proof of correct Surf Village rendering.
 - A malicious or modified emulator could fabricate its own embedded digest.
   Treat the patch source and local build provenance as part of the evidence.
 - The PNG is still operator-supplied. A stronger capture would export the
@@ -212,9 +213,10 @@ Five synthetic regressions cover command-field classification, patch scope,
 missing/duplicated anchors, and clean-checkout application. Disc-analysis CI
 validates the generated diff against the real pinned source; the emulator build
 applies it after the Stage456 hash-binding patch. This is a targeted emulator
-compatibility change, not a modification of game data. A successful original
-game boot remains unconfirmed until the rebuilt artifact passes the private
-runtime probe.
+compatibility change, not a modification of game data. The current-head AppImage has since passed an owner-local retail boot smoke
+through `ResetGraph` in both Interpreter and Dynarec, and the same artifact
+replayed the complete 1430-frame private boot dump in both modes. This does
+not establish full gameplay correctness; see Stage507 below.
 
 
 ## Stage502 follow-up — make the GP0 NOP runtime pass marker trustworthy
@@ -237,15 +239,54 @@ remains private and no successful retail-game boot is claimed by this test.
 
 The first current-head patched-build run successfully compiled PCSX-Redux, its
 host tests and tools, the PS1 test programs, pinned OpenBIOS, and the synthetic
-CD-ROM fixtures. It then stopped before running the host test binary because
-GitHub Actions selected `sh` inside the build container, which rejected the
-workflow's `set -euo pipefail` option. This was a workflow-shell mismatch, not
-a reported emulator assertion failure. The job now sets `defaults.run.shell:
-bash` so the strict pipeline commands are executed by Bash. Current-head CI
-must rerun before this correction is considered validated.
+CD-ROM fixtures, but stopped before the host test binary because the container
+selected `sh` for a `set -euo pipefail` command. The workflow now explicitly
+selects Bash. Current-head run
+[#39955776444](https://github.com/stanmasked/wild-arms-switch-remaster/actions/runs/39955776444)
+then completed successfully: 329 native host tests passed, the AppImage was
+packaged, and its synthetic packaged-runtime smoke tests passed in Interpreter
+and Dynarec. The companion
+[Disc analysis run #39955776460](https://github.com/stanmasked/wild-arms-switch-remaster/actions/runs/39955776460)
+passed 2559 tests with 25 skipped.
 
-Separately, an owner-local run using the previous successfully packaged
-patched emulator and the private original Wild Arms (USA) disc reached the
-Sony Computer Entertainment America and Media.Vision opening logos. The disc
-was not uploaded to GitHub; this local boot observation does not replace the
-current-head host regression or its packaged-runtime smoke tests.
+A separate owner-local smoke against the exact AppImage from that successful
+run confirmed the original retail disc reached the retail EXE and
+`ResetGraph` in both CPU modes. This boot smoke is not a complete gameplay
+test; the native GPU dump replay and GUI-export checks are recorded below.
+
+
+## Stage507 follow-up — verify the current-head GUI export and native replay
+
+The exact current-head AppImage from run #39955776444 was downloaded and
+verified locally. Its SHA-256 is
+`190be03a5226fa289b2f9ddd2462c95b9c5c74c841972e14c120f86e3ab04d70`.
+The extracted emulator binary and bundled OpenBIOS also matched independent
+extractions of that same AppImage.
+
+Using that artifact, the owner-local GPU Dump Player loaded the private native
+boot capture, rewound, and stepped to Frame 1. I then invoked the actual GUI
+button **Export Step 1 private VRAM...** and saved the resulting V2 container;
+this was not assembled by the validation script. The export passed these
+checks locally:
+
+- Exact V2 magic, Frame 1, and a 1,048,576-byte VRAM payload in a
+  1,048,640-byte container.
+- CRC32 validates over the payload.
+- The embedded native-dump SHA-256 matches the exact dump loaded by Player.
+- The exported VRAM payload is byte-identical to the previous independent
+  Lua API extraction of Player Frame 1.
+
+The same current-head artifact then replayed the complete 1430-frame native
+boot capture in both Interpreter and Dynarec. Both runs exited successfully at
+the dump's clean end marker, and neither logged
+`Got an unknown GPU data word: 000326cc`. The private native stream contains
+that GP0 word once; the full replay traversed the capture without classifying
+it as an unknown command.
+
+This closes the current-head GUI export and full native boot-dump replay gates,
+in addition to the successful 329-test host suite and 2559-test Disc analysis
+suite. It does **not** prove full game completion or Surf Village rendering.
+The independent RGB preview/ROI witness remains operator-supplied, so the
+complete strict V2 verifier with a current-artifact GUI-captured preview is
+still pending. Original game data, the native dump, VRAM payloads, screenshots,
+and raw logs remain private and are not committed or uploaded to GitHub.
