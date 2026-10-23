@@ -22,7 +22,13 @@ MAX_RAW_PIXELS=1024*512
 VISUAL_TRANSFORM_CHUNKS=frozenset((
     b"gAMA", b"cHRM", b"iCCP", b"sRGB", b"cICP", b"mDCv", b"cLLi",
     b"sBIT", b"eXIf", b"bKGD", b"acTL", b"fcTL", b"fdAT",
+    # Pixel geometry, location, suggested scaling and stereo presentation
+    # can also change the intended displayed image without changing RGB bytes.
+    b"pHYs", b"oFFs", b"sCAL", b"pCAL", b"sTER",
 ))
+# Preserve inert textual metadata only; unknown ancillary types are not
+# assumed safe merely because PNG permits decoders to ignore them.
+NONVISUAL_ANCILLARY_CHUNKS=frozenset((b"tEXt", b"zTXt", b"iTXt", b"tIME"))
 
 
 def decode_private_opaque_rgb_png(data):
@@ -71,9 +77,10 @@ def decode_private_opaque_rgb_png(data):
                 "for exact raw RGB witness")
         elif kind[0]&0x20==0:
             raise ValueError("unknown critical PNG chunk unsupported")
-        else:
-            if started:
-                ended=True
+        elif kind not in NONVISUAL_ANCILLARY_CHUNKS:
+            raise ValueError("unrecognized ancillary PNG chunk unsupported for exact RGB witness")
+        elif started:
+            ended=True
     if channels is None or not idat:
         raise ValueError("missing PNG image data")
     row_bytes=width*channels
