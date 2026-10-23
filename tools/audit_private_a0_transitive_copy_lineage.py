@@ -74,6 +74,16 @@ class PrivateA0CopyLineage(PrivateA0DrawLineage):
         # Stage443's *direct* writer remains intentionally invalidated.
         self.invalidate_vram_copy_destination(dest_x, dest_y, width, height)
 
+    def clear_fill_origin(self, x, y, width, height):
+        """Remove A0 origin claims for pixels overwritten by GPU fill."""
+        self.invalidate_vram_copy_destination(x,y,width,height)
+        for row in range(y,y+height):
+            left=row*VRAM_WIDTH+x
+            right=left+width
+            self.origin_packet[left:right]=array("i",[UNKNOWN])*width
+            self.origin_address[left:right]=array("i",[UNKNOWN])*width
+            self.copy_hops[left:right]=array("i",[UNKNOWN])*width
+
     def inspect_copy_lineage(self, x, y, draw_epoch, word_epochs,
                              *, max_samples=MAX_RUN_REPORTS_PER_DRAW):
         """Cover the current UV with an entire, still-consecutive A0 source run."""
