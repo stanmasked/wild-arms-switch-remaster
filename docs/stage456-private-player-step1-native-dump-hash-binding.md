@@ -196,3 +196,22 @@ It does not assume that the unused upper half of the implementation's backing
 store is zero. The V2 header, payload length, CRC32, and loaded-dump SHA-256
 binding remain unchanged. This is a source-level fix awaiting current-head CI
 and the matched pinned-OpenBIOS runtime check.
+
+## Stage493 follow-up — GP0(00h) NOP compatibility
+
+The pinned PCSX-Redux command decoder masks the five-bit GP0 command field.
+During the private Wild Arms boot trace, word `0x000326cc` has command type
+`0` and command `0`; the current decoder classifies it as unknown even
+though GP0(00h) is a NOP and its lower 24 bits are ignored. The compatibility
+fix is deliberately separate from the four-file Stage456 dump-hash patch:
+`tools/patch_private_pcsx_gpu_gp0_nop.py` inserts an explicit command-zero
+case into only `src/core/gpu.cc`, requires the exact pinned upstream commit,
+and refuses an absent/duplicated anchor or a pre-modified target file.
+
+Five synthetic regressions cover command-field classification, patch scope,
+missing/duplicated anchors, and clean-checkout application. Disc-analysis CI
+validates the generated diff against the real pinned source; the emulator build
+applies it after the Stage456 hash-binding patch. This is a targeted emulator
+compatibility change, not a modification of game data. A successful original
+game boot remains unconfirmed until the rebuilt artifact passes the private
+runtime probe.
