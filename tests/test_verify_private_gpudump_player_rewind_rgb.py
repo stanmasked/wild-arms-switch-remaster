@@ -212,8 +212,10 @@ class Stage453PlayerRewindTests(unittest.TestCase):
         records=base_records()
         records[5]=(GP1,[0x05000000,0x05000000,0x08000000])
         with tempfile.TemporaryDirectory() as td:
-            paths=fixture(td,records=records)
+            # The native importer may reject this ambiguity before the
+            # display-window verifier is invoked. Either is fail-closed.
             with self.assertRaisesRegex(ValueError,"duplicate"):
+                paths=fixture(td,records=records)
                 verify(paths,require_native_display_window=True)
 
     def test_native_gp1_window_wraps_outside_vram_fail_closed(self):
