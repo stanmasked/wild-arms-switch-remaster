@@ -59,13 +59,15 @@ jobs:
         working-directory: ${{ runner.temp }}/pcsx-redux
         run: make -j 2 all pcsx-redux-tests tools LDFLAGS_Release="-static-libstdc++ -static-libgcc"
 
+      - name: Build matching pinned OpenBIOS
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: |
+          make -C src/mips/openbios -j 2 all
+          test -s src/mips/openbios/openbios.bin
+
       - name: Run compiled PCSX-Redux host test suite
         working-directory: ${{ runner.temp }}/pcsx-redux
         run: xvfb-run catchsegv ./pcsx-redux-tests
-
-      - name: Build matching pinned OpenBIOS
-        working-directory: ${{ runner.temp }}/pcsx-redux
-        run: make -C src/mips/openbios -j 2 all
 
       - name: Package patched PCSX-Redux AppImage with OpenBIOS
         working-directory: ${{ runner.temp }}/pcsx-redux
