@@ -7,10 +7,12 @@ import stat
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from seal_private_player_frame1_archive import seal,verify
+import seal_private_player_frame1_archive as archive
 from test_verify_private_gpudump_player_step1_roi_offset import (
     synthetic_pair, X, Y, W, H, image, PIXELS,
 )
@@ -45,6 +47,55 @@ class Stage516ArchiveTests(unittest.TestCase):
             seal(td,names,roi=ROI)
             with self.assertRaises(FileExistsError):
                 seal(td,names,roi=ROI)
+
+    def test_gp0_rewrite_after_replay_cannot_be_sealed(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths,names=evidence(td)
+            original=archive._strict_audit
+            calls=[0]
+            def mutating_audit(*args,**kwargs):
+                result=original(*args,**kwargs)
+                calls[0]+=1
+                if calls[0]==2:
+                    with paths[2].open("ab") as out:
+                        out.write(b"\\n")
+                return result
+            with patch.object(archive,"_strict_audit",side_effect=mutating_audit):
+                with self.assertRaisesRegex(ValueError,"differs from manifest"):
+                    seal(td,names,roi=ROI)
+            self.assertFalse(Path(td,MANIFEST).exists())
+            self.assertFalse(list(Path(td).glob(".*.tmp")))
+
+    def test_atomic_link_failure_leaves_no_partial_manifest(self):
+        with tempfile.TemporaryDirectory() as td:
+            _,names=evidence(td)
+            with patch.object(archive.os,"link",side_effect=PermissionError("mock link denied")):
+                with self.assertRaises(PermissionError):
+                    seal(td,names,roi=ROI)
+            self.assertFalse(Path(td,MANIFEST).exists())
+            self.assertFalse(list(Path(td).glob(".*.tmp")))
+
+    def test_recheck_detects_gp0_rewrite_during_verification(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths,names=evidence(td)
+            seal(td,names,roi=ROI)
+            original=archive._strict_audit
+            def mutating_audit(*args,**kwargs):
+                result=original(*args,**kwargs)
+                with paths[2].open("ab") as out:
+                    out.write(b"\\n")
+                return result
+            with patch.object(archive,"_strict_audit",side_effect=mutating_audit):
+                with self.assertRaisesRegex(ValueError,"differs from manifest"):
+                    verify(td)
+
+    def test_atomic_published_seal_has_single_link_and_no_temp(self):
+        with tempfile.TemporaryDirectory() as td:
+            _,names=evidence(td)
+            seal(td,names,roi=ROI)
+            self.assertTrue(verify(td))
+            self.assertEqual(Path(td,MANIFEST).stat().st_nlink,1)
+            self.assertFalse(list(Path(td).glob(".*.tmp")))
 
     def test_changed_png_bytes_detected_after_sealing(self):
         with tempfile.TemporaryDirectory() as td:
