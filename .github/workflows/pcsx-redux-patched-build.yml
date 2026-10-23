@@ -38,7 +38,10 @@ concurrency:
 jobs:
   build-patched-emulator:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The pinned upstream + guest tests reached native-host tests but the
+    # previous run hit the former 45-minute job timeout before AppImage packaging.
+    # Keep the full strict gates; do not skip tests or upload a partial runtime.
+    timeout-minutes: 75
     defaults:
       run:
         shell: bash
