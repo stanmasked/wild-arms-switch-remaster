@@ -135,3 +135,36 @@ This is an **integrity/reproducibility** gate only. It does not cryptographicall
 authenticate an operator-supplied screenshot, confirm it was visible in the
 Player window, or prove Surf Village gameplay rendering. Private material
 remains absent from the designated capture folder as of this stage.
+
+
+## Stage519 — GUI export without filesystem dialog (owner opt-in)
+
+The ordinary Save dialog is unchanged by default. For headless Xvfb
+capture sessions where the dialog does not produce a saved file, the
+combined pinned PCSX-Redux patch has an **opt-in direct path** on the
+real `Export Step 1 private VRAM...` GUI button:
+
+```sh
+export WA1_PRIVATE_STEP1_V2_PATH=/absolute/owner-private/frame1.v2.bin
+```
+
+The directory must exist. The destination must be absolute, must not
+already exist, and its immediate parent must not be a symlink. The
+existing Stage456 C++ V2 writer still exclusively creates the file,
+stores Frame 1, the exact 1 MiB GPU VRAM and native GPUDUMP SHA-256,
+sets owner-only permissions, and refuses incomplete output. After the
+button click, the frozen in-memory copy is cleared. The presence of
+an environment variable alone must never produce a capture; the
+loaded Player must show Frame 1 and the user/automation must press
+the actual GUI export button.
+
+Generated patches are verified against the exact pinned PCSX-Redux
+source in GitHub CI, and the Stage519 build workflow builds an AppImage
+without loading any original Wild Arms data. Even a successful build
+does **not** establish a real V2 GUI-export witness. Run the new
+AppImage locally with genuine owner-private GPU data, press the button,
+parse the resulting V2 and compare it with the independently captured
+PNG/VRAM before sealing and archiving the five authentic inputs.
+
+Never add private file paths, original game bytes, V2 binaries, GUI
+screenshots or private checksums to public GitHub/Actions artifacts.
