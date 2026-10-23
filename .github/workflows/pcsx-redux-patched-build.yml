@@ -112,6 +112,36 @@ jobs:
           linuxdeploy -v3 --appdir=AppDir -e AppDir/usr/bin/pcsx-redux -d AppDir/usr/share/applications/pcsx-redux.desktop -i AppDir/usr/share/icons/hicolor/256x256/apps/pcsx-redux.png -o appimage
           mv PCSX-Redux-x86_64.AppImage PCSX-Redux-private-openbios-x86_64.AppImage
 
+      - name: Smoke-test packaged AppImage with pinned OpenBIOS
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: |
+          set -euo pipefail
+          appimage="$PWD/PCSX-Redux-private-openbios-x86_64.AppImage"
+          bios="$PWD/AppDir/usr/share/pcsx-redux/resources/openbios.bin"
+          test -s "$appimage"
+          test -s "$bios"
+          chmod +x "$appimage"
+          for cpu in interpreter dynarec; do
+            logfile="$RUNNER_TEMP/pcsx-redux-smoke-${cpu}.log"
+            config="$RUNNER_TEMP/pcsx-redux-smoke-${cpu}-config"
+            mkdir -p "$config"
+            if ! timeout 45s xvfb-run -a env APPIMAGE_EXTRACT_AND_RUN=1 SDL_AUDIODRIVER=dummy XDG_CONFIG_HOME="$config" \
+              "$appimage" -no-ui -cli -stdout -lua_stdout -bios "$bios" -testmode "-$cpu" \
+              -exec 'PCSX.quit(0)' > "$logfile" 2>&1; then
+              tail -n 80 "$logfile"
+              exit 1
+            fi
+            grep -Fq 'PCSX-Redux booting' "$logfile"
+            grep -Fq 'Loaded BIOS:' "$logfile"
+            grep -Fq 'OpenBIOS detected (' "$logfile"
+            if [ "$cpu" = interpreter ]; then
+              grep -Fq 'CPU type: Interpreted' "$logfile"
+            else
+              grep -Fq 'CPU type: Dynarec' "$logfile"
+            fi
+            echo "PCSX-Redux packaged AppImage smoke passed: $cpu"
+          done
+
       - name: Upload patched private-runtime emulator artifact
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
