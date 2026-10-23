@@ -90,10 +90,14 @@ class Stage446PacketizerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"reserved bits"):
             packetize_owner_raw_words(raw([0xe2100000]))
 
-    def test_unmodeled_primitive_and_gpu_fill_fail_closed(self):
-        for opcode in (0x02000000,0x40000000,0xc0000000):
+    def test_unmodeled_line_and_readback_fail_closed(self):
+        for opcode in (0x40000000,0xc0000000):
             with self.subTest(opcode=opcode), self.assertRaisesRegex(ValueError,"unsupported"):
                 packetize_owner_raw_words(raw([opcode]))
+
+    def test_incomplete_gpu_fill_packet_is_rejected(self):
+        with self.assertRaisesRegex(ValueError,"incomplete final GP0 packet"):
+            packetize_owner_raw_words(raw([0x02000000]))
 
     def test_incomplete_final_gp0_word_fails(self):
         with self.assertRaisesRegex(ValueError,"incomplete final 32-bit"):

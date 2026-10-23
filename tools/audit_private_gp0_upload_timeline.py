@@ -18,6 +18,7 @@ import re
 import struct
 
 from audit_surf_gp0_clut_references import decode_packet
+from decode_private_gp0_fill import decode_bounded_gp0_fill
 from audit_private_gp0_texture_first_uv import probe_first_uv_4bpp
 from audit_private_surf_gp0_stream_uv_link import (
     prepare_private_stream_index, match_first_uv_to_private_streams)
@@ -170,6 +171,26 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
                 any(type(x) is not int or not 0 <= x <= 0xffffffff for x in packet)):
             raise ValueError("invalid GP0 packet sequence element")
         opcode = packet[0] >> 24
+        if opcode == 0x02:
+            # PS1 Quick Fill ignores GP0(E6) masking. GP0(02) writes full
+            # RGB555 pixels with bit15=0 and does not increment draw_epoch:
+            # unlike polygons, every changed pixel is fully modeled here.
+            fill=decode_bounded_gp0_fill(packet)
+            x,y,width,height=(fill[k] for k in ("x","y","width","height"))
+            if width and height:
+                row_bytes=struct.pack("<H",fill["pixel"])*width
+                epoch_row=array("i",[draw_epoch])*width
+                for fy in range(y,y+height):
+                    pos=fy*VRAM_WIDTH+x
+                    vram[pos*2:(pos+width)*2]=row_bytes
+                    pixel_epoch[pos:pos+width]=epoch_row
+                # Overwritten GP0(A0) origin must not survive a fill.
+                if a0_lineage is not None:
+                    a0_lineage.clear_fill_origin(x,y,width,height)
+            else:
+                counters["02_ZERO_DIMENSION_NOOP"] += 1
+            counters["02_VRAM_FILL"] += 1
+            continue
         if opcode == 0xe2:
             # Texture-window control GP0(E2) has four 5-bit fields.
             # Unknown/nonzero settings forbid first-UV sampling until
@@ -420,6 +441,8 @@ def replay_private_gp0_clut_timeline(initial_vram, packets, banks, *,
         "postframe_reconciliation": reconciliation,
         "interpretation": {
             "gpu_a0_and_nonoverlapping_80_copy_replayed_in_order": True,
+            "gpu_02_nonwrapping_fill_rgb555_replayed_and_e6_mask_ignored": True,
+            "gpu_02_wrapping_fill_not_modeled_and_rejected": True,
             "gpu_e6_masking_disabled_explicitly_required_for_transfers": True,
             "all_nonreplayed_gp0_commands_rejected_or_non_vram_state_or_draw": True,
             "gpu_framebuffer_drawing_not_rasterized": True,

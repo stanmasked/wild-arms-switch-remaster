@@ -174,11 +174,13 @@ class Stage437GP0TimelineTests(unittest.TestCase):
                     ValueError,"write-mask"):
                 probe([e6,a0(COLORS)])
 
-    def test_unknown_gpu_fill_command_fails_closed(self):
+    def test_unknown_gpu_line_command_fails_closed(self):
+        # Stage522 models GP0(02) fill; unsupported line primitives still
+        # must not be guessed or treated as a harmless state operation.
         with self.assertRaisesRegex(ValueError,"unknown GP0"):
-            probe([[0x02000000,0,0]])
+            probe([[0x40000000,0,0]])
         with self.assertRaisesRegex(ValueError,"unknown GP0"):
-            probe([E6,a0(COLORS),[0x02000000,0,0],polygon()])
+            probe([E6,a0(COLORS),[0x40000000,0,0],polygon()])
 
     def test_texture_depth_not_four_bpp_skipped(self):
         report=probe([polygon(page=0x80)])
