@@ -110,7 +110,7 @@ class Stage522FillTests(unittest.TestCase):
 
     def test_one_pixel_difference_in_reference_is_detected(self):
         reference=bytearray(VRAM_BYTES)
-        reference[0:2]=b"\\x00\\x40"
+        reference[0]=1
         with self.assertRaisesRegex(ValueError,"postframe reconciliation"):
             replay_private_gp0_clut_timeline(
                 bytes(VRAM_BYTES),[fill(width=16,height=1)],[],
