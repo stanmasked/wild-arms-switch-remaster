@@ -3,12 +3,14 @@ name: Matrix reverse-engineering audits
 concurrency:
   # Preserve one pending/running execution per workflow + event + PR/branch.
   # Do not let historical field-prototype commits consume the queue.
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  # Reset the legacy concurrency key after runs remained in progress after their jobs terminated.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-queue-v2
   cancel-in-progress: true
 
 
 on:
   push:
+    branches: [main]
     paths:
       - 'tools/audit_gp0_matrix_*.py'
       - 'tools/audit_gp0_trig_table.py'
@@ -203,6 +205,18 @@ on:
       - 'tests/test_mips_control_flow.py'
       - '.github/workflows/matrix-audits.yml'
   pull_request:
+    paths:
+      - 'CMakeLists.txt'
+      - 'tools/audit_*.py'
+      - 'tools/mips_*.py'
+      - 'tests/test_audit_*.py'
+      - 'tests/test_gp0_*.py'
+      - 'tests/test_matrix_*.py'
+      - 'tests/test_mips_*.py'
+      - 'tests/test_record_*.py'
+      - 'tests/test_ps1_*.py'
+      - 'tests/test_verify_record_*.py'
+      - 'docs/ps1-*.md'
   workflow_dispatch:
 
 jobs:

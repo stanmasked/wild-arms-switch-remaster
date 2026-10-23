@@ -3,11 +3,13 @@ name: Disc analysis unit tests
 concurrency:
   # Preserve one pending/running execution per workflow + event + PR/branch.
   # Do not let historical field-prototype commits consume the queue.
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  # Reset the legacy concurrency key after runs remained in progress after their jobs terminated.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-queue-v2
   cancel-in-progress: true
 
 on:
   push:
+    branches: [main]
   pull_request:
 jobs:
   python-tests:
@@ -16,3 +18,19 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run synthetic overlay tests (no game image required)
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Fetch exact pinned PCSX-Redux source
+        run: |
+          git init "$RUNNER_TEMP/pcsx-redux"
+          git -C "$RUNNER_TEMP/pcsx-redux" remote add origin https://github.com/grumpycoders/pcsx-redux.git
+          git -C "$RUNNER_TEMP/pcsx-redux" fetch --depth 1 origin de4a33e9a69abec4f567ae33567537f867dc2bba
+          git -C "$RUNNER_TEMP/pcsx-redux" checkout --detach FETCH_HEAD
+          git config --global --add safe.directory "$RUNNER_TEMP/pcsx-redux"
+      - name: Fetch pinned MIPS guest-test submodule
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: git -C "$RUNNER_TEMP/pcsx-redux" submodule update --init src/mips
+      - name: Validate GP0 NOP runtime regression against pinned upstream sources
+        run: python3 tools/patch_private_pcsx_gp0_nop_runtime_test.py "$RUNNER_TEMP/pcsx-redux"
+      - name: Validate generated patch against real upstream sources
+        run: python3 tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py "$RUNNER_TEMP/pcsx-redux"
+      - name: Validate GP0(00h) NOP patch against pinned upstream source
+        run: python3 tools/patch_private_pcsx_gpu_gp0_nop.py "$RUNNER_TEMP/pcsx-redux"

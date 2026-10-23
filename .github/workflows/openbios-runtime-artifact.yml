@@ -1,0 +1,61 @@
+name: Pinned OpenBIOS runtime artifact
+
+on:
+  # Pull-request events are the single validation source for this branch.
+  # A parallel push trigger duplicated the same artifact build on every workflow edit.
+  pull_request:
+    paths:
+      - .github/workflows/openbios-runtime-artifact.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Reset the legacy key after stale queued runs; keep PR and manual runs keyed by branch.
+  # The versioned group gives the current-head workflow a fresh concurrency slot.
+  group: pcsx-redux-openbios-runtime-${{ github.event.pull_request.head.ref || github.ref_name }}-queue-v2
+  cancel-in-progress: true
+
+jobs:
+  build-pinned-openbios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: ghcr.io/grumpycoders/pcsx-redux-build:noble
+      options: --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor:unconfined
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          set-safe-directory: true
+
+      - name: Fetch exact pinned PCSX-Redux source
+        env:
+          UPSTREAM_SHA: de4a33e9a69abec4f567ae33567537f867dc2bba
+        run: |
+          git init "$RUNNER_TEMP/pcsx-redux"
+          git -C "$RUNNER_TEMP/pcsx-redux" remote add origin https://github.com/grumpycoders/pcsx-redux.git
+          git -C "$RUNNER_TEMP/pcsx-redux" fetch --depth 1 origin "$UPSTREAM_SHA"
+          git -C "$RUNNER_TEMP/pcsx-redux" checkout --detach FETCH_HEAD
+          git config --global --add safe.directory "$RUNNER_TEMP/pcsx-redux"
+
+      - name: Fetch pinned upstream submodules
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: ./.github/scripts/update-submodules.sh
+
+      - name: Build OpenBIOS from the pinned MIPS submodule
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: make -C src/mips/openbios -j 2 all
+
+      - name: Validate private-runtime prerequisite artifact
+        run: |
+          test -s "$RUNNER_TEMP/pcsx-redux/src/mips/openbios/openbios.bin"
+          file "$RUNNER_TEMP/pcsx-redux/src/mips/openbios/openbios.bin"
+
+      - name: Upload pinned OpenBIOS binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcsx-redux-openbios-de4a33e9
+          path: ${{ runner.temp }}/pcsx-redux/src/mips/openbios/openbios.bin
+          if-no-files-found: error
+          retention-days: 7

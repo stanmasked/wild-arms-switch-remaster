@@ -1,0 +1,185 @@
+name: PCSX-Redux patched build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/patch_private_pcsx_gpudump_player_step1_export.py
+      - tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py
+      - tools/patch_private_pcsx_gpu_gp0_nop.py
+      - tools/patch_private_pcsx_gp0_nop_runtime_test.py
+      - tests/test_patch_private_pcsx_gp0_nop_runtime_test.py
+      - docs/stage456-private-player-step1-native-dump-hash-binding.md
+      - .github/workflows/pcsx-redux-patched-build.yml
+  pull_request:
+    paths:
+      - tools/patch_private_pcsx_gpudump_player_step1_export.py
+      - tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py
+      - tools/patch_private_pcsx_gpu_gp0_nop.py
+      - tools/patch_private_pcsx_gp0_nop_runtime_test.py
+      - tests/test_patch_private_pcsx_gp0_nop_runtime_test.py
+      - docs/stage456-private-player-step1-native-dump-hash-binding.md
+      - .github/workflows/pcsx-redux-patched-build.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Reset the legacy key after Actions left current-head validation queued with no active jobs.
+  # The versioned key gives this workflow a fresh concurrency slot.
+  group: pcsx-redux-patched-build-${{ github.event.pull_request.number || github.ref }}-queue-v2
+  cancel-in-progress: true
+
+jobs:
+  build-patched-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    container:
+      image: ghcr.io/grumpycoders/pcsx-redux-build:noble
+      options: --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor:unconfined
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          set-safe-directory: true
+
+      - name: Fetch exact pinned PCSX-Redux source
+        env:
+          UPSTREAM_SHA: de4a33e9a69abec4f567ae33567537f867dc2bba
+        run: |
+          git init "$RUNNER_TEMP/pcsx-redux"
+          git -C "$RUNNER_TEMP/pcsx-redux" remote add origin https://github.com/grumpycoders/pcsx-redux.git
+          git -C "$RUNNER_TEMP/pcsx-redux" fetch --depth 1 origin "$UPSTREAM_SHA"
+          git -C "$RUNNER_TEMP/pcsx-redux" checkout --detach FETCH_HEAD
+          git config --global --add safe.directory "$RUNNER_TEMP/pcsx-redux"
+
+      - name: Fetch upstream submodules
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: ./.github/scripts/update-submodules.sh
+
+      - name: Apply combined owner-local research patch
+        run: |
+          python3 "$GITHUB_WORKSPACE/tools/patch_private_pcsx_gpudump_player_step1_dump_hash.py" \
+            "$RUNNER_TEMP/pcsx-redux" --apply
+          python3 "$GITHUB_WORKSPACE/tools/patch_private_pcsx_gpu_gp0_nop.py" \
+            "$RUNNER_TEMP/pcsx-redux" --apply
+          python3 "$GITHUB_WORKSPACE/tools/patch_private_pcsx_gp0_nop_runtime_test.py" \
+            "$RUNNER_TEMP/pcsx-redux" --apply
+          git -C "$RUNNER_TEMP/pcsx-redux" diff --check
+          git -C "$RUNNER_TEMP/pcsx-redux/src/mips" diff --check
+
+      - name: Build patched PCSX-Redux, host tests, and tools
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: make -j 2 all pcsx-redux-tests tools LDFLAGS_Release="-static-libstdc++ -static-libgcc"
+
+      - name: Build pinned PS1 test programs
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: make -C src/mips/tests -j 2 PCSX_TESTS=true
+
+      - name: Build matching pinned OpenBIOS
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: |
+          make -C src/mips/openbios -j 2 all
+          test -s src/mips/openbios/openbios.bin
+
+      - name: Rebuild PS1 test programs with preserved OpenBIOS
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: |
+          cp src/mips/openbios/openbios.bin .
+          make -C src/mips/openbios clean
+          make -C src/mips/tests -j 2 PCSX_TESTS=true
+          cp ./openbios.bin src/mips/openbios/
+          test -s src/mips/openbios/openbios.bin
+          cmp -s ./openbios.bin src/mips/openbios/openbios.bin
+          sha256sum ./openbios.bin | awk '{print $1}' > "$RUNNER_TEMP/openbios-tested.sha256"
+
+      - name: Build retail monitor for CD-ROM test image
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: make -C src/mips/monitor/hosts/retail -j 2
+
+      - name: Generate upstream CD-ROM test image
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: xvfb-run catchsegv ./pcsx-redux -stdout -lua_stdout -testmode -no-gui-log -exec "dofile 'src/mips/tests/cdrom/create-test-iso.lua'"
+
+      - name: Validate native test fixtures
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: |
+          test -s test.cue
+          test -s test.bin
+          test -s test-t25.bin
+          test -s src/mips/tests/cdrom/cdrom.ps-exe
+          test -s src/mips/monitor/hosts/retail/monitor-retail.ps-exe
+          test -s src/mips/openbios/openbios.bin
+
+      - name: Run compiled PCSX-Redux host test suite
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: |
+          set -euo pipefail
+          logfile="$RUNNER_TEMP/pcsx-redux-native-tests.log"
+          xvfb-run catchsegv ./pcsx-redux-tests 2>&1 | tee "$logfile"
+          grep -Fq 'GP0_NOP_RUNTIME_PROBE_PASS word=000326cc before=000006d5 after=000006d5' "$logfile"
+          if grep -Fq 'Got an unknown GPU data word: 000326cc' "$logfile"; then
+            echo "GP0(00h) NOP was incorrectly reported as an unknown GPU word"
+            exit 1
+          fi
+
+      - name: Package patched PCSX-Redux AppImage with tested OpenBIOS
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: |
+          set -euo pipefail
+          expected="$(cat "$RUNNER_TEMP/openbios-tested.sha256")"
+          actual="$(sha256sum ./openbios.bin | awk '{print $1}')"
+          test "$actual" = "$expected"
+          make install DESTDIR=AppDir/usr
+          mkdir -p AppDir/usr/share/pcsx-redux/resources
+          cp ./openbios.bin AppDir/usr/share/pcsx-redux/resources/openbios.bin
+          actual="$(sha256sum AppDir/usr/share/pcsx-redux/resources/openbios.bin | awk '{print $1}')"
+          test "$actual" = "$expected"
+          sed -i s:/usr/bin/:: AppDir/usr/share/applications/pcsx-redux.desktop
+          linuxdeploy -v3 --appdir=AppDir -e AppDir/usr/bin/pcsx-redux -d AppDir/usr/share/applications/pcsx-redux.desktop -i AppDir/usr/share/icons/hicolor/256x256/apps/pcsx-redux.png -o appimage
+          mv PCSX-Redux-x86_64.AppImage PCSX-Redux-private-openbios-x86_64.AppImage
+
+      - name: Smoke-test packaged AppImage with pinned OpenBIOS
+        working-directory: ${{ runner.temp }}/pcsx-redux
+        run: |
+          set -euo pipefail
+          appimage="$PWD/PCSX-Redux-private-openbios-x86_64.AppImage"
+          bios="$PWD/AppDir/usr/share/pcsx-redux/resources/openbios.bin"
+          test -s "$appimage"
+          test -s "$bios"
+          expected="$(cat "$RUNNER_TEMP/openbios-tested.sha256")"
+          actual="$(sha256sum "$bios" | awk '{print $1}')"
+          test "$actual" = "$expected"
+          chmod +x "$appimage"
+          for cpu in interpreter dynarec; do
+            logfile="$RUNNER_TEMP/pcsx-redux-smoke-${cpu}.log"
+            config="$RUNNER_TEMP/pcsx-redux-smoke-${cpu}-config"
+            mkdir -p "$config"
+            if ! timeout 45s xvfb-run -a env APPIMAGE_EXTRACT_AND_RUN=1 SDL_AUDIODRIVER=dummy XDG_CONFIG_HOME="$config" \
+              "$appimage" -no-ui -cli -stdout -lua_stdout -bios "$bios" -testmode "-$cpu" \
+              -exec 'PCSX.quit(0)' > "$logfile" 2>&1; then
+              tail -n 80 "$logfile"
+              exit 1
+            fi
+            grep -Fq 'PCSX-Redux booting' "$logfile"
+            grep -Fq 'Loaded BIOS:' "$logfile"
+            grep -Fq 'OpenBIOS detected (' "$logfile"
+            if [ "$cpu" = interpreter ]; then
+              grep -Fq 'CPU type: Interpreted' "$logfile"
+            else
+              grep -Fq 'CPU type: Dynarec' "$logfile"
+            fi
+            echo "PCSX-Redux packaged AppImage smoke passed: $cpu"
+          done
+
+      - name: Upload patched private-runtime emulator artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcsx-redux-patched-openbios-x86_64
+          path: ${{ runner.temp }}/pcsx-redux/PCSX-Redux-private-openbios-x86_64.AppImage
+          if-no-files-found: error
+          retention-days: 7
