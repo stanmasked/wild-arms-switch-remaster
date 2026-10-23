@@ -156,6 +156,14 @@ class MutualTlsCustodianTests(unittest.TestCase):
                 accepted = done.result(timeout=6)
             return response, accepted
 
+    def test_synthetic_mutual_tls_certificates_pass_strict_x509_validation(self):
+        # OpenSSL 3.5+ requires CA keyCertSign and explicit leaf usages.
+        # Never weaken TLS verification to accommodate test fixtures.
+        openssl('verify', '-x509_strict', '-purpose', 'sslserver',
+                '-CAfile', self.ca, self.server_cert)
+        openssl('verify', '-x509_strict', '-purpose', 'sslclient',
+                '-CAfile', self.ca, self.client_cert)
+
     def test_latest_roundtrip_requires_both_tls_pins_and_ed25519(self):
         (raw, signed, seq), ok = self.run_channel()
         self.assertTrue(ok)
