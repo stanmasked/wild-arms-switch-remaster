@@ -290,3 +290,34 @@ The independent RGB preview/ROI witness remains operator-supplied, so the
 complete strict V2 verifier with a current-artifact GUI-captured preview is
 still pending. Original game data, the native dump, VRAM payloads, screenshots,
 and raw logs remain private and are not committed or uploaded to GitHub.
+
+## Stage508 follow-up — validated current-head native tests and storage boundary
+
+At commit `18f6f515ec8f92b5947faa42836753da75283967`, all three
+pull-request CI workflows completed successfully:
+
+- Disc analysis: https://github.com/stanmasked/wild-arms-switch-remaster/actions/runs/39970101945
+- Pinned OpenBIOS: https://github.com/stanmasked/wild-arms-switch-remaster/actions/runs/39970101949
+- Patched PCSX-Redux: https://github.com/stanmasked/wild-arms-switch-remaster/actions/runs/39970102230
+
+The patched build log records 131 passing native test cases with 3,833
+assertions, including the executed guest marker
+`GP0_NOP_RUNTIME_PROBE_PASS word=000326cc before=000006d5 after=000006d5`.
+Both packaged AppImage CPU-mode smoke tests passed. The build also compared
+the packaged OpenBIOS SHA-256 to the same binary saved for native testing.
+The resulting CI ZIP artifact is named
+`pcsx-redux-patched-openbios-x86_64`, ID `12513542114`.
+
+**Storage boundary:** the public branch contains patch generators,
+regressions, workflow files and this metadata-only verification note.
+Keep all original Wild Arms disc contents (including split archives),
+decoded resources, native GPUDUMP recordings, raw VRAM buffers, screenshots,
+and private runtime logs in owner-controlled private storage only. Do not
+embed private hashes, frame images, original game binaries, or raw log excerpts
+containing assets into public CI artifacts or GitHub comments.
+
+**Remaining gate:** a trusted, lossless native Player preview captured from
+the same frame as the actual GUI-generated V2 export must pass the strict
+RGB555-to-RGB ROI verifier. The already-verified 1,430-frame boot capture is
+not equivalent to Surf Village scene reconstruction; neither is a claim of
+gameplay completion.
