@@ -106,11 +106,11 @@ def replay_bounded_8bpp_intro(initial_vram, packets):
         if opcode == 0x2c:
             if None in (e1, e2, e3, e4, e5, e6):
                 raise ValueError("Stage528 GP0(2C) missing explicit GPU state")
-            # Real developer-logo trace sets E1 bit9 (polygon dithering).
-            # This bounded non-dithered affine-rectangle approximation must
-            # not claim accurate VRAM in that hardware state.
-            if e1 & 0x200:
-                raise ValueError("Stage528 GP0(2C) E1 polygon dithering unmodeled")
+            # GP0(2C) is FLAT-shaded. The pinned PCSX-Redux soft
+            # rasterizer selects its solid textured fast path when
+            # Shading::Flat, even if E1 bit9 requests polygon dithering.
+            # The exact UV phase is handled in replay_bounded_4bpp_quad.
+            # This is NOT permission to replay Gouraud/dithered polygons.
             pixels_written += replay_bounded_4bpp_quad(
                 vram, packet,
                 draw_area=(e3[0], e3[1], e4[0], e4[1]),
