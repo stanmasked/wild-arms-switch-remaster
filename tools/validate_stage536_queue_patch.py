@@ -13,7 +13,7 @@ import tempfile
 
 PINNED_COMMIT = "de4a33e9a69abec4f567ae33567537f867dc2bba"
 SOURCE_BLOBS = {
-    "src/core/cdrom.h": "e82969125b2dd330420a6d2793e53ddd403fbe43",
+    "src/core/cdrom.h": "e82969125b2d330420a6d2793e53ddd403fbe43",
     "src/core/cdrom.cc": "06766089543f068fed47a06cd85e0446f23ad524",
     "src/core/sstate.h": "ab2cf948dfe910275b4ac519673b52cbdaefb4bf",
     "src/core/sstate.cc": "2044f21d6bcf32f5c99766f038a398944d7f3cfe",
@@ -110,8 +110,8 @@ def main():
     args = parser.parse_args()
     try:
         validate(args.pcsx_redux_checkout)
-    except (ValueError, OSError, subprocess.CalledProcessError):
-        parser.exit(2, "STAGE536_UPSTREAM_PATCH_VALIDATION_FAILED\n")
+    except (ValueError, OSError, subprocess.CalledProcessError) as exc:
+        parser.exit(2, "STAGE536_UPSTREAM_PATCH_VALIDATION_FAILED: " + str(exc) + "\n")
     print("STAGE536_PATCH_AND_STAGE535_SOURCE_MAPPING_MATCH_EXACT_PINNED_UPSTREAM; NO_BUILD_OR_RUNTIME_ATTESTATION")
 
 
