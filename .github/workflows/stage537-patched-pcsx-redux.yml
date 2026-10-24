@@ -1,4 +1,4 @@
-name: Stage537 patched PCSX-Redux build
+name: Stage540 patched PCSX-Redux legacy restore candidate
 
 on:
   pull_request:
@@ -6,6 +6,8 @@ on:
       - ".github/workflows/stage537-patched-pcsx-redux.yml"
       - "patches/pcsx-redux/stage536-zero-inactive-cdrom-queue-element.patch"
       - "tools/validate_stage536_queue_patch.py"
+      - "patches/pcsx-redux/stage540-normalize-legacy-inactive-response.patch"
+      - "tests/test_stage540_legacy_response_restore.py"
       - "docs/stage537-patched-pcsx-redux-build.md"
   workflow_dispatch:
 
@@ -18,17 +20,20 @@ concurrency:
 
 jobs:
   build-patched-emulator:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'stage-537-patched-pcsx-redux-build' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'stage-540-legacy-savestate-cdrom-response-normalization' }}
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/grumpycoders/pcsx-redux-build:noble
       options: --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor:unconfined
     env:
       PINNED_PCSX_REDUX: de4a33e9a69abec4f567ae33567537f867dc2bba
-      TEST_RESULTS: /tmp/stage537-test-results
-      ARTIFACT_DIR: /tmp/stage537-artifacts
+      TEST_RESULTS: /tmp/stage540-test-results
+      ARTIFACT_DIR: /tmp/stage540-artifacts
     steps:
       - uses: actions/checkout@v4
+
+      - name: Stage540 ROM-free synthetic restore regression
+        run: python3 -m unittest discover -s tests -p 'test_stage540_legacy_response_restore.py' -v
 
       - name: Fetch exact pinned PCSX-Redux source
         run: |
@@ -47,6 +52,13 @@ jobs:
           git -C "$RUNNER_TEMP/pcsx-redux" apply "$GITHUB_WORKSPACE/patches/pcsx-redux/stage536-zero-inactive-cdrom-queue-element.patch"
           git -C "$RUNNER_TEMP/pcsx-redux" diff --check
           git -C "$RUNNER_TEMP/pcsx-redux" diff -- src/core/cdrom.h
+
+      - name: Apply Stage540 legacy restore patch after Stage536
+        run: |
+          git -C "$RUNNER_TEMP/pcsx-redux" apply --check "$GITHUB_WORKSPACE/patches/pcsx-redux/stage540-normalize-legacy-inactive-response.patch"
+          git -C "$RUNNER_TEMP/pcsx-redux" apply "$GITHUB_WORKSPACE/patches/pcsx-redux/stage540-normalize-legacy-inactive-response.patch"
+          git -C "$RUNNER_TEMP/pcsx-redux" diff --check
+          git -C "$RUNNER_TEMP/pcsx-redux" diff -- src/core/sstate.cc
 
       - name: Fetch pinned upstream submodules
         run: |
@@ -86,28 +98,39 @@ jobs:
           short_sha=$(printf '%s' "$PINNED_PCSX_REDUX" | cut -c 1-8)
           cat > AppDir/usr/share/pcsx-redux/resources/version.json <<EOF
           {
-            "version": "stage537-$short_sha",
+            "version": "stage540-$short_sha",
             "buildId": 0,
             "changeset": "$PINNED_PCSX_REDUX",
             "timestamp": $(date +%s),
-            "channel": "stage537",
+            "channel": "stage540",
             "updateInfo": []
           }
           EOF
           linuxdeploy -v 3 --appdir=AppDir -e AppDir/usr/bin/pcsx-redux -d AppDir/usr/share/applications/pcsx-redux.desktop -i AppDir/usr/share/icons/hicolor/256x256/apps/pcsx-redux.png -o appimage
-          mv PCSX-Redux-x86_64.AppImage PCSX-Redux-Stage537-x86_64.AppImage
-          chmod +x PCSX-Redux-Stage537-x86_64.AppImage
+          mv PCSX-Redux-x86_64.AppImage PCSX-Redux-Stage540-x86_64.AppImage
+          chmod +x PCSX-Redux-Stage540-x86_64.AppImage
           mkdir -p "$ARTIFACT_DIR"
-          cp PCSX-Redux-Stage537-x86_64.AppImage "$ARTIFACT_DIR/"
+          cp PCSX-Redux-Stage540-x86_64.AppImage "$ARTIFACT_DIR/"
           patch_sha=$(sha256sum "$GITHUB_WORKSPACE/patches/pcsx-redux/stage536-zero-inactive-cdrom-queue-element.patch" | cut -d' ' -f1)
-          app_sha=$(sha256sum PCSX-Redux-Stage537-x86_64.AppImage | cut -d' ' -f1)
-          printf '{\n  "stage": 537,\n  "upstream_commit": "%s",\n  "candidate_patch_sha256": "%s",\n  "appimage_sha256": "%s",\n  "build_image": "ghcr.io/grumpycoders/pcsx-redux-build:noble",\n  "original_game_data_in_build": false,\n  "runtime_gameplay_tested": false\n}\n' "$PINNED_PCSX_REDUX" "$patch_sha" "$app_sha" > "$ARTIFACT_DIR/stage537-build-manifest.json"
+          restore_sha=$(sha256sum "$GITHUB_WORKSPACE/patches/pcsx-redux/stage540-normalize-legacy-inactive-response.patch" | cut -d' ' -f1)
+          app_sha=$(sha256sum PCSX-Redux-Stage540-x86_64.AppImage | cut -d' ' -f1)
+          printf '{\n  "stage": 537,\n  "upstream_commit": "%s",\n  "candidate_patch_sha256": "%s",\n  "appimage_sha256": "%s",\n  "build_image": "ghcr.io/grumpycoders/pcsx-redux-build:noble",\n  "original_game_data_in_build": false,\n  "runtime_gameplay_tested": false\n}\n' "$PINNED_PCSX_REDUX" "$patch_sha" "$app_sha" > "$ARTIFACT_DIR/stage540-build-manifest.json"
+          python3 - "$ARTIFACT_DIR/stage540-build-manifest.json" "$restore_sha" <<'PY'
+          import json
+          import pathlib
+          import sys
+          path = pathlib.Path(sys.argv[1])
+          manifest = json.loads(path.read_text())
+          manifest["stage"] = 540
+          manifest["legacy_restore_patch_sha256"] = sys.argv[2]
+          path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+          PY
           cp "$TEST_RESULTS"/* "$ARTIFACT_DIR/" 2>/dev/null || true
 
       - name: Upload patched emulator and build manifest
         uses: actions/upload-artifact@v4
         with:
-          name: stage537-patched-pcsx-redux-linux-x86_64
-          path: /tmp/stage537-artifacts/*
+          name: stage540-patched-pcsx-redux-linux-x86_64
+          path: /tmp/stage540-artifacts/*
           if-no-files-found: error
           retention-days: 7
