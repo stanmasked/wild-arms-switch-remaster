@@ -120,6 +120,12 @@ class Stage533DirectionalReportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exactly five"):
             validate(data)
 
+    def test_unhashable_direction_label_rejected(self):
+        data = report()
+        data["metrics"][0]["direction"] = ["none"]
+        with self.assertRaisesRegex(ValueError, "missing, unknown, or duplicate direction"):
+            validate(data)
+
     def test_duplicate_json_key_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "report.json"
