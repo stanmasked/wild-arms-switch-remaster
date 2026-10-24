@@ -50,6 +50,13 @@ was a developer-logo picture.
 Thus the unchanged Player VRAM is **confirmed**, and the experimental
 polygon/sprite replay differs from it. Do **not** claim that Stage528
 matches authentic developer-logo memory or blame earlier capture timing.
+
+A further owner-private audit found that both original GP0(2C) polygons
+execute with the **E1 polygon-dither bit (bit9) enabled**. The Stage528
+quad approximation does not model GPU dither/triangle edge coverage;
+the integrated public renderer therefore **rejects E1 bit9** for 2C
+and synthetic CI asserts this refusal. This is an explicit runtime
+blocker, not evidence of a successful full-game polygon rasterizer.
 The difference may arise from PS1 rasterization conventions (triangle
 edges, UV interpolation and framebuffer rules) or replay modeling; its
 cause is not established. Keep this original-output negative witness
