@@ -1,97 +1,44 @@
-# Stage532 — Rudy character selection to Surf Village: private route integrity gate
+# Stage532 — Surf Village controlled movement and private evidence seal
 
-## Boundary
+## Result: original-game movement observed
 
-Stage531 owner-reported progress reached the **real character-selection GUI** through
-PCSX-Redux and retained a restartable selection savestate. It did not establish a
-separately audited **Surf Village** original-game field capture. The Stage530
-exact UV result is limited to one independently captured **Media.Vision logo**
-software-GPU frame; do not extrapolate it to gameplay or all GPU opcodes.
+On 2026-10-24, the Stage531 owner-private checkpoint was restored with the exact pinned PCSX-Redux AppImage and the canonical Wild Arms (USA) BIN/CUE. The BIN size and SHA-256, CUE SHA-256, and AppImage SHA-256 matched the existing owner-private Stage531 manifest. The canonical BIN/CUE were reconstructed from the existing private Drive archive parts and remain the canonical source; they are **not duplicated** into the Stage532 evidence bundle.
 
-This stage adds `tools/seal_private_rudy_route_stage532.py`, a **public-code,
-private-data-only** integrity helper for the next original gameplay route.
-It does not run PCSX-Redux, press buttons, prove emulation, recognize Rudy
-in screenshots, attest GUI origins, or claim a Switch port is playable.
+The restored Rudy prologue was advanced through the default-name screen and into a no-dialogue village scene. A private PCSX-Redux GUI capture shows the playable scene with Rudy, NPCs, horses and buildings. The scene is visually consistent with Surf Village. The internal field-map index is **not independently confirmed**.
 
-## Owner-only capture route
+## Controlled A/B input experiment
 
-1. In the **private** workspace, verify original CUE points to the original
-   MODE2/2352 BIN and restore the Stage531 selection savestate.
-2. Capture independent unscaled opaque RGB PNG of the character-selection
-   screen and retain a copy of the selection state.
-3. Record **physical** PS1 controller transitions in an owner-private JSON
-   journal. Start at neutral frame zero; use strictly increasing operator-
-   declared frame indices and end at neutral. These indices are claims,
-   not a trusted emulator timing channel. Observe the on-screen character
-   choice and confirm Rudy manually.
-4. Select Rudy and play until a **visibly controllable Surf Village scene**
-   appears. Independently capture a second unscaled PNG and an arrival
-   savestate. Record whether the character responds to directional input,
-   and preserve a separate owner-private operator report (not in GitHub).
-5. Seal the private bundle, upload files and manifest to **owner-only Google
-   Drive**, download independently to a fresh workspace, and run `verify`.
-   Keep private originals, states, images, input journals, raw logs, hashes
-   and screenshots **out of GitHub and GitHub Actions**.
+Two independent software-GPU runs started from the exact same no-dialogue field savestate:
 
-## Strict input format
+- Control: no directional input.
+- Treatment: PCSX-Redux Lua pad override held **RIGHT** for 30 VSync frames, then returned to neutral.
 
-The route seal expects these seven **distinct, non-hardlinked, non-symlink**
-regular files in one private directory: `disc_bin`, `disc_cue`,
-`selection_state`, `selection_png`, `arrival_state`, `arrival_png`,
-`input_trace`. Its basename arguments cannot contain directory separators.
-The CUE must reference the supplied BIN exactly and contain a single
-`TRACK 01 MODE2/2352` and playable `INDEX 01`.
+The initial raw VRAM snapshots were byte-identical across the two runs. In the idle control, 872 framebuffer pixels changed during the sample interval, consistent with ongoing animation. Under RIGHT, 60,341 pixels changed. Phase correlation on the static upper-building ROI measured approximately **−27.0 horizontal pixels / +0.0 vertical pixels** of background displacement in the 320×240 framebuffer. Independently captured PCSX-Redux GUI before/after images visually show the corresponding camera-tracked movement. These measurements are private aggregate results; no original pixel data or private hashes are committed.
 
-The private input journal schema is:
+**Conclusion:** the original Wild Arms software-GPU run now demonstrates directional input affecting the visible Surf Village scene. This is not a claim of original PS1 hardware parity, Switch runtime integration, general GPU parity, or verified internal map index.
 
-```json
-{
-  "schema": "wild-arms-rudy-route-input-v1",
-  "origin": "operator_declared_not_attested",
-  "events": [
-    {"frame": 0, "buttons": []},
-    {"frame": 12, "buttons": ["cross"]},
-    {"frame": 13, "buttons": []}
-  ]
-}
-```
+## Private archive and integrity boundary
 
-This is purely a **synthetic illustrative format**, not a verified game
-input recipe. The controller mapping for choosing Rudy must be measured,
-not inferred from the example. The parser accepts PS1 face buttons, D-pad,
-Start and Select; each event uses strictly increasing integer frame indices.
-Neither the declared indices nor two different images prove real gameplay.
+The owner-private Stage532 archive retains:
 
-Private-only command shape (filenames here are placeholders):
+- before/after PCSX-Redux savestates;
+- before/after native 1 MiB VRAM snapshots;
+- exact 320×240 framebuffer PNGs deterministically decoded from those VRAM snapshots;
+- separately captured GUI screenshots from the same paused before/after run;
+- the emulated input-state journal and runtime logs;
+- a private manifest with source references, byte sizes and SHA-256 for every evidence file.
 
-```sh
-python3 tools/seal_private_rudy_route_stage532.py seal /private/stage532 \
-  --disc-bin ORIGINAL.bin --disc-cue ORIGINAL.cue \
-  --selection-state BEFORE.state --selection-png BEFORE.png \
-  --arrival-state AFTER.state --arrival-png AFTER.png \
-  --input-trace CONTROLLER.json
-python3 tools/seal_private_rudy_route_stage532.py verify /private/stage532
-```
+The GUI screenshots are supplemental visual evidence. Their on-screen origin is **not cryptographically attested**. The input journal is an operator-declared record of PCSX-Redux Lua pad overrides, not a physical-controller recording or trusted timing attestation.
 
-The sealing tool checks raw-file SHA-256, positive and bounded sizes, raw
-MODE2 sector alignment, the CUE reference, strict PNG decoding and equal
-image dimensions with different RGB pixels, differing state bytes,
-unique paths/inodes, input-journal schema and its frame progression.
-It writes a **0600 owner-private, no-overwrite, atomic manifest** with
-all seven sizes/hashes and a limited summary. `verify` rechecks every
-input and recomputes the summary after an independent Drive download.
-Neither operation uploads or prints private hashes/data.
+The public tool tools/seal_private_rudy_route_stage532.py verifies the canonical BIN/CUE by external reference without copying either original into the evidence bundle. It binds the 320×240 framebuffer PNGs to the raw VRAM crop, checks state and VRAM differences, validates the CUE/track format, and seals all private evidence with a no-overwrite manifest. The verify operation requires the canonical source BIN/CUE to be supplied separately after the evidence ZIP is independently downloaded from Drive.
 
-## Evidence acceptance — not yet met
+## Acceptance gates
 
-- **Integrity PASS** after owner-private `seal`, Drive re-download and
-  independent `verify`: file continuity only.
-- **Visual gameplay PASS** requires separately observed, unscaled field
-  imagery, scene identification, control response, and independent
-  comparison to original PCSX-Redux gameplay captures. Synthetic tests do
-  not satisfy this gate.
-- **Remake rendering parity PASS** additionally requires independent
-  replay/visual checks of real Surf Village GPU primitives. The Stage530
-  Media.Vision parity is insufficient.
+- **Observed movement:** PASS in the owner-private PCSX-Redux run.
+- **Frame-to-VRAM byte binding:** enforced by the private seal tool and synthetic tests.
+- **Independent Drive archive readback:** must pass before this evidence bundle is considered durably archived.
+- **Internal field-map index:** OPEN.
+- **Full Surf Village graphics parity in the remake:** OPEN.
+- **Nintendo Switch runtime / hardware parity:** OPEN.
 
-Public CI executes only synthetic, original-free regression fixtures.
+Public GitHub CI uses synthetic fixtures only. Original BIN/CUE bytes, savestates, raw VRAM, GUI screenshots, input logs and private hashes remain in owner-only Google Drive.
