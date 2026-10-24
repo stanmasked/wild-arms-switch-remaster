@@ -12,8 +12,13 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: stage537-patched-pcsx-redux-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-patched-emulator:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'stage-537-patched-pcsx-redux-build' }}
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/grumpycoders/pcsx-redux-build:noble
@@ -77,7 +82,8 @@ jobs:
           cd "$RUNNER_TEMP/pcsx-redux"
           make install install-openbios DESTDIR=AppDir/usr
           mkdir -p AppDir/usr/share/pcsx-redux/resources
-          short_sha=$(git rev-parse --short "$GITHUB_SHA")
+          sed -i s:/usr/bin/:: AppDir/usr/share/applications/pcsx-redux.desktop
+          short_sha=${PINNED_PCSX_REDUX:0:8}
           cat > AppDir/usr/share/pcsx-redux/resources/version.json <<EOF
           {
             "version": "stage537-$short_sha",
