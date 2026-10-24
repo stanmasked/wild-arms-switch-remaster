@@ -27,7 +27,9 @@ class Stage540RestoreGuardTests(unittest.TestCase):
         self.assertIn("if (!fifo.hasValue && !fifo.valueRead && !fifo.hitMax && fifo.payloadSize == 0 &&", source)
         self.assertIn("fifo.clear();", source)
         self.assertIn("state.commit();", source)
-        self.assertIn("g_emulator->m_cdrom->normalizeRestoredResponseQueues();", source)
+        self.assertEqual(source.count("+    g_emulator->m_cdrom->normalizeRestoredResponseQueues();"), 2)
+        self.assertEqual(source.count("     state.commit();"), 2)
+        self.assertIn("External on-disk savestates use load()", source)
         self.assertEqual(source.count("--- a/"), 2)
 
     def test_synthetic_header_applies_and_preserves_live_fifo(self):
@@ -70,21 +72,41 @@ class Stage540RestoreGuardTests(unittest.TestCase):
             prelude += "struct State { void commit() {} };\n"
             prelude += "void restore(State& state) {\n"
             count = prelude.count("\n") + 1
-            state.write_text(
+            snapshot_text = (
                 prelude + "// synthetic padding\n" * (303-count)
                 + "    g_emulator->m_cpu->invalidateCache();\n"
                   "    state.commit();\n"
                   "    g_emulator->m_cpu->m_regs.lowestTarget = g_emulator->m_cpu->m_regs.cycle;\n"
-                  "}\n",
-                encoding="utf-8",
+                  "}\n"
             )
+            # Reproduce the second, on-disk SaveStates::load() context at
+            # the exact pinned upstream line, so patch application covers both.
+            self.assertLess(len(snapshot_text.splitlines()), 468)
+            snapshot_text += "// synthetic padding\n" * (468-len(snapshot_text.splitlines()))
+            snapshot_text += (
+                "    PCSX::g_emulator->m_cpu->Reset();\n"
+                "    g_emulator->m_allocTracker->reset();\n"
+                "    state.commit();\n"
+                "    g_emulator->m_cpu->m_regs.lowestTarget = g_emulator->m_cpu->m_regs.cycle;\n"
+                "}\n"
+            )
+            state.write_text(snapshot_text, encoding="utf-8")
             self.assertEqual(header.read_text().splitlines()[79], "    virtual void reset() = 0;")
             self.assertEqual(state.read_text().splitlines()[302], "    g_emulator->m_cpu->invalidateCache();")
+            self.assertEqual(state.read_text().splitlines()[468], "    PCSX::g_emulator->m_cpu->Reset();")
             run_checked(["git", "apply", "--check", "--unsafe-paths", str(PATCH)], root)
             run_checked(["git", "apply", "--unsafe-paths", str(PATCH)], root)
 
             text = state.read_text()
-            self.assertLess(text.index("state.commit();"), text.index("normalizeRestoredResponseQueues();"))
+            self.assertEqual(text.count("g_emulator->m_cdrom->normalizeRestoredResponseQueues();"), 2)
+            self.assertIn(
+                "state.commit();\n    // QueueElement constructors/clear() cannot erase legacy snapshot bytes.",
+                text,
+            )
+            self.assertIn(
+                "state.commit();\n    // External on-disk savestates use load()",
+                text,
+            )
 
             main = root / "test.cpp"
             main.write_text(
