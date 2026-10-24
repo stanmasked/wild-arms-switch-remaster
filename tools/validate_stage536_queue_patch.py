@@ -12,12 +12,12 @@ import subprocess
 import tempfile
 
 PINNED_COMMIT = "de4a33e9a69abec4f567ae33567537f867dc2bba"
-SOURCE_BLOBS = {
-    "src/core/cdrom.h": "e82969125b2d330420a6d2793e53ddd403fbe43",
-    "src/core/cdrom.cc": "06766089543f068fed47a06cd85e0446f23ad524",
-    "src/core/sstate.h": "ab2cf948dfe910275b4ac519673b52cbdaefb4bf",
-    "src/core/sstate.cc": "2044f21d6bcf32f5c99766f038a398944d7f3cfe",
-}
+SOURCE_PATHS = (
+    "src/core/cdrom.h",
+    "src/core/cdrom.cc",
+    "src/core/sstate.h",
+    "src/core/sstate.cc",
+)
 HEADER = "src/core/cdrom.h"
 PATCH = Path(__file__).resolve().parents[1] / "patches/pcsx-redux/stage536-zero-inactive-cdrom-queue-element.patch"
 
@@ -32,22 +32,19 @@ def validate(repository):
         raise ValueError("pinned PCSX-Redux checkout is missing")
     head = run(["git", "-C", str(repository), "rev-parse", "HEAD"])
     if head != PINNED_COMMIT:
-        raise ValueError("refusing non-pinned PCSX-Redux checkout")
+        raise ValueError("refusing non-pinned PCSX-Redux checkout: " + head)
 
     sources = {}
-    for path, expected_blob in SOURCE_BLOBS.items():
+    for path in SOURCE_PATHS:
         source_path = repository / path
         if not source_path.is_file() or source_path.is_symlink():
             raise ValueError("pinned source file is missing or is a symlink: " + path)
-        actual_blob = run(["git", "-C", str(repository), "rev-parse", "HEAD:" + path])
-        if actual_blob != expected_blob:
-            raise ValueError("pinned source blob changed: " + path)
         status = subprocess.run(
             ["git", "-C", str(repository), "status", "--porcelain", "--", path],
             check=True, text=True, capture_output=True,
         ).stdout
         if status.strip():
-            raise ValueError("refusing already-modified pinned source: " + path)
+            raise ValueError("refusing modified pinned source: " + path)
         sources[path] = source_path.read_text(encoding="utf-8")
 
     header_text = sources[HEADER]
