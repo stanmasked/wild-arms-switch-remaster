@@ -162,9 +162,9 @@ def replay_bounded_8bpp_intro(initial_vram, packets):
                 if texel == 0:
                     continue
                 color = [
-                    min(31, (((texel >> shift) & 31) *
-                             ((rgb >> shift) & 255)) >> 7)
-                    for shift in (0, 8, 16)
+                    min(31, (((texel >> (5 * channel)) & 31) *
+                             ((rgb >> (8 * channel)) & 255)) >> 7)
+                    for channel in (0, 1, 2)
                 ]
                 offset = (yy * WIDTH + xx) * 2
                 background = struct.unpack_from("<H", vram, offset)[0]
