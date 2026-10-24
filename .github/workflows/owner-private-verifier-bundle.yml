@@ -1,0 +1,46 @@
+name: Owner-private verification tools bundle (public code only)
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/owner-private-verifier-bundle.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-public-verifiers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate source-only verification package
+        run: |
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          required = (
+              "tools/seal_private_player_frame1_archive.py",
+              "tools/import_private_pcsx_native_gpudump.py",
+              "tools/verify_private_gpudump_player_step1_dump_hash.py",
+              "tools/decode_private_opaque_rgb_png.py",
+          )
+          for filename in required:
+              source=Path(filename)
+              if not source.is_file() or source.is_symlink():
+                  raise SystemExit("missing or symlinked verification source")
+              ast.parse(source.read_text(encoding="utf-8"),filename=filename)
+          for source in Path("tools").rglob("*"):
+              if source.is_symlink():
+                  raise SystemExit("symlink prohibited in public verification bundle")
+              if source.is_file() and source.suffix==".py":
+                  ast.parse(source.read_text(encoding="utf-8"),filename=str(source))
+          print("STAGE525_PUBLIC_VERIFIER_SOURCE_BUNDLE_CLEAN")
+          PY
+      - name: Upload reproducible public verifier source
+        uses: actions/upload-artifact@v4
+        with:
+          name: wild-arms-stage525-public-verifier-source
+          path: tools/
+          if-no-files-found: error
+          retention-days: 7
