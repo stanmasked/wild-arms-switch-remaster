@@ -85,7 +85,7 @@ def validate(data):
         if type(record) is not dict or set(record) != METRIC_KEYS:
             raise ValueError("unexpected directional metric fields")
         direction = record["direction"]
-        if direction not in DIRECTIONS or direction in metrics:
+        if type(direction) is not str or direction not in DIRECTIONS or direction in metrics:
             raise ValueError("missing, unknown, or duplicate direction")
         metrics[direction] = record
         expected_frames = 0 if direction == "none" else 30
