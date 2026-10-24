@@ -73,7 +73,7 @@ class Stage536QueueElementFixTests(unittest.TestCase):
             target.parent.mkdir(parents=True)
             fixture_text = FIXTURE.read_text(encoding="utf-8")
             # Align the excerpt with the exact upstream QueueElement line numbers.
-            excerpt = fixture_text[fixture_text.index("struct QueueElement {"):]
+            excerpt = fixture_text[fixture_text.index("    struct QueueElement {"):]
             target.write_text("// omitted upstream context\n" * 179 + excerpt, encoding="utf-8")
             dry = subprocess.run(["git", "apply", "--check", "--unsafe-paths", str(PATCH)],
                                  cwd=root, text=True, capture_output=True)
