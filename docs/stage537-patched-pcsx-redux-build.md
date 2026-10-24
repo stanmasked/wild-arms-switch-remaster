@@ -23,3 +23,8 @@ Before treating the build as complete, the workflow was corrected to avoid deriv
 The workflow is constrained to PR #150's Stage537 branch or manual dispatch, and uses a concurrency group to avoid future duplicate full builds from stacked PRs. The Stage536 branch's build job was observed as skipped by design; its host and disc-analysis tests passed on head `8a20b546cc8413ff8c5a1d835b738b1eb91bf9db`.
 
 Two older full-build runs (40079639906 and 40079641031) remained reported as in progress at the main emulator compile step. They use the previous workflow revision and are not acceptance evidence for the corrected packaging step. A successful build from the corrected Stage537 head, a verified retained artifact, and the private original-game A/B replay are still required.
+
+
+## Packaging failure and POSIX-shell correction — 2026-10-24
+
+The first full corrected-head build compiled PCSX-Redux, built synthetic MIPS tests/OpenBIOS, and passed the synthetic CD-ROM ISO smoke test plus native tests. Packaging then failed with `Bad substitution`: the workflow's default container shell is `/bin/sh`, but the build label used Bash-only `${PINNED_PCSX_REDUX:0:8}` syntax. The command now uses the POSIX-compatible `printf | cut -c 1-8` form. A new full build is required; no AppImage is accepted from the failed run because artifact upload was skipped.
