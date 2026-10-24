@@ -1,6 +1,6 @@
 # Candidate post-restore compatibility patch, pinned to PCSX-Redux de4a33e9a69abec4f567ae33567537f867dc2bba.
 # Apply only after stage536-zero-inactive-cdrom-queue-element.patch.
-# Validated against real Stage539 original-game traces: the legacy checkpoint restores stale, inactive responseFifo1.
+# Stage539 legacy savestates contain stale, inactive responseFifo1; normalize both in-memory restore() and file load().
 --- a/src/core/cdrom.h
 +++ b/src/core/cdrom.h
 @@ -80,3 +80,15 @@
@@ -26,5 +26,12 @@
      state.commit();
 +    // QueueElement constructors/clear() cannot erase legacy snapshot bytes.
 +    // Normalize only empty response FIFOs immediately after committing state.
++    g_emulator->m_cdrom->normalizeRestoredResponseQueues();
+     g_emulator->m_cpu->m_regs.lowestTarget = g_emulator->m_cpu->m_regs.cycle;
+@@ -469,4 +472,6 @@
+     PCSX::g_emulator->m_cpu->Reset();
+     g_emulator->m_allocTracker->reset();
+     state.commit();
++    // External on-disk savestates use load(), not the in-memory restore() path.
 +    g_emulator->m_cdrom->normalizeRestoredResponseQueues();
      g_emulator->m_cpu->m_regs.lowestTarget = g_emulator->m_cpu->m_regs.cycle;
