@@ -36,3 +36,18 @@ The synthetic regression applies the patch with zero fuzz to a small excerpt mat
 4. Audit other `QueueElement` creation and clear paths, and test CD-ROM command/response regressions before treating the candidate as upstream-ready.
 
 Original BIN/CUE, savestates, raw VRAM, emulator binaries, logs and private hashes remain in owner-only Drive. Public CI contains only synthetic source excerpts and tests.
+
+
+## Follow-up baseline v2 — full 16-byte payload probe (2026-10-24)
+
+The private unpatched baseline was expanded to eight runs: neutral/RIGHT × CD-ROM logging off/on × two repeats, with 12 checkpoints per run (96 samples total). The probe records all 16 serialized payload bytes.
+
+- Active DataReady response remained stable in 96/96 samples: cause `1`, payload byte 0 `0x22`, `payload_size=1`, `payload_index=1`.
+- Inactive byte 1 was `0x08` in all 96 samples.
+- Inactive bytes 8–9 varied at every sampled tick in each run, including both logging modes.
+- Inactive byte 10 was `0x00` in 56 samples, `0x01` in 31 and `0x02` in 9; the other inactive positions were zero in this observed baseline.
+- All eight initial VRAM buffers matched; neutral and RIGHT final VRAM hashes each matched their corresponding Stage535 baseline.
+
+This strengthens the finding that the complete serialized queue element contains non-deterministic inactive bytes. It still does not establish a gameplay defect. The candidate patch has not yet been validated in a rebuilt runtime; the Stage537 full build and patched-vs-unpatched original-game replay remain required gates.
+
+Private capture data, checkpoint files, original BIN/CUE, raw VRAM, per-sample payload values and private hashes remain outside GitHub.
