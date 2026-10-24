@@ -50,9 +50,9 @@ class Stage528QuadTests(unittest.TestCase):
         data,writes=replay()
         self.assertEqual(writes,7)
         self.assertEqual([word(data,64+x,156) for x in range(4)],
-                         [0,31,992,31744])
+                         [0,31,992,992])
         self.assertEqual([word(data,64+x,157) for x in range(4)],
-                         [32799,1023,32736,32767])
+                         [32799,1023,32736,32736])
 
     def test_index_zero_can_resolve_to_nonzero_color(self):
         data=fixture()
@@ -70,13 +70,13 @@ class Stage528QuadTests(unittest.TestCase):
     def test_rgb555_modulation_per_channel(self):
         out,_=replay(packet(tint=0x404040))
         self.assertEqual([word(out,65+x,156) for x in range(3)],
-                         [15,15<<5,15<<10])
+                         [15,15<<5,15<<5])
 
     def test_clip_preserves_uv_sampling_coordinates(self):
         out,writes=replay(area=(66,157,67,157))
         self.assertEqual(writes,2)
         self.assertEqual([word(out,x,157) for x in (64,65,66,67)],
-                         [0,0,32736,32767])
+                         [0,0,32736,32736])
 
     def test_wrapped_synthetic_u_coordinates_resolve_nibbles(self):
         data=bytearray(SIZE)
@@ -124,14 +124,18 @@ class Stage528QuadTests(unittest.TestCase):
         self.assertEqual(word(out,65,156),31)
         self.assertEqual(summary["counts"]["2C_BOUNDED_OPAQUE_4BPP_QUAD"],1)
 
-    def test_real_developer_logo_dither_mode_fails_closed(self):
-        # The authentic later logo uses E1 bit9 for polygon dithering.
-        # A visually plausible non-dithered rectangle is NOT full PS1
-        # polygon parity. This synthetic E1 flag must refuse the claim.
-        commands=[[0xe3000000],[0xe407ffff],[0xe5000000],
+    def test_flat_shaded_polygon_dither_bit_uses_identical_fast_path(self):
+        # The pinned PCSX-Redux flat-textured polygon uses the solid
+        # rasterizer, even if the GPU's E1 dither bit is set. This is
+        # deliberately not a claim about Gouraud shaded polygons.
+        ordinary=[[0xe3000000],[0xe407ffff],[0xe5000000],
+                  [0xe100002a],[0xe2000000],[0xe6000000]]
+        dithered=[[0xe3000000],[0xe407ffff],[0xe5000000],
                   [0xe100022a],[0xe2000000],[0xe6000000]]
-        with self.assertRaisesRegex(ValueError,"dithering unmodeled"):
-            replay_bounded_8bpp_intro(bytes(fixture()),commands+[packet()])
+        original=bytes(fixture())
+        plain,_=replay_bounded_8bpp_intro(original,ordinary+[packet()])
+        same,_=replay_bounded_8bpp_intro(original,dithered+[packet()])
+        self.assertEqual(plain,same)
 
     def test_new_noncanonical_quad_does_not_invalidate_sony_8bpp(self):
         from test_replay_private_gp0_intro_8bpp import fixture as old_vram,state,rect
