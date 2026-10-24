@@ -124,6 +124,15 @@ class Stage528QuadTests(unittest.TestCase):
         self.assertEqual(word(out,65,156),31)
         self.assertEqual(summary["counts"]["2C_BOUNDED_OPAQUE_4BPP_QUAD"],1)
 
+    def test_real_developer_logo_dither_mode_fails_closed(self):
+        # The authentic later logo uses E1 bit9 for polygon dithering.
+        # A visually plausible non-dithered rectangle is NOT full PS1
+        # polygon parity. This synthetic E1 flag must refuse the claim.
+        commands=[[0xe3000000],[0xe407ffff],[0xe5000000],
+                  [0xe100022a],[0xe2000000],[0xe6000000]]
+        with self.assertRaisesRegex(ValueError,"dithering unmodeled"):
+            replay_bounded_8bpp_intro(bytes(fixture()),commands+[packet()])
+
     def test_new_noncanonical_quad_does_not_invalidate_sony_8bpp(self):
         from test_replay_private_gp0_intro_8bpp import fixture as old_vram,state,rect
         pre=old_vram(first=0x801f,second=0x03e0)
