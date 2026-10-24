@@ -1,0 +1,106 @@
+name: Stage537 patched PCSX-Redux build
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/stage537-patched-pcsx-redux.yml"
+      - "patches/pcsx-redux/stage536-zero-inactive-cdrom-queue-element.patch"
+      - "tools/validate_stage536_queue_patch.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-patched-emulator:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/grumpycoders/pcsx-redux-build:noble
+      options: --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor:unconfined
+    env:
+      PINNED_PCSX_REDUX: de4a33e9a69abec4f567ae33567537f867dc2bba
+      TEST_RESULTS: /tmp/stage537-test-results
+      ARTIFACT_DIR: /tmp/stage537-artifacts
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch exact pinned PCSX-Redux source
+        run: |
+          git init "$RUNNER_TEMP/pcsx-redux"
+          git -C "$RUNNER_TEMP/pcsx-redux" remote add origin https://github.com/grumpycoders/pcsx-redux.git
+          git -C "$RUNNER_TEMP/pcsx-redux" fetch --depth 1 origin "$PINNED_PCSX_REDUX"
+          git -C "$RUNNER_TEMP/pcsx-redux" checkout --detach FETCH_HEAD
+          git config --global --add safe.directory "$RUNNER_TEMP/pcsx-redux"
+
+      - name: Verify source mapping and candidate patch before modification
+        run: python3 tools/validate_stage536_queue_patch.py "$RUNNER_TEMP/pcsx-redux"
+
+      - name: Apply candidate patch to build workspace
+        run: |
+          git -C "$RUNNER_TEMP/pcsx-redux" apply --check "$GITHUB_WORKSPACE/patches/pcsx-redux/stage536-zero-inactive-cdrom-queue-element.patch"
+          git -C "$RUNNER_TEMP/pcsx-redux" apply "$GITHUB_WORKSPACE/patches/pcsx-redux/stage536-zero-inactive-cdrom-queue-element.patch"
+          git -C "$RUNNER_TEMP/pcsx-redux" diff --check
+          git -C "$RUNNER_TEMP/pcsx-redux" diff -- src/core/cdrom.h
+
+      - name: Fetch pinned upstream submodules
+        run: |
+          cd "$RUNNER_TEMP/pcsx-redux"
+          SUBMODULE_RETRY_ATTEMPTS=4 SUBMODULE_RETRY_DELAY=10 ./.github/scripts/update-submodules.sh
+
+      - name: Build emulator, tools and native test suite
+        run: |
+          cd "$RUNNER_TEMP/pcsx-redux"
+          make -j 2 all pcsx-redux-tests tools LDFLAGS_Release="-static-libstdc++ -static-libgcc"
+
+      - name: Build synthetic MIPS tests and OpenBIOS
+        run: |
+          cd "$RUNNER_TEMP/pcsx-redux"
+          make -C src/mips/tests -j 2 PCSX_TESTS=true
+          make -C src/mips/openbios -j 2 all
+          cp src/mips/openbios/openbios.bin .
+          make -C src/mips/openbios clean
+          make -C src/mips/tests -j 2 PCSX_TESTS=true
+          cp ./openbios.bin src/mips/openbios/
+          make -C src/mips/monitor/hosts/retail -j 2
+
+      - name: Run synthetic CD-ROM ISO smoke test and native tests
+        run: |
+          cd "$RUNNER_TEMP/pcsx-redux"
+          xvfb-run catchsegv ./pcsx-redux -stdout -lua_stdout -testmode -no-gui-log -exec "dofile 'src/mips/tests/cdrom/create-test-iso.lua'"
+          mkdir -p "$TEST_RESULTS"
+          export GTEST_OUTPUT="xml:$TEST_RESULTS/"
+          xvfb-run catchsegv ./pcsx-redux-tests
+
+      - name: Package patched AppImage without update channel
+        run: |
+          cd "$RUNNER_TEMP/pcsx-redux"
+          make install install-openbios DESTDIR=AppDir/usr
+          mkdir -p AppDir/usr/share/pcsx-redux/resources
+          short_sha=$(git rev-parse --short "$GITHUB_SHA")
+          cat > AppDir/usr/share/pcsx-redux/resources/version.json <<EOF
+          {
+            "version": "stage537-$short_sha",
+            "buildId": 0,
+            "changeset": "$PINNED_PCSX_REDUX",
+            "timestamp": $(date +%s),
+            "channel": "stage537",
+            "updateInfo": []
+          }
+          EOF
+          linuxdeploy -v 3 --appdir=AppDir -e AppDir/usr/bin/pcsx-redux -d AppDir/usr/share/applications/pcsx-redux.desktop -i AppDir/usr/share/icons/hicolor/256x256/apps/pcsx-redux.png -o appimage
+          mv PCSX-Redux-x86_64.AppImage PCSX-Redux-Stage537-x86_64.AppImage
+          chmod +x PCSX-Redux-Stage537-x86_64.AppImage
+          mkdir -p "$ARTIFACT_DIR"
+          cp PCSX-Redux-Stage537-x86_64.AppImage "$ARTIFACT_DIR/"
+          patch_sha=$(sha256sum "$GITHUB_WORKSPACE/patches/pcsx-redux/stage536-zero-inactive-cdrom-queue-element.patch" | cut -d' ' -f1)
+          app_sha=$(sha256sum PCSX-Redux-Stage537-x86_64.AppImage | cut -d' ' -f1)
+          printf '{\n  "stage": 537,\n  "upstream_commit": "%s",\n  "candidate_patch_sha256": "%s",\n  "appimage_sha256": "%s",\n  "build_image": "ghcr.io/grumpycoders/pcsx-redux-build:noble",\n  "original_game_data_in_build": false,\n  "runtime_gameplay_tested": false\n}\n' "$PINNED_PCSX_REDUX" "$patch_sha" "$app_sha" > "$ARTIFACT_DIR/stage537-build-manifest.json"
+          cp "$TEST_RESULTS"/* "$ARTIFACT_DIR/" 2>/dev/null || true
+
+      - name: Upload patched emulator and build manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage537-patched-pcsx-redux-linux-x86_64
+          path: /tmp/stage537-artifacts/*
+          if-no-files-found: error
+          retention-days: 7
