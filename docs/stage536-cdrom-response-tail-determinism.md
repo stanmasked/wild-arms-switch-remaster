@@ -51,3 +51,16 @@ The private unpatched baseline was expanded to eight runs: neutral/RIGHT × CD-R
 This strengthens the finding that the complete serialized queue element contains non-deterministic inactive bytes. It still does not establish a gameplay defect. The candidate patch has not yet been validated in a rebuilt runtime; the Stage537 full build and patched-vs-unpatched original-game replay remain required gates.
 
 Private capture data, checkpoint files, original BIN/CUE, raw VRAM, per-sample payload values and private hashes remain outside GitHub.
+
+
+## Correction: verified logging baseline v3 supersedes the v2 logging matrix (2026-10-24)
+
+An audit found that the earlier v2 runner passed `-testmode`. In the pinned PCSX-Redux source this enables safe mode and prevents `pcsx.json` from loading, so the v2 `LoggingCDROM=true` labels did not prove that logging was active. Do not use v2 for logging-on/off conclusions.
+
+The corrected private v3 runner removes `-testmode` and rejects each run unless the actual log output confirms the configured mode. All eight runs completed (96 checkpoints):
+- Four logging-off runs each produced zero `CD-Rom:` debug lines; bytes 8–9 varied at all 12 checkpoints in each run.
+- Four logging-on runs each produced 992 `CD-Rom:` debug lines; bytes 8–9 were `2e00` at all 12 checkpoints in each run.
+- The active one-byte DataReady response remained cause `1`, payload byte 0 `0x22`, size 1, index 1 in all 96 samples.
+- Initial VRAM was identical across runs; neutral and RIGHT final VRAM matched their Stage535 baselines.
+
+The v3 archive, external manifest and aggregate JSON are retained in the owner-only Google Drive evidence archive. Original BIN/CUE, savestates, raw VRAM, detailed logs and private hashes remain outside GitHub. This still remains an unpatched baseline and does not prove a gameplay defect or validate the Stage536 patch.
