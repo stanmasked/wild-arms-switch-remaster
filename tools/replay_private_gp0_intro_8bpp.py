@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage524: narrow ROM-free PS1 GP0(66) 8bpp + CLUT RGB555 replay.
+"""Stage527: bounded PS1 GP0(64) 4bpp and GP0(66) 8bpp RGB555 replay.
 
 This deliberately models only the bounded GPU state and primitive subset
 verified against an owner-private INTRO native GPU dump. Do NOT use it as a
@@ -35,7 +35,7 @@ def _overlap(a, b):
 
 
 def replay_bounded_8bpp_intro(initial_vram, packets):
-    """Replay bounded GP0(02)/GP0(66) commands and E1-E6 GPU registers.
+    """Replay bounded GP0(02)/GP0(64)/(66) and E1-E6 GPU registers.
 
     Returns (full_1MiB_vram, redacted_counts). Input must be the pretrace
     1024x512 u16 little-endian VRAM and a list of complete GP0 packets.
@@ -102,17 +102,22 @@ def replay_bounded_8bpp_intro(initial_vram, packets):
                 pixels_written += width * height
             counts["02_BOUNDED_FILL"] += 1
             continue
-        if opcode != 0x66:
+        if opcode not in (0x66, 0x64):
             raise ValueError("Stage524 GPU primitive or GP0 operation unsupported")
         if len(packet) != 4:
             raise ValueError("Stage524 textured rectangle must have four words")
         if None in (e1, e2, e3, e4, e5, e6):
             raise ValueError("Stage524 rectangle without complete explicit GPU state")
+        depth = (e1 >> 7) & 3
+        required_depth = 0 if opcode == 0x64 else 1
         if (e2 != 0 or e5 != 0 or e6 != 0 or
-                ((e1 >> 7) & 3) != 1 or
+                depth != required_depth or
                 ((e1 >> 5) & 3) != 1 or
                 (e1 & (3 << 12)) != 0):
-            raise ValueError("Stage524 requires 8bpp/ABR1/no-flip/mask-off/no-window/offset")
+            mode = "4bpp" if opcode == 0x64 else "8bpp"
+            raise ValueError(
+                "Stage524 requires " + mode +
+                "/ABR1/no-flip/mask-off/no-window/offset")
         if e3[0] > e4[0] or e3[1] > e4[1]:
             raise ValueError("Stage524 inverted GPU drawing area")
         rgb, vertex_word, uv_word, dimensions = packet
@@ -125,7 +130,7 @@ def replay_bounded_8bpp_intro(initial_vram, packets):
                 y + height > HEIGHT):
             raise ValueError("Stage524 sprite wraps outside VRAM")
         if not width or not height:
-            counts["66_EMPTY_RECT"] += 1
+            counts["64_EMPTY_RECT" if opcode == 0x64 else "66_EMPTY_RECT"] += 1
             continue
         texture_x = (e1 & 0xf) * 64
         texture_y = ((e1 >> 4) & 1) * 256
@@ -134,12 +139,15 @@ def replay_bounded_8bpp_intro(initial_vram, packets):
         if clut & 0x8000:
             raise ValueError("Stage524 reserved CLUT bit15")
         clut_x, clut_y = (clut & 0x3f) * 16, (clut >> 6) & 0x1ff
-        if (texture_x + 128 > WIDTH or texture_y + 256 > HEIGHT or
-                clut_x + 256 > WIDTH or clut_y >= HEIGHT):
-            raise ValueError("Stage524 texture or 256-entry CLUT outside VRAM")
+        texture_words = 64 if opcode == 0x64 else 128
+        clut_words = 16 if opcode == 0x64 else 256
+        if (texture_x + texture_words > WIDTH or
+                texture_y + 256 > HEIGHT or
+                clut_x + clut_words > WIDTH or clut_y >= HEIGHT):
+            raise ValueError("Stage524 indexed texture or CLUT outside VRAM")
         destination = (x, y, width, height)
-        if (_overlap(destination, (texture_x, texture_y, 128, 256)) or
-                _overlap(destination, (clut_x, clut_y, 256, 1))):
+        if (_overlap(destination, (texture_x, texture_y, texture_words, 256)) or
+                _overlap(destination, (clut_x, clut_y, clut_words, 1))):
             raise ValueError("Stage524 self-modifying texture/CLUT cache not modeled")
         for dy in range(height):
             yy = y + dy
@@ -152,9 +160,17 @@ def replay_bounded_8bpp_intro(initial_vram, packets):
                 if not e3[0] <= xx <= e4[0]:
                     continue
                 tu = (uv_x + dx) & 0xff
-                texture_word = struct.unpack_from(
-                    "<H", vram, (texture_row + tu // 2) * 2)[0]
-                index = (texture_word >> (8 * (tu & 1))) & 0xff
+                if opcode == 0x64:
+                    # PS1 four-bit indexed texture: four palette indices
+                    # packed in each 16-bit little-endian texture word.
+                    texture_word = struct.unpack_from(
+                        "<H", vram, (texture_row + tu // 4) * 2)[0]
+                    index = (texture_word >> (4 * (tu & 3))) & 0xf
+                else:
+                    # Stage524 eight-bit indexed texture, two indices/u16.
+                    texture_word = struct.unpack_from(
+                        "<H", vram, (texture_row + tu // 2) * 2)[0]
+                    index = (texture_word >> (8 * (tu & 1))) & 0xff
                 texel = struct.unpack_from(
                     "<H", vram, (clut_y * WIDTH + clut_x + index) * 2)[0]
                 # PS1 index zero is not necessarily transparent: only the
@@ -168,7 +184,9 @@ def replay_bounded_8bpp_intro(initial_vram, packets):
                 ]
                 offset = (yy * WIDTH + xx) * 2
                 background = struct.unpack_from("<H", vram, offset)[0]
-                if texel & 0x8000:
+                if opcode == 0x66 and (texel & 0x8000):
+                    # Only GP0(66) has ABE=1; GP0(64) is opaque even
+                    # when CLUT texel STP bit15 is set.
                     # ABE=1, Texel.STP=1 and ABR=1 => B+F, saturated
                     # independently on each of the 5-bit RGB channels.
                     color = [
@@ -179,10 +197,11 @@ def replay_bounded_8bpp_intro(initial_vram, packets):
                           (color[2] << 10) | (texel & 0x8000))
                 struct.pack_into("<H", vram, offset, output)
                 pixels_written += 1
-        counts["66_TEXTURED_SEMITRANSPARENT_RECT"] += 1
+        counts["64_TEXTURED_OPAQUE_4BPP_RECT" if opcode == 0x64 else
+               "66_TEXTURED_SEMITRANSPARENT_RECT"] += 1
     return bytes(vram), {
         "schema": 1,
-        "kind": "WA1_SYNTHETIC_BOUNDED_GPU_8BPP_RECTANGLE_REPLAY",
+        "kind": "WA1_SYNTHETIC_BOUNDED_GPU_INDEXED_RECTANGLE_REPLAY",
         "complete_packet_count": len(packets),
         "counts": dict(sorted(counts.items())),
         "bounded_pixel_write_count_not_unique_pixels": pixels_written,
@@ -190,5 +209,5 @@ def replay_bounded_8bpp_intro(initial_vram, packets):
         "native_capture_and_scene_identity_not_authenticated_here": True,
         "drawing_to_display_interlace_semantics_not_verified": True,
         "gpu_texture_cache_coherency_not_modeled": True,
-        "only_e1_8bpp_ABR1_and_e2_e5_e6_zero_supported_for_rectangles": True,
+        "only_e1_4bpp_GP0_64_or_8bpp_GP0_66_ABR1_e2_e5_e6_zero": True,
     }
