@@ -179,20 +179,19 @@ class Stage524IndexedIntroTests(unittest.TestCase):
             counters["counts"]["66_TEXTURED_SEMITRANSPARENT_RECT"],1)
 
     def test_next_scene_polygon_and_wrong_depth_sprite_fail_closed(self):
-        # GP0(64) now accepts only its proven 4bpp E1 state. GP0(2C)
-        # remains unsupported even with an explicit E1 command.
+        # GP0(2C) is admitted only with verified canonical geometry.
+        # Empty/ambiguous polygon coordinates are never fabricated.
         polygon=[0x2c000000]+[0]*8
-        with self.assertRaisesRegex(ValueError,"unsupported GP0 packet size"):
+        with self.assertRaisesRegex(ValueError,"rectangle beyond supported"):
             replay_bounded_8bpp_intro(fixture(),state()+[polygon])
         four_bit_sprite=[0x64000000,0,0,0x00010001]
         with self.assertRaisesRegex(ValueError,"requires 4bpp"):
             replay_bounded_8bpp_intro(fixture(),state()+[four_bit_sprite])
 
     def test_known_intro_command_followed_by_developer_polygon_fails(self):
-        # Partially supported frame must be rejected rather than claiming
-        # parity while unmodeled GP0(2C) draws are still present.
+        # Partially supported frame must reject the noncanonical 2C command.
         next_scene=[0x2c000000]+[0]*8
-        with self.assertRaisesRegex(ValueError,"unsupported GP0 packet size"):
+        with self.assertRaisesRegex(ValueError,"rectangle beyond supported"):
             replay_bounded_8bpp_intro(
                 fixture(),state()+[rect(),next_scene])
 
