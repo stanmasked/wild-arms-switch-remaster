@@ -3,7 +3,7 @@
 --- a/src/core/cdrom.h
 +++ b/src/core/cdrom.h
 @@ -180,4 +180,5 @@
- struct QueueElement {
+     struct QueueElement {
 -        uint8_t payload[16];
 -        uint8_t value;
 +        // The complete payload is serialized in savestates, including inactive bytes.
