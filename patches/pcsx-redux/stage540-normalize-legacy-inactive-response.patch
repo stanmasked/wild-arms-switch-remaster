@@ -1,0 +1,30 @@
+# Candidate post-restore compatibility patch, pinned to PCSX-Redux de4a33e9a69abec4f567ae33567537f867dc2bba.
+# Apply only after stage536-zero-inactive-cdrom-queue-element.patch.
+# Validated against real Stage539 original-game traces: the legacy checkpoint restores stale, inactive responseFifo1.
+--- a/src/core/cdrom.h
++++ b/src/core/cdrom.h
+@@ -80,3 +80,15 @@
+     virtual void reset() = 0;
+ 
++    // Backward compatibility for snapshots from unpatched builds: an inactive
++    // response FIFO may have a stale serialized payload/value. Only scrub a
++    // FIFO that is demonstrably empty, leaving active queued responses intact.
++    void normalizeRestoredResponseQueues() {
++        for (auto& fifo : m_responseFifo) {
++            if (!fifo.hasValue && !fifo.valueRead && !fifo.hitMax && fifo.payloadSize == 0 &&
++                fifo.payloadIndex == 0) {
++                fifo.clear();
++            }
++        }
++    }
++
+     virtual void fifoScheduledCallback() = 0;
+--- a/src/core/sstate.cc
++++ b/src/core/sstate.cc
+@@ -303,3 +303,6 @@
+     g_emulator->m_cpu->invalidateCache();
+     state.commit();
++    // QueueElement constructors/clear() cannot erase legacy snapshot bytes.
++    // Normalize only empty response FIFOs immediately after committing state.
++    g_emulator->m_cdrom->normalizeRestoredResponseQueues();
+     g_emulator->m_cpu->m_regs.lowestTarget = g_emulator->m_cpu->m_regs.cycle;
