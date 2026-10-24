@@ -139,6 +139,45 @@ class Stage524IndexedIntroTests(unittest.TestCase):
         self.assertEqual(stats["counts"]["00_NOP"],2)
         self.assertEqual(stats["counts"]["66_EMPTY_RECT"],1)
 
+    def test_complete_synthetic_native_gpu_frame_import_and_rgb_replay(self):
+        # Exercise the real upstream native-import/GP0-packetizer interface,
+        # not just the rectangle function in isolation. All data synthetic.
+        from test_import_private_pcsx_native_gpudump import (
+            MAGIC, native_record, GPU_VERSION, GP0, GP1, TRACE_BEGIN,
+            VSYNC, read_native_gpu_dump, select_first_native_gp0_frame,
+        )
+        from package_private_raw_gp0_wordstream import packetize_owner_raw_words
+        pre=fixture(first=0x801f,second=0x03e0,background=0x7fff)
+        full_words=[0xa0000000,0,0x02000400]
+        full_words.extend(struct.unpack("<%dI"%(VRAM_BYTES//4),pre))
+        restore=[0xe10000aa,0xe2000000,0xe3000000,
+                 0xe407ffff,0xe5000000,0xe6000000]
+        clear=[0x02000000,0,0x00100010]
+        synthetic=MAGIC+b"".join([
+            native_record(GPU_VERSION,[2]),
+            native_record(GP1,[0]),
+            native_record(GP0,full_words),
+            native_record(GP0,restore),
+            native_record(GP1,[0x03000000,0x08000000]),
+            native_record(TRACE_BEGIN),
+            native_record(GP1,[0x03000000]),
+            native_record(GP0,clear+rect()),
+            native_record(VSYNC,[1234,0]),
+        ])
+        parsed=select_first_native_gp0_frame(
+            read_native_gpu_dump(synthetic))
+        self.assertEqual(parsed["initial_vram"],pre)
+        self.assertEqual(parsed["idempotent_live_gp1_control_word_count"],1)
+        gp0_packets,_=packetize_owner_raw_words(parsed["modeled_gp0_raw"])
+        output,counters=replay_bounded_8bpp_intro(pre,gp0_packets)
+        self.assertEqual(pixel(output),0x8006)
+        self.assertEqual(pixel(output,5,8),0x00c0)
+        self.assertEqual(pixel(output,4,9),0)
+        self.assertEqual(len(output),VRAM_BYTES)
+        self.assertEqual(counters["counts"]["02_BOUNDED_FILL"],1)
+        self.assertEqual(
+            counters["counts"]["66_TEXTURED_SEMITRANSPARENT_RECT"],1)
+
     def test_input_types_and_vram_size_fail_closed(self):
         for bad in (bytes(1),bytearray(VRAM_BYTES),None):
             with self.subTest(type=type(bad)),self.assertRaises(ValueError):
