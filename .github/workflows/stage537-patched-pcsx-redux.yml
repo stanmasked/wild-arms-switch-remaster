@@ -83,7 +83,7 @@ jobs:
           make install install-openbios DESTDIR=AppDir/usr
           mkdir -p AppDir/usr/share/pcsx-redux/resources
           sed -i s:/usr/bin/:: AppDir/usr/share/applications/pcsx-redux.desktop
-          short_sha=${PINNED_PCSX_REDUX:0:8}
+          short_sha=$(printf '%s' "$PINNED_PCSX_REDUX" | cut -c 1-8)
           cat > AppDir/usr/share/pcsx-redux/resources/version.json <<EOF
           {
             "version": "stage537-$short_sha",
