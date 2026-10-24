@@ -178,6 +178,27 @@ class Stage524IndexedIntroTests(unittest.TestCase):
         self.assertEqual(
             counters["counts"]["66_TEXTURED_SEMITRANSPARENT_RECT"],1)
 
+    def test_next_real_scene_opcode_classes_explicitly_fail_closed(self):
+        # Stage525 original-developer-logo capture has GP0(2C) and GP0(64).
+        # Synthetic standalone packets only; their rasterization remains
+        # unmodeled. Even a fully specified GPU state must not bypass refusal.
+        polygon=[0x2c000000]+[0]*8
+        rectangle=[0x64000000,0,0,0x00010001]
+        for candidate in (polygon,rectangle):
+            with self.subTest(opcode=candidate[0]>>24):
+                with self.assertRaisesRegex(ValueError,
+                        "unsupported GP0 packet size|GPU primitive"):
+                    replay_bounded_8bpp_intro(
+                        fixture(),state()+[candidate])
+
+    def test_known_intro_command_followed_by_developer_opcode_fails(self):
+        # It is not enough to handle the 8bpp splash commands: any
+        # subsequent unmodeled draw prevents a complete-frame verdict.
+        next_scene=[0x64000000,0,0,0x00010001]
+        with self.assertRaisesRegex(ValueError,"GPU primitive"):
+            replay_bounded_8bpp_intro(
+                fixture(),state()+[rect(),next_scene])
+
     def test_input_types_and_vram_size_fail_closed(self):
         for bad in (bytes(1),bytearray(VRAM_BYTES),None):
             with self.subTest(type=type(bad)),self.assertRaises(ValueError):
