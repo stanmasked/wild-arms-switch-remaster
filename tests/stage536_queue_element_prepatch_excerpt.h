@@ -1,6 +1,6 @@
 // Extracted QueueElement excerpt from PCSX-Redux cdrom.h at commit
 // de4a33e9a69abec4f567ae33567537f867dc2bba; GPL-2.0-or-later.
-struct QueueElement {
+    struct QueueElement {
         uint8_t payload[16];
         uint8_t value;
         bool valueRead = false;
