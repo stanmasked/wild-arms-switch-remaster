@@ -16,8 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Run synthetic overlay tests (no game image required)
-        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
       - name: Fetch exact pinned PCSX-Redux source
         run: |
           git init "$RUNNER_TEMP/pcsx-redux"
@@ -27,6 +25,8 @@ jobs:
           git config --global --add safe.directory "$RUNNER_TEMP/pcsx-redux"
       - name: Validate Stage536 CD-ROM queue patch against exact pinned upstream header
         run: python3 tools/validate_stage536_queue_patch.py "$RUNNER_TEMP/pcsx-redux"
+      - name: Run synthetic overlay tests (no game image required)
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
       - name: Fetch pinned MIPS guest-test submodule
         working-directory: ${{ runner.temp }}/pcsx-redux
         run: git -C "$RUNNER_TEMP/pcsx-redux" submodule update --init src/mips
