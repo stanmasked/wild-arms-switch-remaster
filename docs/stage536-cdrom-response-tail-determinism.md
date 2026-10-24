@@ -1,0 +1,66 @@
+# Stage536 — PCSX-Redux CD-ROM queue inactive-tail determinism candidate
+
+## Evidence motivating the candidate
+
+The owner-private Stage535 trace sampled `responseFifo0` at 12 VSync checkpoints in three runs. The DataReady response had cause value `1`, payload byte zero `0x22`, `payload_size=1`, and `payload_index=1`. In ordinary neutral and RIGHT runs, the inactive two-byte region at zero-based offsets 8–9 varied at every sample. With CD-ROM debug logging enabled, those same tail bytes were constant (`2e00`) at every sample. The final neutral raw VRAM was byte-identical with and without logging and matched the Stage532 neutral control; RIGHT matched the prior RIGHT VRAM capture.
+
+Pinned PCSX-Redux source at commit `de4a33e9a69abec4f567ae33567537f867dc2bba` shows:
+
+- `src/core/cdrom.h`, `QueueElement`: `payload[16]` and `value` have no member initializer; `clear()` resets flags and size/index but not the payload, value, or `hitMax`.
+- `src/core/cdrom.cc`, `readInterrupt`: constructs a local `QueueElement ready`, sets its cause, and appends only the one-byte status value.
+- The queue copies the full object; `src/core/sstate.cc` serializes the entire 16-byte payload even when `payload_size=1`.
+
+This makes the inactive-tail bytes consistent with uninitialized/stale host memory being preserved in the savestate. The exact prior host stack contents have not been identified. The trace does **not** show a rendered-output change or prove a gameplay defect.
+
+## Candidate upstream patch
+
+`patches/pcsx-redux/stage536-zero-inactive-cdrom-queue-element.patch` proposes:
+
+1. value-initialize the payload array and value member when a `QueueElement` is created;
+2. zero the payload and value on `clear()`;
+3. reset `hitMax` on `clear()` so the queue's logical empty/reset state is complete.
+
+The inactive tail is not read as response data when `payload_index >= payload_size`. Clearing it should therefore preserve the active one-byte DataReady response while removing indeterminate/stale bytes from the serialized object. Resetting `hitMax` also matches the method's `clear()` contract and prevents an old consumed-payload flag from leaking into a reused queue element.
+
+This is a **patch candidate only**. It has not been applied to or built into the upstream PCSX-Redux checkout, and the original-disc A/B experiment has not yet been repeated against a patched emulator.
+
+## Regression coverage
+
+The synthetic regression applies the patch with zero fuzz to a small excerpt matching the pinned upstream `QueueElement`, compiles a C++17 harness, and checks default initialization, one-byte DataReady behavior, full-tail clearing, `hitMax` reset and safe queue reuse. It contains no game assets and is not a substitute for an upstream integration build.
+
+## Required next acceptance gates
+
+1. Apply the patch in a separate private PCSX-Redux worktree at the exact pinned commit and build it with the same toolchain/configuration.
+2. Repeat the Stage535 neutral and RIGHT captures, with CD-ROM logging both disabled and enabled.
+3. Verify that the active response fields and raw VRAM remain unchanged relative to the corresponding unpatched runs, while inactive payload tail bytes are zero after construction/clear and savestate outputs no longer differ solely because of this tail.
+4. Audit other `QueueElement` creation and clear paths, and test CD-ROM command/response regressions before treating the candidate as upstream-ready.
+
+Original BIN/CUE, savestates, raw VRAM, emulator binaries, logs and private hashes remain in owner-only Drive. Public CI contains only synthetic source excerpts and tests.
+
+
+## Follow-up baseline v2 — full 16-byte payload probe (2026-10-24)
+
+The private unpatched baseline was expanded to eight runs: neutral/RIGHT × CD-ROM logging off/on × two repeats, with 12 checkpoints per run (96 samples total). The probe records all 16 serialized payload bytes.
+
+- Active DataReady response remained stable in 96/96 samples: cause `1`, payload byte 0 `0x22`, `payload_size=1`, `payload_index=1`.
+- Inactive byte 1 was `0x08` in all 96 samples.
+- Inactive bytes 8–9 varied at every sampled tick in each run, including both logging modes.
+- Inactive byte 10 was `0x00` in 56 samples, `0x01` in 31 and `0x02` in 9; the other inactive positions were zero in this observed baseline.
+- All eight initial VRAM buffers matched; neutral and RIGHT final VRAM hashes each matched their corresponding Stage535 baseline.
+
+This strengthens the finding that the complete serialized queue element contains non-deterministic inactive bytes. It still does not establish a gameplay defect. The candidate patch has not yet been validated in a rebuilt runtime; the Stage537 full build and patched-vs-unpatched original-game replay remain required gates.
+
+Private capture data, checkpoint files, original BIN/CUE, raw VRAM, per-sample payload values and private hashes remain outside GitHub.
+
+
+## Correction: verified logging baseline v3 supersedes the v2 logging matrix (2026-10-24)
+
+An audit found that the earlier v2 runner passed `-testmode`. In the pinned PCSX-Redux source this enables safe mode and prevents `pcsx.json` from loading, so the v2 `LoggingCDROM=true` labels did not prove that logging was active. Do not use v2 for logging-on/off conclusions.
+
+The corrected private v3 runner removes `-testmode` and rejects each run unless the actual log output confirms the configured mode. All eight runs completed (96 checkpoints):
+- Four logging-off runs each produced zero `CD-Rom:` debug lines; bytes 8–9 varied at all 12 checkpoints in each run.
+- Four logging-on runs each produced 992 `CD-Rom:` debug lines; bytes 8–9 were `2e00` at all 12 checkpoints in each run.
+- The active one-byte DataReady response remained cause `1`, payload byte 0 `0x22`, size 1, index 1 in all 96 samples.
+- Initial VRAM was identical across runs; neutral and RIGHT final VRAM matched their Stage535 baselines.
+
+The v3 archive, external manifest and aggregate JSON are retained in the owner-only Google Drive evidence archive. Original BIN/CUE, savestates, raw VRAM, detailed logs and private hashes remain outside GitHub. This still remains an unpatched baseline and does not prove a gameplay defect or validate the Stage536 patch.

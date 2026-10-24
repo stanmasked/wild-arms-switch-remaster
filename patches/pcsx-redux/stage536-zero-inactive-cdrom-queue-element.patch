@@ -1,0 +1,21 @@
+# Candidate patch for PCSX-Redux commit de4a33e9a69abec4f567ae33567537f867dc2bba
+# Expected original src/core/cdrom.h blob: e82969125b2d330420a6d2793e53ddd403fbe43
+--- a/src/core/cdrom.h
++++ b/src/core/cdrom.h
+@@ -180,4 +180,5 @@
+     struct QueueElement {
+-        uint8_t payload[16];
+-        uint8_t value;
++        // The complete payload is serialized in savestates, including inactive bytes.
++        uint8_t payload[16] = {};
++        uint8_t value = 0;
+         bool valueRead = false;
+@@ -193,4 +194,8 @@
+         void clear() {
++            // Keep the entire serialized queue element deterministic, not only its active prefix.
++            for (auto &byte : payload) byte = 0;
++            value = 0;
+             hasValue = false;
+             valueRead = false;
++            hitMax = false;
+             payloadSize = 0;
