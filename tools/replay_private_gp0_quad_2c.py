@@ -80,17 +80,25 @@ def replay_bounded_4bpp_quad(vram, packet, *, draw_area, texture_window=0,
         _overlap(target, (clut_x, clut_y, 16, 1))):
         raise ValueError("GP0(2C) texture/CLUT framebuffer feedback unmodeled")
     color = packet[0]
+    # A textured polygon interpolates UV across its pixel spans.
+    # Vertex UV endpoints are width-1 / height-1 texels apart, but
+    # the polygon covers width/height *pixel cells*. 16.16 gradients
+    # with +0x8000 pixel-center rounding model the pinned PCSX-Redux
+    # flat-shaded textured triangle rasterizer in this bounded case.
+    # A 256-wide quad's last pixel maps to U=254, not U=255.
+    du16 = ((width - 1) << 16) // width
+    dv16 = ((height - 1) << 16) // height
     writes = 0
     for dy in range(height):
         yy = y + dy
         if not y_min <= yy <= y_max:
             continue
-        ty = texture_y + ((v + dy) & 255)
+        ty = texture_y + ((v + ((dy * dv16 + 0x8000) >> 16)) & 255)
         for dx in range(width):
             xx = x + dx
             if not x_min <= xx <= x_max:
                 continue
-            tu = (u + dx) & 255
+            tu = (u + ((dx * du16 + 0x8000) >> 16)) & 255
             texword = struct.unpack_from("<H", vram, 2 * (ty * WIDTH + texture_x + tu // 4))[0]
             index = (texword >> (4 * (tu & 3))) & 15
             pixel = struct.unpack_from("<H", vram, 2 * (clut_y * WIDTH + clut_x + index))[0]
