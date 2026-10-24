@@ -39,7 +39,7 @@ def validate(repository):
         source_path = repository / path
         if not source_path.is_file() or source_path.is_symlink():
             raise ValueError("pinned source file is missing or is a symlink: " + path)
-        actual_blob = run(["git", "-C", str(repository), "hash-object", path])
+        actual_blob = run(["git", "-C", str(repository), "rev-parse", "HEAD:" + path])
         if actual_blob != expected_blob:
             raise ValueError("pinned source blob changed: " + path)
         status = subprocess.run(
@@ -70,7 +70,7 @@ def validate(repository):
         root = Path(temporary)
         target = root / HEADER
         target.parent.mkdir(parents=True)
-        shutil.copyfile(repository / HEADER, target)
+        target.write_bytes(header_text.encode("utf-8"))
         run(["git", "apply", "--check", "--unsafe-paths", str(PATCH)], cwd=root)
         run(["git", "apply", "--unsafe-paths", str(PATCH)], cwd=root)
         patched = target.read_text(encoding="utf-8")
