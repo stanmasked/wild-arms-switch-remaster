@@ -90,7 +90,7 @@ class Stage524IndexedIntroTests(unittest.TestCase):
     def test_color_tint_is_5bit_palette_times_8bit_command_over_128(self):
         pre=fixture(first=0xffff,second=0xffff)
         out,_=replay_bounded_8bpp_intro(
-            pre,state()+[rect(tint=0x004080c0)])
+            pre,state()+[rect(tint=0x000080c0)])
         # B=0 =>0; G=128 =>31; R=192 => saturated31.
         self.assertEqual(pixel(out),0x8000 | 31 | (31 << 5))
 
@@ -125,7 +125,7 @@ class Stage524IndexedIntroTests(unittest.TestCase):
             rect(x=1023,width=16),
             rect(x=700,width=8),
             rect(clut_y=480)[:2]+[0xf8000000,0x00010001],
-            rect(x=4,y=8,width=1024),
+            rect(x=4,y=8,width=1023),
         ]
         for packet in invalid:
             with self.subTest(packet=packet),self.assertRaises(ValueError):
