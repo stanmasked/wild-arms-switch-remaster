@@ -6,6 +6,7 @@ on:
       - ".github/workflows/stage537-patched-pcsx-redux.yml"
       - "patches/pcsx-redux/stage536-zero-inactive-cdrom-queue-element.patch"
       - "tools/validate_stage536_queue_patch.py"
+      - "docs/stage537-patched-pcsx-redux-build.md"
   workflow_dispatch:
 
 permissions:
