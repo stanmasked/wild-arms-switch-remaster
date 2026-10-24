@@ -14,6 +14,7 @@ from collections import Counter
 import struct
 
 from decode_private_gp0_fill import decode_bounded_gp0_fill
+from replay_private_gp0_quad_2c import replay_bounded_4bpp_quad
 
 WIDTH = 1024
 HEIGHT = 512
@@ -50,7 +51,7 @@ def replay_bounded_8bpp_intro(initial_vram, packets):
     counts = Counter()
     pixels_written = 0
     for packet in packets:
-        if (type(packet) is not list or not 1 <= len(packet) <= 4 or
+        if (type(packet) is not list or not 1 <= len(packet) <= 9 or
                 any(type(w) is not int or not 0 <= w <= 0xffffffff
                     for w in packet)):
             raise ValueError("Stage524 unsupported GP0 packet size or words")
@@ -101,6 +102,15 @@ def replay_bounded_8bpp_intro(initial_vram, packets):
                     vram[pos:pos + 2 * width] = row
                 pixels_written += width * height
             counts["02_BOUNDED_FILL"] += 1
+            continue
+        if opcode == 0x2c:
+            if None in (e1, e2, e3, e4, e5, e6):
+                raise ValueError("Stage528 GP0(2C) missing explicit GPU state")
+            pixels_written += replay_bounded_4bpp_quad(
+                vram, packet,
+                draw_area=(e3[0], e3[1], e4[0], e4[1]),
+                texture_window=e2, offset=e5, mask=e6)
+            counts["2C_BOUNDED_OPAQUE_4BPP_QUAD"] += 1
             continue
         if opcode not in (0x66, 0x64):
             raise ValueError("Stage524 GPU primitive or GP0 operation unsupported")
@@ -210,4 +220,5 @@ def replay_bounded_8bpp_intro(initial_vram, packets):
         "drawing_to_display_interlace_semantics_not_verified": True,
         "gpu_texture_cache_coherency_not_modeled": True,
         "only_e1_4bpp_GP0_64_or_8bpp_GP0_66_ABR1_e2_e5_e6_zero": True,
+        "2C_only_canonical_axis_aligned_one_to_one_4bpp_rectangles": True,
     }
