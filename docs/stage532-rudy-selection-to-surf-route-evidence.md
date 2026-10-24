@@ -36,7 +36,7 @@ The public tool tools/seal_private_rudy_route_stage532.py verifies the canonical
 
 - **Observed movement:** PASS in the owner-private PCSX-Redux run.
 - **Frame-to-VRAM byte binding:** enforced by the private seal tool and synthetic tests.
-- **Independent Drive archive readback:** must pass before this evidence bundle is considered durably archived.
+- **Independent Drive archive readback:** PASS — downloaded again from owner-only Drive; ZIP CRC, byte-for-byte ZIP SHA-256 and every bundle-manifest member hash verified. The private transfer receipt is stored alongside the manifests.
 - **Internal field-map index:** OPEN.
 - **Full Surf Village graphics parity in the remake:** OPEN.
 - **Nintendo Switch runtime / hardware parity:** OPEN.
