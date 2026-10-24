@@ -178,24 +178,21 @@ class Stage524IndexedIntroTests(unittest.TestCase):
         self.assertEqual(
             counters["counts"]["66_TEXTURED_SEMITRANSPARENT_RECT"],1)
 
-    def test_next_real_scene_opcode_classes_explicitly_fail_closed(self):
-        # Stage525 original-developer-logo capture has GP0(2C) and GP0(64).
-        # Synthetic standalone packets only; their rasterization remains
-        # unmodeled. Even a fully specified GPU state must not bypass refusal.
+    def test_next_scene_polygon_and_wrong_depth_sprite_fail_closed(self):
+        # GP0(64) now accepts only its proven 4bpp E1 state. GP0(2C)
+        # remains unsupported even with an explicit E1 command.
         polygon=[0x2c000000]+[0]*8
-        rectangle=[0x64000000,0,0,0x00010001]
-        for candidate in (polygon,rectangle):
-            with self.subTest(opcode=candidate[0]>>24):
-                with self.assertRaisesRegex(ValueError,
-                        "unsupported GP0 packet size|GPU primitive"):
-                    replay_bounded_8bpp_intro(
-                        fixture(),state()+[candidate])
+        with self.assertRaisesRegex(ValueError,"unsupported GP0 packet size"):
+            replay_bounded_8bpp_intro(fixture(),state()+[polygon])
+        four_bit_sprite=[0x64000000,0,0,0x00010001]
+        with self.assertRaisesRegex(ValueError,"requires 4bpp"):
+            replay_bounded_8bpp_intro(fixture(),state()+[four_bit_sprite])
 
-    def test_known_intro_command_followed_by_developer_opcode_fails(self):
-        # It is not enough to handle the 8bpp splash commands: any
-        # subsequent unmodeled draw prevents a complete-frame verdict.
-        next_scene=[0x64000000,0,0,0x00010001]
-        with self.assertRaisesRegex(ValueError,"GPU primitive"):
+    def test_known_intro_command_followed_by_developer_polygon_fails(self):
+        # Partially supported frame must be rejected rather than claiming
+        # parity while unmodeled GP0(2C) draws are still present.
+        next_scene=[0x2c000000]+[0]*8
+        with self.assertRaisesRegex(ValueError,"unsupported GP0 packet size"):
             replay_bounded_8bpp_intro(
                 fixture(),state()+[rect(),next_scene])
 
