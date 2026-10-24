@@ -25,6 +25,8 @@ jobs:
           git -C "$RUNNER_TEMP/pcsx-redux" fetch --depth 1 origin de4a33e9a69abec4f567ae33567537f867dc2bba
           git -C "$RUNNER_TEMP/pcsx-redux" checkout --detach FETCH_HEAD
           git config --global --add safe.directory "$RUNNER_TEMP/pcsx-redux"
+      - name: Validate Stage536 CD-ROM queue patch against exact pinned upstream header
+        run: python3 tools/validate_stage536_queue_patch.py "$RUNNER_TEMP/pcsx-redux"
       - name: Fetch pinned MIPS guest-test submodule
         working-directory: ${{ runner.temp }}/pcsx-redux
         run: git -C "$RUNNER_TEMP/pcsx-redux" submodule update --init src/mips
