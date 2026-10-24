@@ -4,6 +4,13 @@ on:
   pull_request:
     paths:
       - .github/workflows/owner-private-verifier-bundle.yml
+      # Regenerate the exact public replay/verification code archive whenever
+      # its source changes, so owner-private comparisons use the same
+      # revision that passed GitHub CI rather than a stale local checkout.
+      - tools/replay_private_gp0_quad_2c.py
+      - tools/replay_private_gp0_intro_8bpp.py
+      - tools/seal_private_player_frame1_archive.py
+      - tools/verify_private_gpudump_player_step1_dump_hash.py
   workflow_dispatch:
 
 permissions:
